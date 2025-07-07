@@ -29,10 +29,9 @@ func main() {
 
 	cfg := &config.Config{}
 
-	rootCmd.PersistentFlags().StringVar(&cfg.APIURL, "api-url", "http://localhost:8081/api", "API URL")
+	rootCmd.PersistentFlags().StringVar(&cfg.APIURL, "api-url", "http://localhost:8083/api", "API URL")
 	rootCmd.PersistentFlags().StringVar(&cfg.UserID, "user-id", "admin@kagent.dev", "User ID")
 	rootCmd.PersistentFlags().StringVarP(&cfg.Namespace, "namespace", "n", "kagent", "Namespace")
-	rootCmd.PersistentFlags().StringVar(&cfg.A2AURL, "a2a-url", "http://localhost:8083/api/a2a", "A2A URL")
 	rootCmd.PersistentFlags().StringVarP(&cfg.OutputFormat, "output-format", "o", "table", "Output format")
 	rootCmd.PersistentFlags().BoolVarP(&cfg.Verbose, "verbose", "v", false, "Verbose output")
 	installCmd := &cobra.Command{
@@ -70,7 +69,7 @@ func main() {
 	invokeCmd.Flags().StringVarP(&invokeCfg.Session, "session", "s", "", "Session")
 	invokeCmd.Flags().StringVarP(&invokeCfg.Agent, "agent", "a", "", "Agent")
 	invokeCmd.Flags().BoolVarP(&invokeCfg.Stream, "stream", "S", false, "Stream the response")
-	invokeCmd.MarkFlagRequired("task")
+	invokeCmd.Flags().StringVarP(&invokeCfg.File, "file", "f", "", "File to read the task from")
 
 	bugReportCmd := &cobra.Command{
 		Use:   "bug-report",

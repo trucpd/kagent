@@ -121,7 +121,7 @@ func ChatCmd(c *ishell.Context) {
 	}
 
 	// Setup A2A client
-	a2aURL := fmt.Sprintf("%s/%s/%s", cfg.A2AURL, cfg.Namespace, team.Component.Label)
+	a2aURL := fmt.Sprintf("%s/a2a/%s/%s", cfg.APIURL, cfg.Namespace, team.Component.Label)
 	a2aClient, err := a2aclient.NewA2AClient(a2aURL)
 	if err != nil {
 		c.Printf("Failed to create A2A client: %v\n", err)

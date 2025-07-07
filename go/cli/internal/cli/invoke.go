@@ -19,6 +19,7 @@ import (
 type InvokeCfg struct {
 	Config  *config.Config
 	Task    string
+	File    string
 	Session string
 	Agent   string
 	Stream  bool
@@ -35,26 +36,31 @@ func InvokeCmd(ctx context.Context, cfg *InvokeCfg) {
 	}
 
 	var task string
-	switch cfg.Task {
-	case "":
-		fmt.Fprintln(os.Stderr, "Task is required")
+	// If task is set, use it. Otherwise, read from file or stdin.
+	if cfg.Task != "" {
+		task = cfg.Task
+	} else if cfg.File != "" {
+		switch cfg.File {
+		case "-":
+			// Read from stdin
+			content, err := io.ReadAll(os.Stdin)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error reading from stdin: %v\n", err)
+				return
+			}
+			task = string(content)
+		default:
+			// Read from file
+			content, err := os.ReadFile(cfg.File)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error reading from file: %v\n", err)
+				return
+			}
+			task = string(content)
+		}
+	} else {
+		fmt.Fprintln(os.Stderr, "Task or file is required")
 		return
-	case "-":
-		// Read from stdin
-		content, err := io.ReadAll(os.Stdin)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error reading from stdin: %v\n", err)
-			return
-		}
-		task = string(content)
-	default:
-		// Read from file
-		content, err := os.ReadFile(cfg.Task)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error reading from file: %v\n", err)
-			return
-		}
-		task = string(content)
 	}
 
 	// Start port forwarding for A2A
@@ -92,15 +98,8 @@ func InvokeCmd(ctx context.Context, cfg *InvokeCfg) {
 			return
 		}
 
-		// Get team information
-		team, err := clientSet.Agent.GetAgent(ctx, cfg.Agent)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error getting agent: %v\n", err)
-			return
-		}
-
 		// Setup A2A client
-		a2aURL := fmt.Sprintf("%s/%s/%s", cfg.Config.A2AURL, cfg.Config.Namespace, team.Data.Component.Label)
+		a2aURL := fmt.Sprintf("%s/a2a/%s/%s", cfg.Config.APIURL, cfg.Config.Namespace, cfg.Agent)
 		a2aClient, err := a2aclient.NewA2AClient(a2aURL)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating A2A client: %v\n", err)
@@ -157,15 +156,8 @@ func InvokeCmd(ctx context.Context, cfg *InvokeCfg) {
 			return
 		}
 
-		// Get team information
-		team, err := clientSet.Agent.GetAgent(ctx, cfg.Agent)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error getting agent: %v\n", err)
-			return
-		}
-
 		// Setup A2A client
-		a2aURL := fmt.Sprintf("%s/%s/%s", cfg.Config.A2AURL, cfg.Config.Namespace, team.Data.Component.Label)
+		a2aURL := fmt.Sprintf("%s/a2a/%s/%s", cfg.Config.APIURL, cfg.Config.Namespace, cfg.Agent)
 		a2aClient, err := a2aclient.NewA2AClient(a2aURL)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating A2A client: %v\n", err)

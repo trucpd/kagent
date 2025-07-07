@@ -150,10 +150,10 @@ func (s *HTTPServer) setupRoutes() {
 	// Sessions - using database handlers
 	s.router.HandleFunc(APIPathSessions, adaptHandler(s.handlers.Sessions.HandleListSessions)).Methods(http.MethodGet)
 	s.router.HandleFunc(APIPathSessions, adaptHandler(s.handlers.Sessions.HandleCreateSession)).Methods(http.MethodPost)
-	s.router.HandleFunc(APIPathSessions+"/{sessionID}", adaptHandler(s.handlers.Sessions.HandleGetSession)).Methods(http.MethodGet)
-	s.router.HandleFunc(APIPathSessions+"/{sessionID}/tasks", adaptHandler(s.handlers.Sessions.HandleListSessionTasks)).Methods(http.MethodGet)
-	s.router.HandleFunc(APIPathSessions+"/{sessionID}", adaptHandler(s.handlers.Sessions.HandleDeleteSession)).Methods(http.MethodDelete)
-	s.router.HandleFunc(APIPathSessions+"/{sessionID}", adaptHandler(s.handlers.Sessions.HandleUpdateSession)).Methods(http.MethodPut)
+	s.router.HandleFunc(APIPathSessions+"/{session_name}", adaptHandler(s.handlers.Sessions.HandleGetSession)).Methods(http.MethodGet)
+	s.router.HandleFunc(APIPathSessions+"/{session_name}/tasks", adaptHandler(s.handlers.Sessions.HandleListSessionTasks)).Methods(http.MethodGet)
+	s.router.HandleFunc(APIPathSessions+"/{session_name}", adaptHandler(s.handlers.Sessions.HandleDeleteSession)).Methods(http.MethodDelete)
+	s.router.HandleFunc(APIPathSessions+"/{session_name}", adaptHandler(s.handlers.Sessions.HandleUpdateSession)).Methods(http.MethodPut)
 
 	// Tools - using database handlers
 	s.router.HandleFunc(APIPathTools, adaptHandler(s.handlers.Tools.HandleListToolsDB)).Methods(http.MethodGet)

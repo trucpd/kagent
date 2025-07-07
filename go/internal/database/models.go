@@ -41,8 +41,6 @@ type Agent struct {
 	gorm.Model
 	Name      string        `gorm:"unique;not null" json:"name"`
 	Component api.Component `gorm:"type:json;not null" json:"component"`
-
-	Sessions []Session `gorm:"foreignKey:AgentID;constraint:OnDelete:CASCADE" json:"sessions"`
 }
 
 type Message struct {
@@ -55,9 +53,6 @@ type Message struct {
 	Data      string  `gorm:"type:text;not null" json:"data"` // JSON serialized protocol.Message
 	SessionID *string `gorm:"not null;index" json:"session_id"`
 	TaskID    string  `gorm:"not null;index" json:"task_id"`
-
-	// Relationships
-	Feedback []Feedback `gorm:"foreignKey:MessageID;constraint:OnDelete:CASCADE" json:"feedback,omitempty"`
 }
 
 type Session struct {
@@ -68,8 +63,6 @@ type Session struct {
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"deleted_at"`
 
 	AgentID *string `gorm:"not null;index" json:"agent_id"`
-
-	Tasks []Task `gorm:"foreignKey:SessionID;constraint:OnDelete:CASCADE" json:"tasks"`
 }
 
 type Task struct {
@@ -80,8 +73,6 @@ type Task struct {
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"deleted_at"`
 	Data      string         `gorm:"type:text;not null" json:"data"` // JSON serialized task data
 	SessionID *string        `gorm:"not null;index" json:"session_id"`
-
-	Messages []Message `gorm:"foreignKey:TaskID;constraint:OnDelete:CASCADE" json:"messages"`
 }
 
 type PushNotification struct {
@@ -115,7 +106,7 @@ type Tool struct {
 	gorm.Model
 	Name       string        `gorm:"unique" json:"name"`
 	Component  api.Component `gorm:"type:json;not null" json:"component"`
-	ServerName string        `gorm:"index;constraint:OnDelete:SET NULL" json:"server_name,omitempty"`
+	ServerName string        `gorm:"not null;index" json:"server_name,omitempty"`
 }
 
 // ToolServer represents a tool server that provides tools
@@ -124,8 +115,6 @@ type ToolServer struct {
 	Name          string        `gorm:"primaryKey" json:"name"`
 	LastConnected *time.Time    `json:"last_connected,omitempty"`
 	Component     api.Component `gorm:"type:json;not null" json:"component"`
-
-	Tools []Tool `gorm:"foreignKey:ServerName" json:"tools,omitempty"`
 }
 
 // // EvalTask represents an evaluation task

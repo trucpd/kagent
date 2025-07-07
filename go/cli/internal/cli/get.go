@@ -11,7 +11,6 @@ import (
 	"github.com/kagent-dev/kagent/go/cli/internal/config"
 	"github.com/kagent-dev/kagent/go/internal/database"
 	"github.com/kagent-dev/kagent/go/pkg/client"
-	"trpc.group/trpc-go/trpc-a2a-go/protocol"
 )
 
 func GetAgentCmd(cfg *config.Config, resourceName string) {
@@ -100,29 +99,6 @@ func printTools(tools []database.Tool) error {
 	}
 
 	return printOutput(tools, headers, rows)
-}
-
-func printTasks(tasks []*database.Task) error {
-	headers := []string{"#", "ID", "MESSAGES", "STATUS", "CREATED"}
-	rows := make([][]string, len(tasks))
-	for i, task := range tasks {
-
-		a2aTask := protocol.Task{}
-		if err := json.Unmarshal([]byte(task.Data), &a2aTask); err != nil {
-			fmt.Fprintf(os.Stderr, "Failed to unmarshal task: %v\n", err)
-			return nil
-		}
-
-		rows[i] = []string{
-			strconv.Itoa(i + 1),
-			task.ID,
-			strconv.Itoa(len(task.Messages)),
-			string(a2aTask.Status.State),
-			task.CreatedAt.Format(time.RFC3339),
-		}
-	}
-
-	return printOutput(tasks, headers, rows)
 }
 
 func printAgents(teams []database.Agent) error {

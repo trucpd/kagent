@@ -18,7 +18,7 @@ type Manager struct {
 // NewManager creates a new database manager
 func NewManager(databasePath string) (*Manager, error) {
 	db, err := gorm.Open(sqlite.Open(databasePath), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info),
+		Logger: logger.Default.LogMode(logger.Warn),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
