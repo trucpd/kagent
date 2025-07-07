@@ -210,16 +210,25 @@ func (t *taskHandler) prepareMessages(ctx context.Context, session *database.Ses
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse message: %w", err)
 		}
+		source := "user"
+		if parsedMessage.Role == protocol.MessageRoleAgent {
+			source = "agent"
+		}
 		for _, part := range parsedMessage.Parts {
 			if textPart, ok := part.(*protocol.TextPart); ok {
-				events := autogen_client.NewTextMessage(textPart.Text)
+				events := autogen_client.NewTextMessage(textPart.Text, source)
 				result = append(result, events)
 			} else if dataPart, ok := part.(*protocol.DataPart); ok {
 				fmt.Printf("dataPart type: %T\n", dataPart.Data)
-				// parsedEvent, err := autogen_client.ParseEvent([]byte(dataPart.Data))
-				// if err != nil {
-				// 	return nil, fmt.Errorf("failed to parse event: %w", err)
-				// }
+				byt, err := json.Marshal(dataPart.Data)
+				if err != nil {
+					return nil, fmt.Errorf("failed to marshal data part: %w", err)
+				}
+				parsedEvent, err := autogen_client.ParseEvent(byt)
+				if err != nil {
+					return nil, fmt.Errorf("failed to parse event: %w", err)
+				}
+				result = append(result, parsedEvent)
 			}
 		}
 	}

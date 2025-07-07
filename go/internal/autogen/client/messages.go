@@ -42,29 +42,36 @@ func (e *BaseEvent) GetType() string {
 }
 
 type BaseChatMessage struct {
-	BaseEvent
+	BaseEvent   `json:",inline"`
 	Source      string            `json:"source"`
 	Metadata    map[string]string `json:"metadata"`
 	ModelsUsage *ModelsUsage      `json:"models_usage"`
 }
 
-type TextMessage struct {
-	BaseChatMessage
-	Content string `json:"content"`
+func newBaseChatMessage(source string, eventType string) BaseChatMessage {
+	return BaseChatMessage{
+		BaseEvent:   BaseEvent{Type: eventType},
+		Source:      source,
+		Metadata:    make(map[string]string),
+		ModelsUsage: &ModelsUsage{},
+	}
 }
 
-func NewTextMessage(content string) *TextMessage {
+type TextMessage struct {
+	BaseChatMessage `json:",inline"`
+	Content         string `json:"content"`
+}
+
+func NewTextMessage(content, source string) *TextMessage {
 	return &TextMessage{
-		BaseChatMessage: BaseChatMessage{
-			BaseEvent: BaseEvent{Type: TextMessageLabel},
-		},
-		Content: content,
+		BaseChatMessage: newBaseChatMessage(source, TextMessageLabel),
+		Content:         content,
 	}
 }
 
 type ModelClientStreamingChunkEvent struct {
-	BaseChatMessage
-	Content string `json:"content"`
+	BaseChatMessage `json:",inline"`
+	Content         string `json:"content"`
 }
 
 type FunctionCall struct {
@@ -74,8 +81,8 @@ type FunctionCall struct {
 }
 
 type ToolCallRequestEvent struct {
-	BaseChatMessage
-	Content []FunctionCall `json:"content"`
+	BaseChatMessage `json:",inline"`
+	Content         []FunctionCall `json:"content"`
 }
 
 type FunctionExecutionResult struct {
@@ -84,19 +91,19 @@ type FunctionExecutionResult struct {
 }
 
 type ToolCallExecutionEvent struct {
-	BaseChatMessage
-	Content []FunctionExecutionResult `json:"content"`
+	BaseChatMessage `json:",inline"`
+	Content         []FunctionExecutionResult `json:"content"`
 }
 
 type MemoryQueryEvent struct {
-	BaseChatMessage
-	Content []map[string]interface{} `json:"content"`
+	BaseChatMessage `json:",inline"`
+	Content         []map[string]interface{} `json:"content"`
 }
 
 type ToolCallSummaryMessage struct {
-	BaseChatMessage
-	ToolCalls []FunctionCall            `json:"tool_calls"`
-	Results   []FunctionExecutionResult `json:"results"`
+	BaseChatMessage `json:",inline"`
+	ToolCalls       []FunctionCall            `json:"tool_calls"`
+	Results         []FunctionExecutionResult `json:"results"`
 }
 
 const (
