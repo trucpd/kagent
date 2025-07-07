@@ -13,6 +13,8 @@ import (
 	"github.com/kagent-dev/kagent/go/controller/api/v1alpha1"
 	autogen_client "github.com/kagent-dev/kagent/go/internal/autogen/client"
 	"github.com/kagent-dev/kagent/go/internal/database"
+	kagent_client "github.com/kagent-dev/kagent/go/pkg/client"
+	"github.com/kagent-dev/kagent/go/pkg/client/api"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -37,7 +39,7 @@ func TestE2E(t *testing.T) {
 	ctx := context.Background()
 
 	// Initialize agent client
-	agentClient := autogen_client.New(APIEndpoint)
+	agentClient := kagent_client.New(APIEndpoint)
 
 	// Initialize controller-runtime client
 	cfg, err := config.GetConfig()
@@ -54,25 +56,25 @@ func TestE2E(t *testing.T) {
 	testStartTime := time.Now().String()
 
 	createOrFetchAgentSession := func(agentName string) (*database.Session, *database.Agent) {
-		agentTeam, err := dbService.GetTeam(agentName, GlobalUserID)
+		agentTeam, err := agentClient.Agent.GetAgent(ctx, agentName)
 		require.NoError(t, err)
 
 		// reuse existing sessions if available
-		existingSessions, err := agentClient.ListSessions(GlobalUserID)
+		existingSessions, err := agentClient.Session.ListSessions(ctx, GlobalUserID)
 		require.NoError(t, err)
-		for _, session := range existingSessions {
+		for _, session := range existingSessions.Data {
 			if session.UserID == GlobalUserID {
-				return session, agentTeam
+				return session, agentTeam.Data
 			}
 		}
 
-		sess, err := agentClient.CreateSession(&autogen_client.CreateSession{
+		sess, err := agentClient.Session.CreateSession(ctx, &api.SessionRequest{
 			UserID: GlobalUserID,
 			Name:   fmt.Sprintf("e2e-test-%s-%s", agentName, testStartTime),
 		})
 		require.NoError(t, err)
 
-		return sess, agentTeam
+		return sess.Data, agentTeam.Data
 	}
 
 	// Helper function to run an interactive session with an agent

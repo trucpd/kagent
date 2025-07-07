@@ -324,8 +324,6 @@ func (a *apiTranslator) translateGroupChatForTeam(
 ) (*database.Agent, error) {
 	// get model config
 	roundRobinTeamConfig := team.Spec.RoundRobinTeamConfig
-	selectorTeamConfig := team.Spec.SelectorTeamConfig
-	magenticOneTeamConfig := team.Spec.MagenticOneTeamConfig
 
 	modelConfigObj, err := common.GetModelConfig(
 		ctx,
@@ -408,29 +406,7 @@ func (a *apiTranslator) translateGroupChatForTeam(
 				CommonTeamConfig: commonTeamConfig,
 			}),
 		}
-	} else if selectorTeamConfig != nil {
-		teamConfig = &api.Component{
-			Provider:      "autogen_agentchat.teams.SelectorGroupChat",
-			ComponentType: "team",
-			Version:       1,
-			Description:   team.Spec.Description,
-			Config: api.MustToConfig(&api.SelectorGroupChatConfig{
-				CommonTeamConfig: commonTeamConfig,
-				SelectorPrompt:   selectorTeamConfig.SelectorPrompt,
-			}),
-		}
-	} else if magenticOneTeamConfig != nil {
-		teamConfig = &api.Component{
-			Provider:      "autogen_agentchat.teams.MagenticOneGroupChat",
-			ComponentType: "team",
-			Version:       1,
-			Description:   team.Spec.Description,
-			Config: api.MustToConfig(&api.MagenticOneGroupChatConfig{
-				CommonTeamConfig:  commonTeamConfig,
-				MaxStalls:         magenticOneTeamConfig.MaxStalls,
-				FinalAnswerPrompt: magenticOneTeamConfig.FinalAnswerPrompt,
-			}),
-		}
+
 	} else {
 		return nil, fmt.Errorf("no team config specified")
 	}

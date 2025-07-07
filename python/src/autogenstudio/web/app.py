@@ -100,6 +100,7 @@ async def health_check():
     }
 
 
+app.mount("/api", api)
 # Error handlers
 
 
@@ -109,7 +110,7 @@ async def internal_error_handler(request, exc):
     return {
         "status": False,
         "message": "Internal server error",
-        "detail": str(exc) if settings.API_DOCS else "Internal server error",
+        "detail": "Internal server error",
     }
 
 

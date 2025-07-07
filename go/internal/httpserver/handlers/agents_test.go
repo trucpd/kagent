@@ -77,7 +77,7 @@ func createAutogenTeam(client *db_fake.InMemmoryFakeClient, userID string, agent
 			Label: common.GetObjectRef(agent),
 		},
 	}
-	client.CreateTeam(autogenTeam)
+	client.CreateAgent(autogenTeam)
 }
 
 func TestHandleGetTeam(t *testing.T) {

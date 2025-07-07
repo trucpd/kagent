@@ -76,8 +76,6 @@ spec:
                 required:
                 - selectorPrompt
                 type: object
-              swarmTeamConfig:
-                type: object
               terminationCondition:
                 properties:
                   finalTextMessageTermination:

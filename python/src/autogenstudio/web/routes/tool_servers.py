@@ -37,7 +37,7 @@ async def get_server_tools(
         tools = await tsm.discover_tools(request.server)
         for tool in tools:
             # Generate a unique identifier for the tool from its component
-            component_data = tool.dump_component().model_dump_json()
+            component_data = tool.dump_component().model_dump()
 
             # Check if the tool already exists based on id/name
             component_config = component_data.get("config", {})

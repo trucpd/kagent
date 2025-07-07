@@ -311,13 +311,13 @@ func (a *autogenReconciler) ReconcileAutogenToolServer(ctx context.Context, req 
 		return fmt.Errorf("failed to get tool server %s: %v", req.Name, err)
 	}
 
-	serverID, reconcileErr := a.reconcileToolServer(ctx, toolServer)
+	reconcileErr := a.reconcileToolServer(ctx, toolServer)
 
 	// update the tool server status as the agents depend on it
 	if err := a.reconcileToolServerStatus(
 		ctx,
 		toolServer,
-		serverID,
+		common.GetObjectRef(toolServer),
 		reconcileErr,
 	); err != nil {
 		return fmt.Errorf("failed to reconcile tool server %s: %v", req.Name, err)
@@ -339,10 +339,10 @@ func (a *autogenReconciler) ReconcileAutogenToolServer(ctx context.Context, req 
 func (a *autogenReconciler) reconcileToolServerStatus(
 	ctx context.Context,
 	toolServer *v1alpha1.ToolServer,
-	serverID uint,
+	serverRef string,
 	err error,
 ) error {
-	discoveredTools, discoveryErr := a.getDiscoveredMCPTools(ctx, serverID)
+	discoveredTools, discoveryErr := a.getDiscoveredMCPTools(ctx, serverRef)
 	if discoveryErr != nil {
 		err = multierror.Append(err, discoveryErr)
 	}
@@ -500,17 +500,17 @@ func (a *autogenReconciler) reconcileAgent(ctx context.Context, agent *v1alpha1.
 	return nil
 }
 
-func (a *autogenReconciler) reconcileToolServer(ctx context.Context, server *v1alpha1.ToolServer) (uint, error) {
+func (a *autogenReconciler) reconcileToolServer(ctx context.Context, server *v1alpha1.ToolServer) error {
 	toolServer, err := a.autogenTranslator.TranslateToolServer(ctx, server)
 	if err != nil {
-		return 0, fmt.Errorf("failed to translate tool server %s/%s: %v", server.Namespace, server.Name, err)
+		return fmt.Errorf("failed to translate tool server %s/%s: %v", server.Namespace, server.Name, err)
 	}
-	serverID, err := a.upsertToolServer(ctx, toolServer)
+	err = a.upsertToolServer(ctx, toolServer)
 	if err != nil {
-		return 0, fmt.Errorf("failed to upsert tool server %s/%s: %v", server.Namespace, server.Name, err)
+		return fmt.Errorf("failed to upsert tool server %s/%s: %v", server.Namespace, server.Name, err)
 	}
 
-	return serverID, nil
+	return nil
 }
 
 func (a *autogenReconciler) upsertAgent(ctx context.Context, agent *database.Agent) error {
@@ -541,7 +541,7 @@ func (a *autogenReconciler) upsertAgent(ctx context.Context, agent *database.Age
 	return a.dbClient.UpsertAgent(agent)
 }
 
-func (a *autogenReconciler) upsertToolServer(ctx context.Context, toolServer *database.ToolServer) (uint, error) {
+func (a *autogenReconciler) upsertToolServer(ctx context.Context, toolServer *database.ToolServer) error {
 	// lock to prevent races
 	a.upsertLock.Lock()
 	defer a.upsertLock.Unlock()
@@ -549,22 +549,22 @@ func (a *autogenReconciler) upsertToolServer(ctx context.Context, toolServer *da
 	// delete if toolServer exists
 	existingToolServer, err := a.dbClient.GetToolServer(toolServer.Component.Label)
 	if err != nil && !strings.Contains(err.Error(), "not found") {
-		return 0, fmt.Errorf("failed to get existing toolServer %s: %v", toolServer.Component.Label, err)
+		return fmt.Errorf("failed to get existing toolServer %s: %v", toolServer.Component.Label, err)
 	}
 	if existingToolServer != nil {
 		toolServer.ID = existingToolServer.ID
 		err = a.dbClient.UpdateToolServer(toolServer)
 		if err != nil {
-			return 0, fmt.Errorf("failed to delete existing toolServer %s: %v", toolServer.Component.Label, err)
+			return fmt.Errorf("failed to delete existing toolServer %s: %v", toolServer.Component.Label, err)
 		}
 	} else {
 		existingToolServer, err = a.dbClient.CreateToolServer(toolServer)
 		if err != nil {
-			return 0, fmt.Errorf("failed to create toolServer %s: %v", toolServer.Component.Label, err)
+			return fmt.Errorf("failed to create toolServer %s: %v", toolServer.Component.Label, err)
 		}
 		existingToolServer, err = a.dbClient.GetToolServer(toolServer.Component.Label)
 		if err != nil {
-			return 0, fmt.Errorf("failed to get existing toolServer %s: %v", toolServer.Component.Label, err)
+			return fmt.Errorf("failed to get existing toolServer %s: %v", toolServer.Component.Label, err)
 		}
 	}
 
@@ -572,14 +572,14 @@ func (a *autogenReconciler) upsertToolServer(ctx context.Context, toolServer *da
 		Server: &existingToolServer.Component,
 	})
 	if err != nil {
-		return 0, fmt.Errorf("failed to fetch tools for toolServer %s: %v", toolServer.Component.Label, err)
+		return fmt.Errorf("failed to fetch tools for toolServer %s: %v", toolServer.Component.Label, err)
 	}
 
 	if err := a.dbClient.RefreshToolsForServer(toolServer.Component.Label, tools.Tools); err != nil {
-		return 0, fmt.Errorf("failed to refresh tools for toolServer %s: %v", toolServer.Component.Label, err)
+		return fmt.Errorf("failed to refresh tools for toolServer %s: %v", toolServer.Component.Label, err)
 	}
 
-	return existingToolServer.ID, nil
+	return nil
 }
 
 func (a *autogenReconciler) findAgentsUsingModel(ctx context.Context, req ctrl.Request) ([]*v1alpha1.Agent, error) {
@@ -858,7 +858,7 @@ func (a *autogenReconciler) findAgentsUsingToolServer(ctx context.Context, req c
 
 }
 
-func (a *autogenReconciler) getDiscoveredMCPTools(ctx context.Context, serverID uint) ([]*v1alpha1.MCPTool, error) {
+func (a *autogenReconciler) getDiscoveredMCPTools(ctx context.Context, serverRef string) ([]*v1alpha1.MCPTool, error) {
 	allTools, err := a.dbClient.ListTools()
 	if err != nil {
 		return nil, err
@@ -866,7 +866,7 @@ func (a *autogenReconciler) getDiscoveredMCPTools(ctx context.Context, serverID 
 
 	var discoveredTools []*v1alpha1.MCPTool
 	for _, tool := range allTools {
-		if tool.ServerID == serverID {
+		if tool.ServerName == serverRef {
 			mcpTool, err := convertTool(&tool)
 			if err != nil {
 				return nil, fmt.Errorf("failed to convert tool: %v", err)

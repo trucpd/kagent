@@ -161,7 +161,7 @@ func TestTaskHandlerWithSession(t *testing.T) {
 		}
 		err := dbService.CreateSession(session)
 		require.NoError(t, err)
-		assert.Equal(t, sessionID, session.Name)
+		assert.Equal(t, sessionID, session.ID)
 		assert.Equal(t, 1, session.ID) // The in-memory client assigns ID 1 for the first session
 
 		translator := a2a.NewAutogenA2ATranslator(baseURL, mockClient, dbService)
