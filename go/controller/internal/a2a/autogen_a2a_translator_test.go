@@ -189,7 +189,7 @@ func TestTaskHandlerWithSession(t *testing.T) {
 		require.NotNil(t, result)
 
 		// Test the handler
-		events, err := result.TaskHandler.HandleMessage(ctx, task, sessionID)
+		events, err := result.TaskHandler.HandleMessage(ctx, task, ptr.To(sessionID))
 		require.NoError(t, err)
 		require.Len(t, events, 1)
 
@@ -233,7 +233,7 @@ func TestTaskHandlerWithSession(t *testing.T) {
 		require.NotNil(t, result)
 
 		// Test the handler - this should create a new session and then invoke it
-		events, err := result.TaskHandler.HandleMessage(ctx, task, sessionID)
+		events, err := result.TaskHandler.HandleMessage(ctx, task, ptr.To(sessionID))
 		require.NoError(t, err)
 		require.Len(t, events, 1)
 
@@ -284,7 +284,7 @@ func TestTaskHandlerWithoutSession(t *testing.T) {
 		require.NotNil(t, result)
 
 		// Test the handler without session ID
-		events, err := result.TaskHandler.HandleMessage(ctx, task, "")
+		events, err := result.TaskHandler.HandleMessage(ctx, task, nil)
 		require.NoError(t, err)
 		require.Len(t, events, 1)
 
@@ -326,7 +326,7 @@ func TestTaskHandlerWithoutSession(t *testing.T) {
 		require.NotNil(t, result)
 
 		// Test the handler with empty session ID
-		events, err := result.TaskHandler.HandleMessage(ctx, task, "")
+		events, err := result.TaskHandler.HandleMessage(ctx, task, nil)
 		require.NoError(t, err)
 		require.Len(t, events, 1)
 
@@ -372,7 +372,7 @@ func TestTaskHandlerMessageContentExtraction(t *testing.T) {
 		require.NotNil(t, result)
 
 		// Test the handler
-		events, err := result.TaskHandler.HandleMessage(ctx, task, "")
+		events, err := result.TaskHandler.HandleMessage(ctx, task, nil)
 		require.NoError(t, err)
 		require.Len(t, events, 1)
 
@@ -422,7 +422,7 @@ func TestTaskHandlerStreamingSupport(t *testing.T) {
 		require.NotNil(t, result)
 
 		// Test streaming
-		eventChan, err := result.TaskHandler.HandleMessageStream(ctx, task, "")
+		eventChan, err := result.TaskHandler.HandleMessageStream(ctx, task, nil)
 		require.NoError(t, err)
 		require.NotNil(t, eventChan)
 
@@ -477,7 +477,7 @@ func TestTaskHandlerStreamingSupport(t *testing.T) {
 		require.NotNil(t, result)
 
 		// Test streaming with session
-		eventChan, err := result.TaskHandler.HandleMessageStream(ctx, task, sessionID)
+		eventChan, err := result.TaskHandler.HandleMessageStream(ctx, task, ptr.To(sessionID))
 		require.NoError(t, err)
 		require.NotNil(t, eventChan)
 

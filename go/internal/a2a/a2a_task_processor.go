@@ -16,8 +16,8 @@ var (
 )
 
 type MessageHandler interface {
-	HandleMessage(ctx context.Context, task string, contextID string) ([]client.Event, error)
-	HandleMessageStream(ctx context.Context, task string, contextID string) (<-chan client.Event, error)
+	HandleMessage(ctx context.Context, task string, contextID *string) ([]client.Event, error)
+	HandleMessageStream(ctx context.Context, task string, contextID *string) (<-chan client.Event, error)
 }
 
 type a2aMessageProcessor struct {
@@ -60,8 +60,7 @@ func (a *a2aMessageProcessor) ProcessMessage(
 
 	if !options.Streaming {
 		// Process the input text (in this simple example, we'll just reverse it).
-		contextID := handle.GetContextID()
-		result, err := a.msgHandler.HandleMessage(ctx, text, contextID)
+		result, err := a.msgHandler.HandleMessage(ctx, text, message.ContextID)
 		if err != nil {
 			message := protocol.NewMessage(
 				protocol.MessageRoleAgent,
@@ -85,7 +84,7 @@ func (a *a2aMessageProcessor) ProcessMessage(
 		}, nil
 	}
 
-	events, err := a.msgHandler.HandleMessageStream(ctx, text, handle.GetContextID())
+	events, err := a.msgHandler.HandleMessageStream(ctx, text, message.ContextID)
 	if err != nil {
 		return nil, err
 	}

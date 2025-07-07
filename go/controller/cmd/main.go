@@ -21,6 +21,8 @@ import (
 	"crypto/tls"
 	"flag"
 	"fmt"
+	"net/http"
+	"net/http/pprof"
 	"os"
 	"path/filepath"
 	"strings"
@@ -53,6 +55,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -269,8 +272,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	dbService := database.NewServiceWrapper(dbManager)
-	dbClient := database.NewClient(dbService)
+	dbClient := database.NewClient(dbManager)
 
 	autogenClient := autogen_client.New(
 		autogenStudioBaseURL,
@@ -289,7 +291,7 @@ func main() {
 		defaultModelConfig,
 	)
 
-	a2aHandler := a2a.NewA2AHttpMux(httpserver.APIPathA2A)
+	a2aHandler := a2a.NewA2AHttpMux(httpserver.APIPathA2A, dbClient)
 
 	a2aReconciler := a2a_reconciler.NewAutogenReconciler(
 		autogenClient,
@@ -378,6 +380,11 @@ func main() {
 	}
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up ready check")
+		os.Exit(1)
+	}
+
+	if err := mgr.Add(&adminServer{port: ":6060"}); err != nil {
+		setupLog.Error(err, "unable to set up admin server")
 		os.Exit(1)
 	}
 
@@ -472,4 +479,27 @@ func filterValidNamespaces(namespaces []string) []string {
 	}
 
 	return validNamespaces
+}
+
+var _ manager.Runnable = &adminServer{}
+
+type adminServer struct {
+	port string
+}
+
+func (a *adminServer) Start(ctx context.Context) error {
+	setupLog.Info("starting pprof server")
+	mux := http.NewServeMux()
+	mux.HandleFunc("/debug/pprof/", pprof.Index)
+	mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+	mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+	mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+	mux.HandleFunc("/debug/pprof/goroutine", pprof.Handler("goroutine").ServeHTTP)
+	mux.HandleFunc("/debug/pprof/heap", pprof.Handler("heap").ServeHTTP)
+	mux.HandleFunc("/debug/pprof/block", pprof.Handler("block").ServeHTTP)
+	mux.HandleFunc("/debug/pprof/threadcreate", pprof.Handler("threadcreate").ServeHTTP)
+	mux.HandleFunc("/debug/pprof/mutex", pprof.Handler("mutex").ServeHTTP)
+	mux.HandleFunc("/debug/pprof/allocs", pprof.Handler("allocs").ServeHTTP)
+	setupLog.Info("pprof server started", "address", a.port)
+	return http.ListenAndServe(a.port, mux)
 }

@@ -275,7 +275,7 @@ func (c *InMemmoryFakeClient) ListToolsForServer(serverName string) ([]database.
 }
 
 // ListMessagesForTask retrieves messages for a specific task
-func (c *InMemmoryFakeClient) ListMessagesForTask(taskID string) ([]database.Message, error) {
+func (c *InMemmoryFakeClient) ListMessagesForTask(taskID, userID string) ([]database.Message, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -289,6 +289,34 @@ func (c *InMemmoryFakeClient) ListMessagesForTask(taskID string) ([]database.Mes
 	for i, msg := range messages {
 		result[i] = *msg
 	}
+	return result, nil
+}
+
+// ListMessagesForSession retrieves messages for a specific session
+func (c *InMemmoryFakeClient) ListMessagesForSession(sessionID, userID string) ([]database.Message, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	messages, exists := c.sessions[sessionID]
+	if !exists {
+		return []database.Message{}, nil
+	}
+
+	// get all tasks for the session
+	tasks, err := c.ListSessionTasks(sessionID, messages.UserID)
+	if err != nil {
+		return []database.Message{}, err
+	}
+
+	var result []database.Message
+	for _, task := range tasks {
+		taskMessages, err := c.ListMessagesForTask(task.ID, userID)
+		if err != nil {
+			return []database.Message{}, err
+		}
+		result = append(result, taskMessages...)
+	}
+
 	return result, nil
 }
 

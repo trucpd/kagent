@@ -53,15 +53,26 @@ type TextMessage struct {
 	Content string `json:"content"`
 }
 
+func NewTextMessage(content string) *TextMessage {
+	return &TextMessage{
+		BaseChatMessage: BaseChatMessage{
+			BaseEvent: BaseEvent{Type: TextMessageLabel},
+		},
+		Content: content,
+	}
+}
+
 type ModelClientStreamingChunkEvent struct {
 	BaseChatMessage
 	Content string `json:"content"`
 }
+
 type FunctionCall struct {
 	ID        string `json:"id"`
 	Arguments string `json:"arguments"`
 	Name      string `json:"name"`
 }
+
 type ToolCallRequestEvent struct {
 	BaseChatMessage
 	Content []FunctionCall `json:"content"`

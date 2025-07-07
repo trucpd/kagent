@@ -6,48 +6,8 @@ import (
 	"gorm.io/gorm"
 )
 
-func NewServiceWrapper(manager *Manager) *ServiceWrapper {
-	return &ServiceWrapper{
-		Agent:            NewService[Agent](manager),
-		Message:          NewService[Message](manager),
-		Session:          NewService[Session](manager),
-		Task:             NewService[Task](manager),
-		PushNotification: NewService[PushNotification](manager),
-		Feedback:         NewService[Feedback](manager),
-		Tool:             NewService[Tool](manager),
-		ToolServer:       NewService[ToolServer](manager),
-		// EvalTask:         NewService[EvalTask](manager),
-		// EvalCriteria:     NewService[EvalCriteria](manager),
-		// EvalRun:          NewService[EvalRun](manager),
-	}
-}
-
 type Model interface {
 	TableName() string
-}
-
-type ServiceWrapper struct {
-	Agent            *Service[Agent]
-	Message          *Service[Message]
-	Session          *Service[Session]
-	Task             *Service[Task]
-	PushNotification *Service[PushNotification]
-	Feedback         *Service[Feedback]
-	Tool             *Service[Tool]
-	ToolServer       *Service[ToolServer]
-	// EvalTask         *Service[EvalTask]
-	// EvalCriteria     *Service[EvalCriteria]
-	// EvalRun          *Service[EvalRun]
-}
-
-// Service provides high-level database operations
-type Service[T Model] struct {
-	db *gorm.DB
-}
-
-// NewService creates a new database service
-func NewService[T Model](manager *Manager) *Service[T] {
-	return &Service[T]{db: manager.db}
 }
 
 type Clause struct {
@@ -55,9 +15,9 @@ type Clause struct {
 	Value interface{}
 }
 
-func (s *Service[T]) List(clauses ...Clause) ([]T, error) {
+func list[T Model](db *gorm.DB, clauses ...Clause) ([]T, error) {
 	var models []T
-	query := s.db
+	query := db
 
 	for _, clause := range clauses {
 		query = query.Where(fmt.Sprintf("%s = ?", clause.Key), clause.Value)
@@ -70,9 +30,9 @@ func (s *Service[T]) List(clauses ...Clause) ([]T, error) {
 	return models, nil
 }
 
-func (s *Service[T]) Get(clauses ...Clause) (*T, error) {
+func get[T Model](db *gorm.DB, clauses ...Clause) (*T, error) {
 	var model T
-	query := s.db
+	query := db
 
 	for _, clause := range clauses {
 		query = query.Where(fmt.Sprintf("%s = ?", clause.Key), clause.Value)
@@ -85,25 +45,25 @@ func (s *Service[T]) Get(clauses ...Clause) (*T, error) {
 	return &model, nil
 }
 
-func (s *Service[T]) Create(model *T) error {
-	err := s.db.Create(model).Error
+func create[T Model](db *gorm.DB, model *T) error {
+	err := db.Create(model).Error
 	if err != nil {
 		return fmt.Errorf("failed to create model: %w", err)
 	}
 	return nil
 }
 
-func (s *Service[T]) Update(model *T) error {
-	err := s.db.Save(model).Error
+func upsert[T Model](db *gorm.DB, model *T) error {
+	err := db.Save(model).Error
 	if err != nil {
 		return fmt.Errorf("failed to update model: %w", err)
 	}
 	return nil
 }
 
-func (s *Service[T]) Delete(clauses ...Clause) error {
+func delete[T Model](db *gorm.DB, clauses ...Clause) error {
 	t := new(T)
-	query := s.db
+	query := db
 
 	for _, clause := range clauses {
 		query = query.Where(fmt.Sprintf("%s = ?", clause.Key), clause.Value)

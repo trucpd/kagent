@@ -1,18 +1,8 @@
 package manager
 
 import (
-	"time"
-
 	"trpc.group/trpc-go/trpc-a2a-go/protocol"
 )
-
-type NotFoundError struct {
-	Message string
-}
-
-func (e *NotFoundError) Error() string {
-	return e.Message
-}
 
 // Storage defines the interface for persisting task manager data
 type Storage interface {
@@ -33,9 +23,6 @@ type Storage interface {
 	StorePushNotification(taskID string, config protocol.TaskPushNotificationConfig) error
 	GetPushNotification(taskID string) (protocol.TaskPushNotificationConfig, error)
 	DeletePushNotification(taskID string) error
-
-	// Cleanup operations
-	CleanupExpiredConversations(maxAge time.Duration) (int, error)
 }
 
 // StorageOptions contains configuration options for storage implementations

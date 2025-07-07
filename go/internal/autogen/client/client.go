@@ -134,6 +134,7 @@ func (c *client) doRequest(ctx context.Context, method, path string, body interf
 type InvokeTaskRequest struct {
 	Task       string         `json:"task"`
 	TeamConfig *api.Component `json:"team_config"`
+	Messages   []Event        `json:"messages"`
 }
 
 type InvokeTaskResult struct {
@@ -144,6 +145,14 @@ type InvokeTaskResult struct {
 
 func (c *client) InvokeTask(ctx context.Context, req *InvokeTaskRequest) (*InvokeTaskResult, error) {
 	var invoke InvokeTaskResult
+	{
+		bytes, err := json.Marshal(req)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling request: %w", err)
+		}
+		fmt.Println(string(bytes))
+	}
+
 	err := c.doRequest(ctx, "POST", "/invoke", req, &invoke)
 	return &invoke, err
 }

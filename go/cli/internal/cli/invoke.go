@@ -2,7 +2,6 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -10,8 +9,6 @@ import (
 
 	"github.com/kagent-dev/kagent/go/cli/internal/config"
 	"github.com/kagent-dev/kagent/go/pkg/client"
-	"github.com/kagent-dev/kagent/go/pkg/client/api"
-	"gorm.io/gorm"
 	a2aclient "trpc.group/trpc-go/trpc-a2a-go/client"
 	"trpc.group/trpc-go/trpc-a2a-go/protocol"
 )
@@ -69,29 +66,6 @@ func InvokeCmd(ctx context.Context, cfg *InvokeCfg) {
 
 	// If session is set invoke within a session.
 	if cfg.Session != "" {
-		sessionResp, err := clientSet.Session.GetSession(ctx, cfg.Session, cfg.Config.UserID)
-
-		if err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				if cfg.Agent == "" {
-					fmt.Fprintln(os.Stderr, "Agent is required when creating a new session")
-					return
-				}
-				// If the session is not found, create it
-				sessionCreateResp, err := clientSet.Session.CreateSession(ctx, &api.SessionRequest{
-					Name:   cfg.Session,
-					UserID: cfg.Config.UserID,
-				})
-				if err != nil {
-					fmt.Fprintf(os.Stderr, "Error creating session: %v\n", err)
-					return
-				}
-				sessionResp = sessionCreateResp
-			} else {
-				fmt.Fprintf(os.Stderr, "Error getting session: %v\n", err)
-				return
-			}
-		}
 
 		if cfg.Agent == "" {
 			fmt.Fprintln(os.Stderr, "Agent is required")
@@ -107,7 +81,6 @@ func InvokeCmd(ctx context.Context, cfg *InvokeCfg) {
 		}
 
 		// Use A2A client to send message
-		sessionID := sessionResp.Data.ID
 		if cfg.Stream {
 			ctx, cancel := context.WithTimeout(ctx, 300*time.Second)
 			defer cancel()
@@ -115,7 +88,7 @@ func InvokeCmd(ctx context.Context, cfg *InvokeCfg) {
 			result, err := a2aClient.StreamMessage(ctx, protocol.SendMessageParams{
 				Message: protocol.Message{
 					Role:      protocol.MessageRoleUser,
-					ContextID: &sessionID,
+					ContextID: &cfg.Session,
 					Parts:     []protocol.Part{protocol.NewTextPart(task)},
 				},
 			})
@@ -131,7 +104,7 @@ func InvokeCmd(ctx context.Context, cfg *InvokeCfg) {
 			result, err := a2aClient.SendMessage(ctx, protocol.SendMessageParams{
 				Message: protocol.Message{
 					Role:      protocol.MessageRoleUser,
-					ContextID: &sessionID,
+					ContextID: &cfg.Session,
 					Parts:     []protocol.Part{protocol.NewTextPart(task)},
 				},
 			})

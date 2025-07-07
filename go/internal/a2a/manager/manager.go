@@ -373,6 +373,7 @@ func (m *TaskManager) OnSendTaskSubscribe(ctx context.Context, request protocol.
 
 // storeMessage stores messages
 func (m *TaskManager) storeMessage(message protocol.Message) error {
+	log.Infof("Storing message %s", message.MessageID)
 	// Store the message using the storage interface
 	return m.Storage.StoreMessage(message)
 }
@@ -450,10 +451,7 @@ func (m *TaskManager) processRequestMessage(message *protocol.Message) error {
 	if message.MessageID == "" {
 		message.MessageID = protocol.GenerateMessageID()
 	}
-	if message.ContextID != nil {
-		return m.storeMessage(*message)
-	}
-	return nil
+	return m.storeMessage(*message)
 }
 
 func (m *TaskManager) processReplyMessage(ctxID string, message *protocol.Message) error {
@@ -462,12 +460,7 @@ func (m *TaskManager) processReplyMessage(ctxID string, message *protocol.Messag
 	if message.MessageID == "" {
 		message.MessageID = protocol.GenerateMessageID()
 	}
-
-	// if contextID is not nil, store the conversation history
-	if message.ContextID != nil {
-		return m.storeMessage(*message)
-	}
-	return nil
+	return m.storeMessage(*message)
 }
 
 func (m *TaskManager) getTask(taskID string) (*MemoryCancellableTask, error) {

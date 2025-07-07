@@ -3,10 +3,9 @@ from typing import Dict, List
 from autogen_core import (
     ComponentModel,
 )
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from ...datamodel import Tool, ToolServer
 from ...toolservermanager import ToolServerManager
 
 router = APIRouter()

@@ -2,6 +2,7 @@ package a2a
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -13,6 +14,7 @@ import (
 	common "github.com/kagent-dev/kagent/go/internal/utils"
 	"gorm.io/gorm"
 	"k8s.io/utils/ptr"
+	"trpc.group/trpc-go/trpc-a2a-go/protocol"
 	"trpc.group/trpc-go/trpc-a2a-go/server"
 )
 
@@ -58,7 +60,7 @@ func (a *autogenA2ATranslator) TranslateHandlerForAgent(
 		return nil, nil
 	}
 
-	handler, err := a.makeHandlerForTeam(autogenTeam)
+	handler, err := a.makeHandlerForTeam(autogenTeam, a.dbService)
 	if err != nil {
 		return nil, err
 	}
@@ -108,10 +110,12 @@ func (a *autogenA2ATranslator) translateCardForAgent(
 
 func (a *autogenA2ATranslator) makeHandlerForTeam(
 	autogenTeam *database.Agent,
+	dbService database.Client,
 ) (a2a.MessageHandler, error) {
 	return &taskHandler{
-		team:   autogenTeam,
-		client: a.autogenClient,
+		team:      autogenTeam,
+		client:    a.autogenClient,
+		dbService: dbService,
 	}, nil
 }
 
@@ -121,16 +125,24 @@ type taskHandler struct {
 	dbService database.Client
 }
 
-func (t *taskHandler) HandleMessage(ctx context.Context, task string, contextID string) ([]autogen_client.Event, error) {
+func (t *taskHandler) HandleMessage(ctx context.Context, task string, contextID *string) ([]autogen_client.Event, error) {
 	var taskResult *autogen_client.TaskResult
-	if contextID != "" {
-		_, err := t.getOrCreateSession(ctx, contextID)
+	if contextID != nil && *contextID != "" {
+		log.Printf("Handling message for session %s", *contextID)
+		session, err := t.getOrCreateSession(ctx, *contextID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get or create session: %w", err)
+			return nil, fmt.Errorf("failed to get session: %w", err)
 		}
+
+		messages, err := t.prepareMessages(ctx, session)
+		if err != nil {
+			return nil, fmt.Errorf("failed to prepare messages: %w", err)
+		}
+
 		resp, err := t.client.InvokeTask(ctx, &autogen_client.InvokeTaskRequest{
 			Task:       task,
 			TeamConfig: &t.team.Component,
+			Messages:   messages,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to invoke task: %w", err)
@@ -182,16 +194,54 @@ func (t *taskHandler) getOrCreateSession(ctx context.Context, contextID string) 
 	return session, nil
 }
 
-func (t *taskHandler) HandleMessageStream(ctx context.Context, task string, contextID string) (<-chan autogen_client.Event, error) {
-	if contextID != "" {
-		_, err := t.getOrCreateSession(ctx, contextID)
+func (t *taskHandler) prepareMessages(ctx context.Context, session *database.Session) ([]autogen_client.Event, error) {
+	messages, err := t.dbService.ListMessagesForSession(session.ID, common.GetGlobalUserID())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get messages for session: %w", err)
+	}
+
+	log.Printf("Retrieved %d messages for session %s", len(messages), session.ID)
+
+	var result []autogen_client.Event
+	for _, message := range messages {
+		var parsedMessage protocol.Message
+		log.Printf("parsing message: %s", message.Data)
+		err := json.Unmarshal([]byte(message.Data), &parsedMessage)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse message: %w", err)
+		}
+		for _, part := range parsedMessage.Parts {
+			if textPart, ok := part.(*protocol.TextPart); ok {
+				events := autogen_client.NewTextMessage(textPart.Text)
+				result = append(result, events)
+			} else if dataPart, ok := part.(*protocol.DataPart); ok {
+				fmt.Printf("dataPart type: %T\n", dataPart.Data)
+				// parsedEvent, err := autogen_client.ParseEvent([]byte(dataPart.Data))
+				// if err != nil {
+				// 	return nil, fmt.Errorf("failed to parse event: %w", err)
+				// }
+			}
+		}
+	}
+	return result, nil
+}
+
+func (t *taskHandler) HandleMessageStream(ctx context.Context, task string, contextID *string) (<-chan autogen_client.Event, error) {
+	if contextID != nil && *contextID != "" {
+		session, err := t.getOrCreateSession(ctx, *contextID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get session: %w", err)
+		}
+
+		messages, err := t.prepareMessages(ctx, session)
+		if err != nil {
+			return nil, fmt.Errorf("failed to prepare messages: %w", err)
 		}
 
 		stream, err := t.client.InvokeTaskStream(ctx, &autogen_client.InvokeTaskRequest{
 			Task:       task,
 			TeamConfig: &t.team.Component,
+			Messages:   messages,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to invoke task: %w", err)

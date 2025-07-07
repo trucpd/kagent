@@ -44,15 +44,15 @@ type Agent struct {
 }
 
 type Message struct {
-	ID        string         `gorm:"primaryKey" json:"id"`
-	UserID    string         `gorm:"primaryKey" json:"user_id"`
+	ID        string         `gorm:"primaryKey;not null" json:"id"`
+	UserID    string         `gorm:"primaryKey;not null" json:"user_id"`
 	CreatedAt time.Time      `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt time.Time      `gorm:"autoUpdateTime" json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"deleted_at"`
 
 	Data      string  `gorm:"type:text;not null" json:"data"` // JSON serialized protocol.Message
-	SessionID *string `gorm:"not null;index" json:"session_id"`
-	TaskID    string  `gorm:"not null;index" json:"task_id"`
+	SessionID *string `gorm:"index" json:"session_id"`
+	TaskID    *string `gorm:"index" json:"task_id"`
 }
 
 type Session struct {
