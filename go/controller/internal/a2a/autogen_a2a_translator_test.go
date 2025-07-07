@@ -245,7 +245,7 @@ func TestTaskHandlerWithSession(t *testing.T) {
 		// Verify the session was created
 		createdSession, err := dbService.GetSession(sessionID, "admin@kagent.dev")
 		require.NoError(t, err)
-		assert.Equal(t, sessionID, createdSession.Name)
+		assert.Equal(t, sessionID, createdSession.ID)
 	})
 }
 
@@ -447,7 +447,7 @@ func TestTaskHandlerStreamingSupport(t *testing.T) {
 
 		// Create a session
 		err := dbService.CreateSession(&database.Session{
-			Name:   sessionID,
+			ID:     sessionID,
 			UserID: "admin@kagent.dev",
 		})
 		require.NoError(t, err)

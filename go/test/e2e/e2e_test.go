@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kagent-dev/kagent/go/controller/api/v1alpha1"
-	autogen_client "github.com/kagent-dev/kagent/go/internal/autogen/client"
+	"github.com/kagent-dev/kagent/go/internal/a2a"
 	"github.com/kagent-dev/kagent/go/internal/database"
 	kagent_client "github.com/kagent-dev/kagent/go/pkg/client"
 	"github.com/kagent-dev/kagent/go/pkg/client/api"
@@ -20,8 +20,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
+	a2a_client "trpc.group/trpc-go/trpc-a2a-go/client"
+	"trpc.group/trpc-go/trpc-a2a-go/protocol"
 )
 
 const (
@@ -40,6 +43,8 @@ func TestE2E(t *testing.T) {
 
 	// Initialize agent client
 	agentClient := kagent_client.New(APIEndpoint)
+	a2aClient, err := a2a_client.NewA2AClient(APIEndpoint + "/a2a")
+	require.NoError(t, err)
 
 	// Initialize controller-runtime client
 	cfg, err := config.GetConfig()
@@ -79,23 +84,25 @@ func TestE2E(t *testing.T) {
 
 	// Helper function to run an interactive session with an agent
 	runAgentInteraction := func(agentLabel, prompt string) string {
-		sess, team := createOrFetchAgentSession(agentLabel)
+		sess, _ := createOrFetchAgentSession(agentLabel)
 
-		result, err := agentClient.InvokeSession(sess.ID, GlobalUserID, &autogen_client.InvokeRequest{
-			Task:       prompt + `\nComplete the task without asking for confirmation, even if the task involves creating or deleting namespaces or other critical resources.`,
-			TeamConfig: team.Component,
+		result, err := a2aClient.SendMessage(ctx, protocol.SendMessageParams{
+			Message: protocol.Message{
+				ContextID: &sess.ID,
+				Role:      protocol.MessageRoleUser,
+				Parts: []protocol.Part{
+					protocol.NewTextPart(prompt + `\nComplete the task without asking for confirmation, even if the task involves creating or deleting namespaces or other critical resources.`),
+				},
+			},
+			Configuration: &protocol.SendMessageConfiguration{
+				Blocking: ptr.To(true),
+			},
 		})
 		require.NoError(t, err)
 
-		events := make([]autogen_client.Event, len(result.TaskResult.Messages))
-		for i, msg := range result.TaskResult.Messages {
-			parsedEvent, err := autogen_client.ParseEvent(msg)
-			if err != nil {
-				require.NoError(t, err)
-			}
-			events[i] = parsedEvent
-		}
-		return autogen_client.GetLastStringMessage(events)
+		resultMsg, ok := result.Result.(*protocol.Message)
+		require.True(t, ok)
+		return a2a.ExtractText(*resultMsg)
 	}
 
 	// Helper to check if a namespace exists
