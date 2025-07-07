@@ -438,6 +438,7 @@ func (a *apiTranslator) translateGroupChatForTeam(
 	teamConfig.Label = common.GetObjectRef(team)
 
 	return &database.Agent{
+		Name:      common.GetObjectRef(team),
 		Component: *teamConfig,
 	}, nil
 }

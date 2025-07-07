@@ -11,6 +11,7 @@ import (
 	autogen_client "github.com/kagent-dev/kagent/go/internal/autogen/client"
 	"github.com/kagent-dev/kagent/go/internal/database"
 	common "github.com/kagent-dev/kagent/go/internal/utils"
+	"gorm.io/gorm"
 	"k8s.io/utils/ptr"
 	"trpc.group/trpc-go/trpc-a2a-go/server"
 )
@@ -164,11 +165,11 @@ func (t *taskHandler) HandleMessage(ctx context.Context, task string, contextID 
 func (t *taskHandler) getOrCreateSession(ctx context.Context, contextID string) (*database.Session, error) {
 	session, err := t.dbService.GetSession(contextID, common.GetGlobalUserID())
 	if err != nil {
-		if errors.Is(err, autogen_client.NotFoundError) {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			session = &database.Session{
-				Name:   contextID,
-				UserID: common.GetGlobalUserID(),
-				TeamID: ptr.To(uint(t.team.ID)),
+				ID:      contextID,
+				UserID:  common.GetGlobalUserID(),
+				AgentID: ptr.To(t.team.Name),
 			}
 			err := t.dbService.CreateSession(session)
 			if err != nil {

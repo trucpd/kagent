@@ -244,7 +244,7 @@ func (c *InMemmoryFakeClient) ListToolServers() ([]database.ToolServer, error) {
 }
 
 // ListTools lists all tools for a user
-func (c *InMemmoryFakeClient) ListTools(userID string) ([]database.Tool, error) {
+func (c *InMemmoryFakeClient) ListTools() ([]database.Tool, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -267,7 +267,7 @@ func (c *InMemmoryFakeClient) ListToolsForServer(serverName string) ([]database.
 		if !exists {
 			continue
 		}
-		if tool.ServerID == toolServer.ID {
+		if tool.ServerName == toolServer.Name {
 			result = append(result, *tool)
 		}
 	}

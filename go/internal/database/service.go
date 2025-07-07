@@ -16,9 +16,9 @@ func NewServiceWrapper(manager *Manager) *ServiceWrapper {
 		Feedback:         NewService[Feedback](manager),
 		Tool:             NewService[Tool](manager),
 		ToolServer:       NewService[ToolServer](manager),
-		EvalTask:         NewService[EvalTask](manager),
-		EvalCriteria:     NewService[EvalCriteria](manager),
-		EvalRun:          NewService[EvalRun](manager),
+		// EvalTask:         NewService[EvalTask](manager),
+		// EvalCriteria:     NewService[EvalCriteria](manager),
+		// EvalRun:          NewService[EvalRun](manager),
 	}
 }
 
@@ -35,9 +35,9 @@ type ServiceWrapper struct {
 	Feedback         *Service[Feedback]
 	Tool             *Service[Tool]
 	ToolServer       *Service[ToolServer]
-	EvalTask         *Service[EvalTask]
-	EvalCriteria     *Service[EvalCriteria]
-	EvalRun          *Service[EvalRun]
+	// EvalTask         *Service[EvalTask]
+	// EvalCriteria     *Service[EvalCriteria]
+	// EvalRun          *Service[EvalRun]
 }
 
 // Service provides high-level database operations

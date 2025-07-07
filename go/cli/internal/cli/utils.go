@@ -14,6 +14,7 @@ import (
 	autogen_client "github.com/kagent-dev/kagent/go/internal/autogen/client"
 	"github.com/kagent-dev/kagent/go/pkg/client"
 	"github.com/kagent-dev/kagent/go/pkg/sse"
+	"trpc.group/trpc-go/trpc-a2a-go/protocol"
 )
 
 func CheckServerConnection(client *client.ClientSet) error {
@@ -162,6 +163,50 @@ func StreamEvents(ch <-chan *sse.Event, usage *autogen_client.ModelsUsage, verbo
 			}
 
 			bufferedToolCallRequest = nil
+		}
+	}
+}
+
+func StreamA2AEvents(ch <-chan protocol.StreamingMessageEvent, verbose bool) {
+	for event := range ch {
+		if verbose {
+			json, err := event.MarshalJSON()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error marshaling A2A event: %v\n", err)
+				continue
+			}
+			fmt.Fprintf(os.Stdout, "%+v\n", string(json))
+		} else {
+			json, err := event.MarshalJSON()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error marshaling A2A event: %v\n", err)
+				continue
+			}
+			fmt.Fprintf(os.Stdout, "%+v\n", string(json))
+		}
+	}
+	fmt.Fprintln(os.Stdout) // Add a newline after streaming is complete
+}
+
+func startPortForward(ctx context.Context) func() {
+	ctx, cancel := context.WithCancel(ctx)
+	a2aPortFwdCmd := exec.CommandContext(ctx, "kubectl", "-n", "kagent", "port-forward", "service/kagent", "8083:8083")
+	// Error connecting to server, port-forward the server
+	go func() {
+		if err := a2aPortFwdCmd.Start(); err != nil {
+			fmt.Fprintf(os.Stderr, "Error starting port-forward: %v\n", err)
+			os.Exit(1)
+		}
+	}()
+
+	// Ensure the context is cancelled when the shell is closed
+	return func() {
+		cancel()
+		if err := a2aPortFwdCmd.Wait(); err != nil {
+			// These 2 errors are expected
+			if !strings.Contains(err.Error(), "signal: killed") && !strings.Contains(err.Error(), "exec: not started") {
+				fmt.Fprintf(os.Stderr, "Error waiting for port-forward to exit: %v\n", err)
+			}
 		}
 	}
 }

@@ -12,7 +12,6 @@ type Client interface {
 	CreateSession(session *Session) error
 	CreateAgent(agent *Agent) error
 	CreateToolServer(toolServer *ToolServer) (*ToolServer, error)
-	CreateTool(tool *Tool) error
 
 	UpsertAgent(agent *Agent) error
 
@@ -32,7 +31,7 @@ type Client interface {
 	GetTool(name string) (*Tool, error)
 	GetToolServer(name string) (*ToolServer, error)
 
-	ListTools(userID string) ([]Tool, error)
+	ListTools() ([]Tool, error)
 	ListFeedback(userID string) ([]Feedback, error)
 	ListSessionTasks(sessionName string, userID string) ([]Task, error)
 	ListSessions(userID string) ([]Session, error)
@@ -180,8 +179,8 @@ func (c *clientImpl) ListToolServers() ([]ToolServer, error) {
 }
 
 // ListTools lists all tools for a user
-func (c *clientImpl) ListTools(userID string) ([]Tool, error) {
-	return c.serviceWrapper.Tool.List(Clause{Key: "user_id", Value: userID})
+func (c *clientImpl) ListTools() ([]Tool, error) {
+	return c.serviceWrapper.Tool.List()
 }
 
 // ListToolsForServer lists all tools for a specific server
@@ -207,14 +206,16 @@ func (c *clientImpl) RefreshToolsForServer(serverName string, tools []*autogen_c
 		if existingToolIndex != -1 {
 			existingTool := existingTools[existingToolIndex]
 			existingTool.Component = *tool.Component
+			existingTool.ServerName = serverName
 			err = c.serviceWrapper.Tool.Update(&existingTool)
 			if err != nil {
 				return err
 			}
 		} else {
 			err = c.serviceWrapper.Tool.Create(&Tool{
-				Name:      tool.Name,
-				Component: *tool.Component,
+				Name:       tool.Name,
+				Component:  *tool.Component,
+				ServerName: serverName,
 			})
 			if err != nil {
 				return fmt.Errorf("failed to create tool %s: %v", tool.Name, err)

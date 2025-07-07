@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/kagent-dev/kagent/go/tools/pkg/utils"
 	"net/http"
 	"os"
 	"os/signal"
@@ -12,6 +11,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/kagent-dev/kagent/go/tools/pkg/utils"
 
 	"github.com/kagent-dev/kagent/go/internal/version"
 	"github.com/kagent-dev/kagent/go/tools/pkg/logger"
@@ -23,6 +24,7 @@ import (
 	"github.com/kagent-dev/kagent/go/tools/pkg/k8s"
 	"github.com/kagent-dev/kagent/go/tools/pkg/prometheus"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/mark3labs/mcp-go/util"
 	"github.com/spf13/cobra"
 )
 
@@ -83,7 +85,7 @@ func run(cmd *cobra.Command, args []string) {
 	signal.Notify(signalChan, os.Interrupt, syscall.SIGTERM)
 
 	// HTTP server reference (only used when not in stdio mode)
-	var sseServer *server.SSEServer
+	var sseServer *server.StreamableHTTPServer
 
 	// Start server based on chosen mode
 	wg.Add(1)
@@ -93,7 +95,7 @@ func run(cmd *cobra.Command, args []string) {
 			runStdioServer(ctx, mcp)
 		}()
 	} else {
-		sseServer = server.NewSSEServer(mcp)
+		sseServer = server.NewStreamableHTTPServer(mcp, server.WithLogger(util.DefaultLogger()), server.WithStateLess(true))
 		go func() {
 			defer wg.Done()
 			addr := fmt.Sprintf(":%d", port)

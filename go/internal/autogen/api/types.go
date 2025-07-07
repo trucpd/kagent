@@ -42,6 +42,25 @@ type Component struct {
 	Config           JSONMap `gorm:"type:json" json:"config"`
 }
 
+// Scan implements the sql.Scanner interface
+func (c *Component) Scan(value interface{}) error {
+	if value == nil {
+		return nil
+	}
+
+	bytes, ok := value.([]byte)
+	if !ok {
+		return errors.New("failed to scan Component: value is not []byte")
+	}
+
+	return json.Unmarshal(bytes, c)
+}
+
+// Value implements the driver.Valuer interface
+func (c Component) Value() (driver.Value, error) {
+	return json.Marshal(c)
+}
+
 func (c *Component) ToConfig() (map[string]interface{}, error) {
 	if c == nil {
 		return nil, nil

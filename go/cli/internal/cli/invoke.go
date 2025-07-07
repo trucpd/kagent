@@ -2,16 +2,18 @@ package cli
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/kagent-dev/kagent/go/cli/internal/config"
-	autogen_client "github.com/kagent-dev/kagent/go/internal/autogen/client"
 	"github.com/kagent-dev/kagent/go/pkg/client"
 	"github.com/kagent-dev/kagent/go/pkg/client/api"
+	"gorm.io/gorm"
+	a2aclient "trpc.group/trpc-go/trpc-a2a-go/client"
+	"trpc.group/trpc-go/trpc-a2a-go/protocol"
 )
 
 type InvokeCfg struct {
@@ -24,10 +26,10 @@ type InvokeCfg struct {
 
 func InvokeCmd(ctx context.Context, cfg *InvokeCfg) {
 
-	client := client.New(cfg.Config.APIURL)
+	clientSet := client.New(cfg.Config.APIURL)
 
 	var pf *portForward
-	if err := CheckServerConnection(client); err != nil {
+	if err := CheckServerConnection(clientSet); err != nil {
 		pf = NewPortForward(ctx, cfg.Config)
 		defer pf.Stop()
 	}
@@ -54,20 +56,23 @@ func InvokeCmd(ctx context.Context, cfg *InvokeCfg) {
 		}
 		task = string(content)
 	}
+
+	// Start port forwarding for A2A
+	cancel := startPortForward(ctx)
+	defer cancel()
+
 	// If session is set invoke within a session.
 	if cfg.Session != "" {
-		session, err := client.Session.GetSession(ctx, cfg.Session, cfg.Config.UserID)
-		var team *api.Team
+		sessionResp, err := clientSet.Session.GetSession(ctx, cfg.Session, cfg.Config.UserID)
 
 		if err != nil {
-			if errors.Is(err, autogen_client.NotFoundError) {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
 				if cfg.Agent == "" {
 					fmt.Fprintln(os.Stderr, "Agent is required when creating a new session")
 					return
 				}
 				// If the session is not found, create it
-
-				session, err = client.Session.CreateSession(ctx, &api.SessionRequest{
+				sessionCreateResp, err := clientSet.Session.CreateSession(ctx, &api.SessionRequest{
 					Name:   cfg.Session,
 					UserID: cfg.Config.UserID,
 				})
@@ -75,81 +80,138 @@ func InvokeCmd(ctx context.Context, cfg *InvokeCfg) {
 					fmt.Fprintf(os.Stderr, "Error creating session: %v\n", err)
 					return
 				}
+				sessionResp = sessionCreateResp
 			} else {
 				fmt.Fprintf(os.Stderr, "Error getting session: %v\n", err)
 				return
 			}
 		}
 
-		team, err = client.Agent.GetTeam(ctx, cfg.Agent)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error getting team: %v\n", err)
+		if cfg.Agent == "" {
+			fmt.Fprintln(os.Stderr, "Agent is required")
 			return
 		}
 
+		// Get team information
+		team, err := clientSet.Agent.GetAgent(ctx, cfg.Agent)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error getting agent: %v\n", err)
+			return
+		}
+
+		// Setup A2A client
+		a2aURL := fmt.Sprintf("%s/%s/%s", cfg.Config.A2AURL, cfg.Config.Namespace, team.Data.Component.Label)
+		a2aClient, err := a2aclient.NewA2AClient(a2aURL)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating A2A client: %v\n", err)
+			return
+		}
+
+		// Use A2A client to send message
+		sessionID := sessionResp.Data.ID
 		if cfg.Stream {
-			usage := &autogen_client.ModelsUsage{}
-			ch, err := client.Session.InvokeSessionStream(ctx, session.ID, &api.InvokeRequest{
-				Task:       task,
-				TeamConfig: team.Component,
+			ctx, cancel := context.WithTimeout(ctx, 300*time.Second)
+			defer cancel()
+
+			result, err := a2aClient.StreamMessage(ctx, protocol.SendMessageParams{
+				Message: protocol.Message{
+					Role:      protocol.MessageRoleUser,
+					ContextID: &sessionID,
+					Parts:     []protocol.Part{protocol.NewTextPart(task)},
+				},
 			})
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error invoking session: %v\n", err)
 				return
 			}
-			StreamEvents(ch, usage, cfg.Config.Verbose)
+			StreamA2AEvents(result, cfg.Config.Verbose)
 		} else {
-			result, err := client.InvokeSession(session.ID, cfg.Config.UserID, &autogen_client.InvokeRequest{
-				Task:       task,
-				TeamConfig: team.Component,
+			ctx, cancel := context.WithTimeout(ctx, 300*time.Second)
+			defer cancel()
+
+			result, err := a2aClient.SendMessage(ctx, protocol.SendMessageParams{
+				Message: protocol.Message{
+					Role:      protocol.MessageRoleUser,
+					ContextID: &sessionID,
+					Parts:     []protocol.Part{protocol.NewTextPart(task)},
+				},
 			})
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error invoking session: %v\n", err)
 				return
 			}
 
-			enc := json.NewEncoder(os.Stdout)
-			enc.SetIndent("", "  ")
-			if err := enc.Encode(result.TaskResult); err != nil {
-				fmt.Fprintf(os.Stderr, "Error encoding task result: %v\n", err)
+			jsn, err := result.MarshalJSON()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error marshaling result: %v\n", err)
 				return
 			}
+
+			fmt.Fprintf(os.Stdout, "%+v\n", string(jsn))
 		}
 
 	} else {
 
-		team, err := client.GetTeam(cfg.Agent, cfg.Config.UserID)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error getting team: %v\n", err)
+		if cfg.Agent == "" {
+			fmt.Fprintln(os.Stderr, "Agent is required")
 			return
 		}
 
-		req := &autogen_client.InvokeTaskRequest{
-			Task:       task,
-			TeamConfig: team.Component,
+		// Get team information
+		team, err := clientSet.Agent.GetAgent(ctx, cfg.Agent)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error getting agent: %v\n", err)
+			return
 		}
 
+		// Setup A2A client
+		a2aURL := fmt.Sprintf("%s/%s/%s", cfg.Config.A2AURL, cfg.Config.Namespace, team.Data.Component.Label)
+		a2aClient, err := a2aclient.NewA2AClient(a2aURL)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating A2A client: %v\n", err)
+			return
+		}
+
+		// Use A2A client to send message (no session)
 		if cfg.Stream {
-			usage := &autogen_client.ModelsUsage{}
-			ch, err := client.InvokeTaskStream(req)
+			ctx, cancel := context.WithTimeout(ctx, 300*time.Second)
+			defer cancel()
+
+			result, err := a2aClient.StreamMessage(ctx, protocol.SendMessageParams{
+				Message: protocol.Message{
+					Role:      protocol.MessageRoleUser,
+					ContextID: nil, // No session
+					Parts:     []protocol.Part{protocol.NewTextPart(task)},
+				},
+			})
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error invoking task: %v\n", err)
 				return
 			}
-			StreamEvents(ch, usage, cfg.Config.Verbose)
+			StreamA2AEvents(result, cfg.Config.Verbose)
 		} else {
-			result, err := client.InvokeTask(req)
+			ctx, cancel := context.WithTimeout(ctx, 300*time.Second)
+			defer cancel()
+
+			result, err := a2aClient.SendMessage(ctx, protocol.SendMessageParams{
+				Message: protocol.Message{
+					Role:      protocol.MessageRoleUser,
+					ContextID: nil, // No session
+					Parts:     []protocol.Part{protocol.NewTextPart(task)},
+				},
+			})
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error invoking task: %v\n", err)
 				return
 			}
 
-			enc := json.NewEncoder(os.Stdout)
-			enc.SetIndent("", "  ")
-			if err := enc.Encode(result.TaskResult); err != nil {
-				fmt.Fprintf(os.Stderr, "Error encoding task result: %v\n", err)
+			jsn, err := result.MarshalJSON()
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error marshaling result: %v\n", err)
 				return
 			}
+
+			fmt.Fprintf(os.Stdout, "%+v\n", string(jsn))
 		}
 	}
 }

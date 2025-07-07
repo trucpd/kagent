@@ -30,7 +30,7 @@ func (h *ToolsHandler) HandleListToolsDB(w ErrorResponseWriter, r *http.Request)
 	log = log.WithValues("userID", userID)
 
 	log.V(1).Info("Listing tools from database")
-	tools, err := h.DatabaseService.ListTools(userID)
+	tools, err := h.DatabaseService.ListTools()
 	if err != nil {
 		w.RespondWithError(errors.NewInternalServerError("Failed to list tools", err))
 		return

@@ -54,9 +54,9 @@ func (m *Manager) Initialize() error {
 		&Feedback{},
 		&Tool{},
 		&ToolServer{},
-		&EvalTask{},
-		&EvalCriteria{},
-		&EvalRun{},
+		// &EvalTask{},
+		// &EvalCriteria{},
+		// &EvalRun{},
 	)
 
 	if err != nil {
@@ -83,9 +83,9 @@ func (m *Manager) Reset(recreateTables bool) error {
 		&Feedback{},
 		&Tool{},
 		&ToolServer{},
-		&EvalTask{},
-		&EvalCriteria{},
-		&EvalRun{},
+		// &EvalTask{},
+		// &EvalCriteria{},
+		// &EvalRun{},
 	)
 
 	if err != nil {

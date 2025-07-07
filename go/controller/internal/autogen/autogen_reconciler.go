@@ -3,13 +3,14 @@ package autogen
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
 	"sync"
 
 	"github.com/hashicorp/go-multierror"
-	"k8s.io/apimachinery/pkg/api/errors"
+	"gorm.io/gorm"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -388,7 +389,7 @@ func (a *autogenReconciler) reconcileToolServerStatus(
 func (a *autogenReconciler) ReconcileAutogenMemory(ctx context.Context, req ctrl.Request) error {
 	memory := &v1alpha1.Memory{}
 	if err := a.kube.Get(ctx, req.NamespacedName, memory); err != nil {
-		if errors.IsNotFound(err) {
+		if k8s_errors.IsNotFound(err) {
 			return a.handleMemoryDeletion(req)
 		}
 
@@ -522,22 +523,22 @@ func (a *autogenReconciler) upsertAgent(ctx context.Context, agent *database.Age
 	}
 	resp, err := a.autogenClient.Validate(ctx, &req)
 	if err != nil {
-		return fmt.Errorf("failed to validate agent %s: %v", agent.Component.Label, err)
+		return fmt.Errorf("failed to validate agent %s: %v", agent.Name, err)
 	}
 	if !resp.IsValid {
-		return fmt.Errorf("agent %s is invalid: %v", agent.Component.Label, resp.ErrorMsg())
+		return fmt.Errorf("agent %s is invalid: %v", agent.Name, resp.ErrorMsg())
 	}
 
 	// delete if team exists
-	existingAgent, err := a.dbClient.GetAgent(agent.Component.Label)
-	if err != nil && err != autogen_client.NotFoundError {
-		return fmt.Errorf("failed to get existing agent %s: %v", agent.Component.Label, err)
+	existingAgent, err := a.dbClient.GetAgent(agent.Name)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return fmt.Errorf("failed to get existing agent %s: %v", agent.Name, err)
 	}
 	if existingAgent != nil {
 		agent.ID = existingAgent.ID
 	}
 
-	return a.dbClient.CreateAgent(agent)
+	return a.dbClient.UpsertAgent(agent)
 }
 
 func (a *autogenReconciler) upsertToolServer(ctx context.Context, toolServer *database.ToolServer) (uint, error) {
@@ -858,7 +859,7 @@ func (a *autogenReconciler) findAgentsUsingToolServer(ctx context.Context, req c
 }
 
 func (a *autogenReconciler) getDiscoveredMCPTools(ctx context.Context, serverID uint) ([]*v1alpha1.MCPTool, error) {
-	allTools, err := a.dbClient.ListTools(common.GetGlobalUserID())
+	allTools, err := a.dbClient.ListTools()
 	if err != nil {
 		return nil, err
 	}

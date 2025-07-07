@@ -172,7 +172,7 @@ type ToolServerResponse struct {
 
 func (c *client) FetchTools(ctx context.Context, req *ToolServerRequest) (*ToolServerResponse, error) {
 	var tools ToolServerResponse
-	err := c.doRequest(ctx, "POST", "/toolservers/refresh", req, &tools)
+	err := c.doRequest(ctx, "POST", "/toolservers", req, &tools)
 	if err != nil {
 		return nil, err
 	}

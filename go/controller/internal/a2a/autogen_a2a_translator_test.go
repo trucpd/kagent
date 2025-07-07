@@ -155,8 +155,9 @@ func TestTaskHandlerWithSession(t *testing.T) {
 
 		// Create a session in the in-memory client
 		session := &database.Session{
-			Name:   sessionID,
-			UserID: "admin@kagent.dev",
+			ID:      sessionID,
+			UserID:  "admin@kagent.dev",
+			AgentID: ptr.To("test-agent"),
 		}
 		err := dbService.CreateSession(session)
 		require.NoError(t, err)
