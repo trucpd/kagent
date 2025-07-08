@@ -41,8 +41,15 @@ spec:
             - {{ .Values.controller.loglevel }}
             - -watch-namespaces
             - "{{ include "kagent.watchNamespaces" . }}"
-            - -database-path
-            - /sqlite-volume/kagent.db
+            - -database-type
+            - {{ .Values.database.type }}
+            {{- if eq .Values.database.type "sqlite" }}
+            - -sqlite-database-path
+            - /sqlite-volume/{{ .Values.database.sqlite.databaseName }}
+            {{- else if eq .Values.database.type "postgres" }}
+            - -postgres-database-url
+            - {{ .Values.database.postgres.url }}
+            {{- end }}
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.controller.image.registry }}/{{ .Values.controller.image.repository }}:{{ coalesce .Values.global.tag .Values.controller.image.tag .Chart.Version }}"

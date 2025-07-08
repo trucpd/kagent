@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sync"
 
+	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -15,23 +16,47 @@ type Manager struct {
 	initLock sync.Mutex
 }
 
+type DatabaseType string
+
+const (
+	DatabaseTypeSqlite   DatabaseType = "sqlite"
+	DatabaseTypePostgres DatabaseType = "postgres"
+)
+
+type SqliteConfig struct {
+	DatabasePath string
+}
+
+type PostgresConfig struct {
+	URL string
+}
+
+type Config struct {
+	DatabaseType   DatabaseType
+	SqliteConfig   *SqliteConfig
+	PostgresConfig *PostgresConfig
+}
+
 // NewManager creates a new database manager
-func NewManager(databasePath string) (*Manager, error) {
-	db, err := gorm.Open(sqlite.Open(databasePath), &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Info),
-	})
+func NewManager(config *Config) (*Manager, error) {
+	var db *gorm.DB
+	var err error
+
+	switch config.DatabaseType {
+	case DatabaseTypeSqlite:
+		db, err = gorm.Open(sqlite.Open(config.SqliteConfig.DatabasePath), &gorm.Config{
+			Logger: logger.Default.LogMode(logger.Info),
+		})
+	case DatabaseTypePostgres:
+		db, err = gorm.Open(postgres.Open(config.PostgresConfig.URL), &gorm.Config{
+			Logger: logger.Default.LogMode(logger.Info),
+		})
+	default:
+		return nil, fmt.Errorf("invalid database type: %s", config.DatabaseType)
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
-	}
-
-	// Enable foreign key constraints for SQLite
-	sqlDB, err := db.DB()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get underlying sql.DB: %w", err)
-	}
-
-	if _, err := sqlDB.Exec("PRAGMA foreign_keys = ON"); err != nil {
-		return nil, fmt.Errorf("failed to enable foreign key constraints: %w", err)
 	}
 
 	return &Manager{db: db}, nil
