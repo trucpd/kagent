@@ -56,19 +56,34 @@ func (a *a2aMessageProcessor) ProcessMessage(
 		}, nil
 	}
 
-	processorLog.Info("Processing task", "taskID", message.TaskID, "contextID", message.ContextID, "text", text)
+	taskID, err := handle.BuildTask(message.TaskID, message.ContextID)
+	if err != nil {
+		return nil, err
+	}
+
+	processorLog.Info("Processing task", "taskID", taskID, "contextID", message.ContextID, "text", text)
 
 	if !options.Streaming {
+		defer handle.CleanTask(&taskID)
+
+		if err := handle.UpdateTaskState(&taskID, protocol.TaskStateWorking, &message); err != nil {
+			processorLog.Error(err, "Failed to update task state to working")
+		}
+
 		// Process the input text (in this simple example, we'll just reverse it).
 		result, err := a.msgHandler.HandleMessage(ctx, text, message.ContextID)
 		if err != nil {
-			message := protocol.NewMessage(
-				protocol.MessageRoleAgent,
-				[]protocol.Part{protocol.NewTextPart(err.Error())},
-			)
+			if err := handle.UpdateTaskState(&taskID, protocol.TaskStateFailed, &message); err != nil {
+				processorLog.Error(err, "Failed to update task state to failed")
+			}
+
 			return &taskmanager.MessageProcessingResult{
-				Result: &message,
+				Result: buildError(err),
 			}, nil
+		}
+
+		if err := handle.UpdateTaskState(&taskID, protocol.TaskStateCompleted, &message); err != nil {
+			processorLog.Error(err, "Failed to update task state to completed")
 		}
 
 		textResult := client.GetLastStringMessage(result)
@@ -84,43 +99,25 @@ func (a *a2aMessageProcessor) ProcessMessage(
 		}, nil
 	}
 
-	events, err := a.msgHandler.HandleMessageStream(ctx, text, message.ContextID)
-	if err != nil {
-		return nil, err
-	}
-
-	taskID, err := handle.BuildTask(message.TaskID, message.ContextID)
-	if err != nil {
-		return nil, err
-	}
-
 	taskSubscriber, err := handle.SubScribeTask(ptr.To(taskID))
 	if err != nil {
 		return nil, err
 	}
 
-	go func() {
-		defer func() {
-			if taskSubscriber != nil {
-				taskSubscriber.Close()
-			}
-
-			handle.CleanTask(&taskID)
-		}()
-
-		// Send task status update - working
-		workingEvent := protocol.StreamingMessageEvent{
-			Result: &protocol.TaskStatusUpdateEvent{
-				TaskID: taskID,
-				Kind:   protocol.KindTaskStatusUpdate,
-				Status: protocol.TaskStatus{
-					State: protocol.TaskStateWorking,
-				},
-			},
+	events, err := a.msgHandler.HandleMessageStream(ctx, text, message.ContextID)
+	if err != nil {
+		if err := handle.UpdateTaskState(&taskID, protocol.TaskStateFailed, &message); err != nil {
+			processorLog.Error(err, "Failed to update task state to failed")
 		}
-		err = taskSubscriber.Send(workingEvent)
-		if err != nil {
-			processorLog.Error(err, "Failed to send working event to task subscriber")
+
+		return nil, err
+	}
+
+	go func() {
+		defer handle.CleanTask(&taskID)
+
+		if err := handle.UpdateTaskState(&taskID, protocol.TaskStateWorking, &message); err != nil {
+			processorLog.Error(err, "Failed to update task state to working")
 		}
 
 		for event := range events {
@@ -130,26 +127,20 @@ func (a *a2aMessageProcessor) ProcessMessage(
 			}
 		}
 
-		// Send task completion
-		completedEvent := protocol.StreamingMessageEvent{
-			Result: &protocol.TaskStatusUpdateEvent{
-				TaskID: taskID,
-				Kind:   protocol.KindTaskStatusUpdate,
-				Status: protocol.TaskStatus{
-					State: protocol.TaskStateCompleted,
-				},
-				Final: true,
-			},
-		}
-		err = taskSubscriber.Send(completedEvent)
-		if err != nil {
-			processorLog.Error(err, "Failed to send completed event to task subscriber")
+		if err := handle.UpdateTaskState(&taskID, protocol.TaskStateCompleted, &message); err != nil {
+			processorLog.Error(err, "Failed to update task state to completed")
 		}
 	}()
 
 	return &taskmanager.MessageProcessingResult{
 		StreamingEvents: taskSubscriber,
 	}, nil
+}
+
+func buildError(err error) *protocol.Message {
+	return &protocol.Message{
+		Parts: []protocol.Part{protocol.NewTextPart(err.Error())},
+	}
 }
 
 func convertAutogenTypeToA2AType(event client.Event, taskId, contextId *string) protocol.StreamingMessageEvent {

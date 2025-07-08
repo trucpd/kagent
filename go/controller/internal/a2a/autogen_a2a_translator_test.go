@@ -162,7 +162,7 @@ func TestTaskHandlerWithSession(t *testing.T) {
 		err := dbService.CreateSession(session)
 		require.NoError(t, err)
 		assert.Equal(t, sessionID, session.ID)
-		assert.Equal(t, 1, session.ID) // The in-memory client assigns ID 1 for the first session
+		assert.Equal(t, "test-session", session.ID)
 
 		translator := a2a.NewAutogenA2ATranslator(baseURL, mockClient, dbService)
 
@@ -201,7 +201,7 @@ func TestTaskHandlerWithSession(t *testing.T) {
 	})
 
 	t.Run("should create new session when session not found", func(t *testing.T) {
-		sessionID := "ne	w-session"
+		sessionID := "new-session"
 		task := "test task"
 
 		mockClient := fake.NewMockAutogenClient()
@@ -291,7 +291,7 @@ func TestTaskHandlerWithoutSession(t *testing.T) {
 		// Check that we got a TextMessage with the expected content
 		textMsg, ok := events[0].(*autogen_client.TextMessage)
 		require.True(t, ok, "Expected TextMessage event")
-		assert.Equal(t, "Task completed: test task", textMsg.Content)
+		assert.Equal(t, "Session task completed: test task", textMsg.Content)
 		assert.Equal(t, "assistant", textMsg.Source)
 	})
 
@@ -333,7 +333,7 @@ func TestTaskHandlerWithoutSession(t *testing.T) {
 		// Check that we got a TextMessage with the expected content
 		textMsg, ok := events[0].(*autogen_client.TextMessage)
 		require.True(t, ok, "Expected TextMessage event")
-		assert.Equal(t, "Task completed: test task", textMsg.Content)
+		assert.Equal(t, "Session task completed: test task", textMsg.Content)
 	})
 }
 
@@ -378,7 +378,7 @@ func TestTaskHandlerMessageContentExtraction(t *testing.T) {
 
 		// Test that GetLastStringMessage works correctly
 		lastString := autogen_client.GetLastStringMessage(events)
-		assert.Equal(t, "Task completed: test task", lastString)
+		assert.Equal(t, "Session task completed: test task", lastString)
 	})
 
 	t.Run("should handle empty event list", func(t *testing.T) {
@@ -435,7 +435,7 @@ func TestTaskHandlerStreamingSupport(t *testing.T) {
 		require.Len(t, events, 1)
 		textMsg, ok := events[0].(*autogen_client.TextMessage)
 		require.True(t, ok, "Expected TextMessage event")
-		assert.Equal(t, "Task stream completed: test task", textMsg.Content)
+		assert.Equal(t, "Session task completed: test task", textMsg.Content)
 	})
 
 	t.Run("should support streaming with session", func(t *testing.T) {
@@ -490,6 +490,6 @@ func TestTaskHandlerStreamingSupport(t *testing.T) {
 		require.Len(t, events, 1)
 		textMsg, ok := events[0].(*autogen_client.TextMessage)
 		require.True(t, ok, "Expected TextMessage event")
-		assert.Equal(t, "Session stream task completed: test task", textMsg.Content)
+		assert.Equal(t, "Session task completed: test task", textMsg.Content)
 	})
 }

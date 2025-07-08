@@ -236,18 +236,8 @@ func (h *taskHandler) CleanTask(taskID *string) error {
 	// Cancel the task
 	task.Cancel()
 
-	// Remove from storage
-	if err := h.manager.Storage.DeleteTask(*taskID); err != nil {
-		return fmt.Errorf("failed to delete task: %w", err)
-	}
-
 	// Clean up subscribers
-	h.manager.taskMu.Lock()
-	for _, sub := range h.manager.Subscribers[*taskID] {
-		sub.Close()
-	}
-	delete(h.manager.Subscribers, *taskID)
-	h.manager.taskMu.Unlock()
+	h.manager.cleanSubscribers(*taskID)
 
 	return nil
 }

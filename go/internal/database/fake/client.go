@@ -6,6 +6,7 @@ import (
 
 	autogen_client "github.com/kagent-dev/kagent/go/internal/autogen/client"
 	"github.com/kagent-dev/kagent/go/internal/database"
+	"gorm.io/gorm"
 )
 
 // InMemmoryFakeClient is a fake implementation of database.Client for testing
@@ -136,7 +137,7 @@ func (c *InMemmoryFakeClient) GetSession(sessionID string, userID string) (*data
 	key := c.sessionKey(sessionID, userID)
 	session, exists := c.sessions[key]
 	if !exists {
-		return nil, fmt.Errorf("session with ID %s for user %s not found", sessionID, userID)
+		return nil, gorm.ErrRecordNotFound
 	}
 	return session, nil
 }
@@ -148,7 +149,7 @@ func (c *InMemmoryFakeClient) GetAgent(agentName string) (*database.Agent, error
 
 	agent, exists := c.agents[agentName]
 	if !exists {
-		return nil, fmt.Errorf("agent with name %s not found", agentName)
+		return nil, gorm.ErrRecordNotFound
 	}
 	return agent, nil
 }
@@ -160,7 +161,7 @@ func (c *InMemmoryFakeClient) GetTool(toolName string) (*database.Tool, error) {
 
 	tool, exists := c.tools[toolName]
 	if !exists {
-		return nil, fmt.Errorf("tool with name %s not found", toolName)
+		return nil, gorm.ErrRecordNotFound
 	}
 	return tool, nil
 }
@@ -172,7 +173,7 @@ func (c *InMemmoryFakeClient) GetToolServer(serverName string) (*database.ToolSe
 
 	server, exists := c.toolServers[serverName]
 	if !exists {
-		return nil, fmt.Errorf("tool server with name %s not found", serverName)
+		return nil, gorm.ErrRecordNotFound
 	}
 	return server, nil
 }

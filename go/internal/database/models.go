@@ -62,7 +62,7 @@ type Session struct {
 	UpdatedAt time.Time      `gorm:"autoUpdateTime" json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"deleted_at"`
 
-	AgentID *string `gorm:"not null;index" json:"agent_id"`
+	AgentID *string `gorm:"index" json:"agent_id"`
 }
 
 type Task struct {
@@ -72,7 +72,7 @@ type Task struct {
 	UpdatedAt time.Time      `gorm:"autoUpdateTime" json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"deleted_at"`
 	Data      string         `gorm:"type:text;not null" json:"data"` // JSON serialized task data
-	SessionID *string        `gorm:"not null;index" json:"session_id"`
+	SessionID *string        `gorm:"index" json:"session_id"`
 }
 
 type PushNotification struct {

@@ -139,6 +139,9 @@ func (t *taskHandler) HandleMessage(ctx context.Context, task string, contextID 
 			return nil, fmt.Errorf("failed to prepare messages: %w", err)
 		}
 
+		// Debug logging
+		log.Printf("DEBUG: About to call InvokeTask with Messages - len: %d, nil: %v", len(messages), messages == nil)
+
 		resp, err := t.client.InvokeTask(ctx, &autogen_client.InvokeTaskRequest{
 			Task:       task,
 			TeamConfig: &t.team.Component,

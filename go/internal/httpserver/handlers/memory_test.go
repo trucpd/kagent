@@ -19,6 +19,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/kagent-dev/kagent/go/controller/api/v1alpha1"
+	autogen_fake "github.com/kagent-dev/kagent/go/internal/autogen/client/fake"
+	database_fake "github.com/kagent-dev/kagent/go/internal/database/fake"
 	"github.com/kagent-dev/kagent/go/internal/httpserver/handlers"
 	"github.com/kagent-dev/kagent/go/pkg/client/api"
 )
@@ -36,6 +38,8 @@ func TestMemoryHandler(t *testing.T) {
 		base := &handlers.Base{
 			KubeClient:         kubeClient,
 			DefaultModelConfig: types.NamespacedName{Namespace: "default", Name: "default"},
+			AutogenClient:      autogen_fake.NewInMemoryAutogenClient(),
+			DatabaseService:    database_fake.NewClient(),
 		}
 		handler := handlers.NewMemoryHandler(base)
 		responseRecorder := newMockErrorResponseWriter()
@@ -74,13 +78,13 @@ func TestMemoryHandler(t *testing.T) {
 
 			assert.Equal(t, http.StatusOK, responseRecorder.Code)
 
-			var memories []api.MemoryResponse
+			memories := api.StandardResponse[[]api.MemoryResponse]{}
 			err = json.Unmarshal(responseRecorder.Body.Bytes(), &memories)
 			require.NoError(t, err)
-			assert.Len(t, memories, 1)
+			assert.Len(t, memories.Data, 1)
 
 			// Verify memory response
-			memory := memories[0]
+			memory := memories.Data[0]
 			assert.Equal(t, "default/test-memory-1", memory.Ref)
 			assert.Equal(t, "Pinecone", memory.ProviderName)
 			assert.Equal(t, "test-secret", memory.APIKeySecretRef)
@@ -95,10 +99,10 @@ func TestMemoryHandler(t *testing.T) {
 
 			assert.Equal(t, http.StatusOK, responseRecorder.Code)
 
-			var memories []api.MemoryResponse
+			memories := api.StandardResponse[[]api.MemoryResponse]{}
 			err := json.Unmarshal(responseRecorder.Body.Bytes(), &memories)
 			require.NoError(t, err)
-			assert.Len(t, memories, 0)
+			assert.Len(t, memories.Data, 0)
 		})
 	})
 
@@ -127,12 +131,12 @@ func TestMemoryHandler(t *testing.T) {
 
 			assert.Equal(t, http.StatusCreated, responseRecorder.Code)
 
-			var memory v1alpha1.Memory
+			memory := api.StandardResponse[v1alpha1.Memory]{}
 			err := json.Unmarshal(responseRecorder.Body.Bytes(), &memory)
 			require.NoError(t, err)
-			assert.Equal(t, "test-memory", memory.Name)
-			assert.Equal(t, "default", memory.Namespace)
-			assert.Equal(t, v1alpha1.Pinecone, memory.Spec.Provider)
+			assert.Equal(t, "test-memory", memory.Data.Name)
+			assert.Equal(t, "default", memory.Data.Namespace)
+			assert.Equal(t, v1alpha1.Pinecone, memory.Data.Spec.Provider)
 		})
 
 		t.Run("InvalidJSON", func(t *testing.T) {
@@ -226,7 +230,7 @@ func TestMemoryHandler(t *testing.T) {
 			req := httptest.NewRequest("GET", "/api/memories/default/test-memory", nil)
 
 			router := mux.NewRouter()
-			router.HandleFunc("/api/memories/{namespace}/{memoryName}", func(w http.ResponseWriter, r *http.Request) {
+			router.HandleFunc("/api/memories/{namespace}/{name}", func(w http.ResponseWriter, r *http.Request) {
 				handler.HandleGetMemory(responseRecorder, r)
 			}).Methods("GET")
 
@@ -234,11 +238,11 @@ func TestMemoryHandler(t *testing.T) {
 
 			assert.Equal(t, http.StatusOK, responseRecorder.Code)
 
-			var memoryResponse api.MemoryResponse
+			memoryResponse := api.StandardResponse[api.MemoryResponse]{}
 			err = json.Unmarshal(responseRecorder.Body.Bytes(), &memoryResponse)
 			require.NoError(t, err)
-			assert.Equal(t, "default/test-memory", memoryResponse.Ref)
-			assert.Equal(t, "Pinecone", memoryResponse.ProviderName)
+			assert.Equal(t, "default/test-memory", memoryResponse.Data.Ref)
+			assert.Equal(t, "Pinecone", memoryResponse.Data.ProviderName)
 		})
 
 		t.Run("NotFound", func(t *testing.T) {
@@ -247,7 +251,7 @@ func TestMemoryHandler(t *testing.T) {
 			req := httptest.NewRequest("GET", "/api/memories/default/nonexistent", nil)
 
 			router := mux.NewRouter()
-			router.HandleFunc("/api/memories/{namespace}/{memoryName}", func(w http.ResponseWriter, r *http.Request) {
+			router.HandleFunc("/api/memories/{namespace}/{name}", func(w http.ResponseWriter, r *http.Request) {
 				handler.HandleGetMemory(responseRecorder, r)
 			}).Methods("GET")
 
@@ -292,7 +296,7 @@ func TestMemoryHandler(t *testing.T) {
 			req.Header.Set("Content-Type", "application/json")
 
 			router := mux.NewRouter()
-			router.HandleFunc("/api/memories/{namespace}/{memoryName}", func(w http.ResponseWriter, r *http.Request) {
+			router.HandleFunc("/api/memories/{namespace}/{name}", func(w http.ResponseWriter, r *http.Request) {
 				handler.HandleUpdateMemory(responseRecorder, r)
 			}).Methods("PUT")
 
@@ -300,11 +304,11 @@ func TestMemoryHandler(t *testing.T) {
 
 			assert.Equal(t, http.StatusOK, responseRecorder.Code)
 
-			var updatedMemory v1alpha1.Memory
+			updatedMemory := api.StandardResponse[v1alpha1.Memory]{}
 			err = json.Unmarshal(responseRecorder.Body.Bytes(), &updatedMemory)
 			require.NoError(t, err)
-			assert.Equal(t, "new-index.pinecone.io", updatedMemory.Spec.Pinecone.IndexHost)
-			assert.Equal(t, 15, updatedMemory.Spec.Pinecone.TopK)
+			assert.Equal(t, "new-index.pinecone.io", updatedMemory.Data.Spec.Pinecone.IndexHost)
+			assert.Equal(t, 15, updatedMemory.Data.Spec.Pinecone.TopK)
 		})
 
 		t.Run("InvalidJSON", func(t *testing.T) {
@@ -314,7 +318,7 @@ func TestMemoryHandler(t *testing.T) {
 			req.Header.Set("Content-Type", "application/json")
 
 			router := mux.NewRouter()
-			router.HandleFunc("/api/memories/{namespace}/{memoryName}", func(w http.ResponseWriter, r *http.Request) {
+			router.HandleFunc("/api/memories/{namespace}/{name}", func(w http.ResponseWriter, r *http.Request) {
 				handler.HandleUpdateMemory(responseRecorder, r)
 			}).Methods("PUT")
 
@@ -338,7 +342,7 @@ func TestMemoryHandler(t *testing.T) {
 			req.Header.Set("Content-Type", "application/json")
 
 			router := mux.NewRouter()
-			router.HandleFunc("/api/memories/{namespace}/{memoryName}", func(w http.ResponseWriter, r *http.Request) {
+			router.HandleFunc("/api/memories/{namespace}/{name}", func(w http.ResponseWriter, r *http.Request) {
 				handler.HandleUpdateMemory(responseRecorder, r)
 			}).Methods("PUT")
 
@@ -370,7 +374,7 @@ func TestMemoryHandler(t *testing.T) {
 			req := httptest.NewRequest("DELETE", "/api/memories/default/test-memory", nil)
 
 			router := mux.NewRouter()
-			router.HandleFunc("/api/memories/{namespace}/{memoryName}", func(w http.ResponseWriter, r *http.Request) {
+			router.HandleFunc("/api/memories/{namespace}/{name}", func(w http.ResponseWriter, r *http.Request) {
 				handler.HandleDeleteMemory(responseRecorder, r)
 			}).Methods("DELETE")
 
@@ -378,10 +382,10 @@ func TestMemoryHandler(t *testing.T) {
 
 			assert.Equal(t, http.StatusOK, responseRecorder.Code)
 
-			var response map[string]string
+			response := api.StandardResponse[struct{}]{}
 			err = json.Unmarshal(responseRecorder.Body.Bytes(), &response)
 			require.NoError(t, err)
-			assert.Equal(t, "Memory deleted successfully", response["message"])
+			assert.Equal(t, "Memory deleted successfully", response.Message)
 		})
 
 		t.Run("NotFound", func(t *testing.T) {
@@ -390,7 +394,7 @@ func TestMemoryHandler(t *testing.T) {
 			req := httptest.NewRequest("DELETE", "/api/memories/default/nonexistent", nil)
 
 			router := mux.NewRouter()
-			router.HandleFunc("/api/memories/{namespace}/{memoryName}", func(w http.ResponseWriter, r *http.Request) {
+			router.HandleFunc("/api/memories/{namespace}/{name}", func(w http.ResponseWriter, r *http.Request) {
 				handler.HandleDeleteMemory(responseRecorder, r)
 			}).Methods("DELETE")
 

@@ -20,7 +20,7 @@ import (
 	"github.com/kagent-dev/kagent/go/internal/autogen/api"
 	autogen_fake "github.com/kagent-dev/kagent/go/internal/autogen/client/fake"
 	"github.com/kagent-dev/kagent/go/internal/database"
-	db_fake "github.com/kagent-dev/kagent/go/internal/database/fake"
+	database_fake "github.com/kagent-dev/kagent/go/internal/database/fake"
 	common "github.com/kagent-dev/kagent/go/internal/utils"
 )
 
@@ -58,6 +58,7 @@ func setupTestHandler(objects ...client.Object) (*AgentsHandler, string) {
 
 	userID := common.GetGlobalUserID()
 	autogenClient := autogen_fake.NewInMemoryAutogenClient()
+	dbClient := database_fake.NewClient()
 
 	base := &Base{
 		KubeClient:    kubeClient,
@@ -66,12 +67,13 @@ func setupTestHandler(objects ...client.Object) (*AgentsHandler, string) {
 			Name:      "test-model-config",
 			Namespace: "default",
 		},
+		DatabaseService: dbClient,
 	}
 
 	return NewAgentsHandler(base), userID
 }
 
-func createAutogenTeam(client *db_fake.InMemmoryFakeClient, userID string, agent *v1alpha1.Agent) {
+func createAutogenTeam(client database.Client, userID string, agent *v1alpha1.Agent) {
 	autogenTeam := &database.Agent{
 		Component: api.Component{
 			Label: common.GetObjectRef(agent),
@@ -86,7 +88,7 @@ func TestHandleGetTeam(t *testing.T) {
 		team := createTestAgent("test-team", modelConfig)
 
 		handler, userID := setupTestHandler(team, modelConfig)
-		createAutogenTeam(handler.Base.DatabaseService.(*db_fake.InMemmoryFakeClient), userID, team)
+		createAutogenTeam(handler.Base.DatabaseService, userID, team)
 
 		req := httptest.NewRequest("GET", fmt.Sprintf("/api/teams/1?user_id=%s", userID), nil)
 		req = mux.SetURLVars(req, map[string]string{"teamID": "1"})
@@ -169,7 +171,7 @@ func TestHandleListTeams(t *testing.T) {
 		team := createTestAgent("test-team", modelConfig)
 
 		handler, userID := setupTestHandler(team, modelConfig)
-		createAutogenTeam(handler.Base.DatabaseService.(*db_fake.InMemmoryFakeClient), userID, team)
+		createAutogenTeam(handler.Base.DatabaseService, userID, team)
 
 		req := httptest.NewRequest("GET", fmt.Sprintf("/api/teams?user_id=%s", userID), nil)
 		w := httptest.NewRecorder()

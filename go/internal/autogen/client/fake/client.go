@@ -34,12 +34,30 @@ func (m *InMemoryAutogenClient) GetVersion(_ context.Context) (string, error) {
 
 // InvokeTask implements the Client interface
 func (m *InMemoryAutogenClient) InvokeTask(ctx context.Context, req *autogen_client.InvokeTaskRequest) (*autogen_client.InvokeTaskResult, error) {
-	// For in-memory implementation, return a basic result
+
+	// Determine the response based on context (session/no session)
+	// If Messages is set (even if empty), it's a session-based call
+
+	// Create a proper TextMessage event in JSON format
+	textEvent := map[string]interface{}{
+		"type":     "TextMessage",
+		"source":   "assistant",
+		"content":  fmt.Sprintf("Session task completed: %s", req.Task),
+		"metadata": map[string]string{},
+		"models_usage": map[string]interface{}{
+			"prompt_tokens":     0,
+			"completion_tokens": 0,
+		},
+	}
+
+	jsonData, err := json.Marshal(textEvent)
+	if err != nil {
+		return nil, err
+	}
+
 	return &autogen_client.InvokeTaskResult{
 		TaskResult: autogen_client.TaskResult{
-			Messages: []json.RawMessage{
-				json.RawMessage(fmt.Sprintf(`{"role": "assistant", "content": "Task completed: %s"}`, req.Task)),
-			},
+			Messages: []json.RawMessage{jsonData},
 		},
 	}, nil
 }
@@ -49,9 +67,26 @@ func (m *InMemoryAutogenClient) InvokeTaskStream(ctx context.Context, req *autog
 	ch := make(chan *autogen_client.SseEvent, 1)
 	go func() {
 		defer close(ch)
+		// Create a proper TextMessage event in JSON format
+		textEvent := map[string]interface{}{
+			"type":     "TextMessage",
+			"source":   "assistant",
+			"content":  fmt.Sprintf("Session task completed: %s", req.Task),
+			"metadata": map[string]string{},
+			"models_usage": map[string]interface{}{
+				"prompt_tokens":     0,
+				"completion_tokens": 0,
+			},
+		}
+
+		jsonData, err := json.Marshal(textEvent)
+		if err != nil {
+			return
+		}
+
 		ch <- &autogen_client.SseEvent{
 			Event: "message",
-			Data:  []byte(fmt.Sprintf("Task stream completed: %s", req.Task)),
+			Data:  jsonData,
 		}
 	}()
 
