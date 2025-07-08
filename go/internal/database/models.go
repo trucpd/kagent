@@ -117,54 +117,6 @@ type ToolServer struct {
 	Component     api.Component `gorm:"type:json;not null" json:"component"`
 }
 
-// // EvalTask represents an evaluation task
-// type EvalTask struct {
-// 	gorm.Model
-// 	UserID      string        `gorm:"primaryKey;not null" json:"user_id"`
-// 	Name        string        `gorm:"default:'Unnamed Task'" json:"name"`
-// 	Description string        `json:"description"`
-// 	Config      api.Component `gorm:"type:json;not null" json:"config"`
-// }
-
-// // EvalCriteria represents evaluation criteria
-// type EvalCriteria struct {
-// 	gorm.Model
-// 	Name        string        `gorm:"default:'Unnamed Criteria'" json:"name"`
-// 	Description string        `json:"description"`
-// 	Config      api.Component `gorm:"type:json;not null" json:"config"`
-// }
-
-// // EvalRunStatus represents the status of an evaluation run
-// type EvalRunStatus string
-
-// const (
-// 	EvalRunStatusPending  EvalRunStatus = "pending"
-// 	EvalRunStatusRunning  EvalRunStatus = "running"
-// 	EvalRunStatusComplete EvalRunStatus = "complete"
-// 	EvalRunStatusError    EvalRunStatus = "error"
-// )
-
-// // EvalRun represents an evaluation run
-// type EvalRun struct {
-// 	gorm.Model
-// 	UserID          string          `gorm:"primaryKey;not null" json:"user_id"`
-// 	Name            string          `gorm:"default:'Unnamed Evaluation Run'" json:"name"`
-// 	Description     string          `json:"description"`
-// 	TaskID          *uint           `gorm:"index;constraint:OnDelete:SET NULL" json:"task_id,omitempty"`
-// 	RunnerConfig    api.Component   `gorm:"not null" json:"runner_config"`
-// 	JudgeConfig     api.Component   `gorm:"not null" json:"judge_config"`
-// 	CriteriaConfigs []api.Component `json:"criteria_configs"`
-// 	Status          EvalRunStatus   `gorm:"default:pending" json:"status"`
-// 	StartTime       *time.Time      `json:"start_time,omitempty"`
-// 	EndTime         *time.Time      `json:"end_time,omitempty"`
-// 	RunResult       JSONMap         `gorm:"type:json" json:"run_result,omitempty"`
-// 	ScoreResult     JSONMap         `gorm:"type:json" json:"score_result,omitempty"`
-// 	ErrorMessage    *string         `json:"error_message,omitempty"`
-
-// 	// Relationships
-// 	Task *EvalTask `gorm:"foreignKey:TaskID" json:"task,omitempty"`
-// }
-
 // TableName methods to match Python table names
 func (Agent) TableName() string            { return "agent" }
 func (Message) TableName() string          { return "message" }
@@ -174,7 +126,3 @@ func (PushNotification) TableName() string { return "push_notification" }
 func (Feedback) TableName() string         { return "feedback" }
 func (Tool) TableName() string             { return "tool" }
 func (ToolServer) TableName() string       { return "toolserver" }
-
-// func (EvalTask) TableName() string         { return "evaltask" }
-// func (EvalCriteria) TableName() string     { return "evalcriteria" }
-// func (EvalRun) TableName() string          { return "evalrun" }
