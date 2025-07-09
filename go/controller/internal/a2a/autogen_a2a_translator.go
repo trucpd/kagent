@@ -183,7 +183,7 @@ func (t *taskHandler) getOrCreateSession(ctx context.Context, contextID string) 
 			session = &database.Session{
 				ID:      contextID,
 				UserID:  common.GetGlobalUserID(),
-				AgentID: ptr.To(t.team.Name),
+				AgentID: &t.team.ID,
 				Name:    contextID,
 			}
 			err := t.dbService.CreateSession(session)

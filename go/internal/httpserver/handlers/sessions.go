@@ -9,7 +9,6 @@ import (
 	"github.com/kagent-dev/kagent/go/internal/httpserver/errors"
 	"github.com/kagent-dev/kagent/go/internal/utils"
 	"github.com/kagent-dev/kagent/go/pkg/client/api"
-	"k8s.io/utils/ptr"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -26,6 +25,48 @@ func NewSessionsHandler(base *Base) *SessionsHandler {
 // RunRequest represents a run creation request
 type RunRequest struct {
 	Task string `json:"task"`
+}
+
+func (h *SessionsHandler) HandleGetSessionsForAgent(w ErrorResponseWriter, r *http.Request) {
+	log := ctrllog.FromContext(r.Context()).WithName("sessions-handler").WithValues("operation", "get-sessions-for-agent")
+
+	namespace, err := GetPathParam(r, "namespace")
+	if err != nil {
+		w.RespondWithError(errors.NewBadRequestError("Failed to get agent ref from path", err))
+		return
+	}
+	log = log.WithValues("namespace", namespace)
+
+	agentName, err := GetPathParam(r, "name")
+	if err != nil {
+		w.RespondWithError(errors.NewBadRequestError("Failed to get agent namespace from path", err))
+		return
+	}
+	log = log.WithValues("agentName", agentName)
+
+	userID, err := GetUserID(r)
+	if err != nil {
+		w.RespondWithError(errors.NewBadRequestError("Failed to get user ID", err))
+		return
+	}
+
+	// Get agent ID from agent ref
+	agent, err := h.DatabaseService.GetAgent(namespace + "/" + agentName)
+	if err != nil {
+		w.RespondWithError(errors.NewNotFoundError("Agent not found", err))
+		return
+	}
+
+	log.V(1).Info("Getting sessions for agent from database")
+	sessions, err := h.DatabaseService.ListSessionsForAgent(agent.ID, userID)
+	if err != nil {
+		w.RespondWithError(errors.NewInternalServerError("Failed to get sessions for agent", err))
+		return
+	}
+
+	log.Info("Successfully listed sessions", "count", len(sessions))
+	data := api.NewResponse(sessions, "Successfully listed sessions", false)
+	RespondWithJSON(w, http.StatusOK, data)
 }
 
 // HandleListSessions handles GET /api/sessions requests using database
@@ -67,15 +108,29 @@ func (h *SessionsHandler) HandleCreateSession(w ErrorResponseWriter, r *http.Req
 	}
 	log = log.WithValues("userID", sessionRequest.UserID)
 
+	if sessionRequest.AgentRef == nil {
+		w.RespondWithError(errors.NewBadRequestError("agent_ref is required", nil))
+		return
+	}
+	log = log.WithValues("agentRef", *sessionRequest.AgentRef)
+
 	id := uuid.New().String()
 	name := id
 	if sessionRequest.Name != nil {
 		name = *sessionRequest.Name
 	}
+
+	agent, err := h.DatabaseService.GetAgent(*sessionRequest.AgentRef)
+	if err != nil {
+		w.RespondWithError(errors.NewNotFoundError("Agent not found", err))
+		return
+	}
+
 	session := &database.Session{
-		UserID:  sessionRequest.UserID,
-		AgentID: ptr.To(sessionRequest.AgentRef),
+		ID:      id,
 		Name:    name,
+		UserID:  sessionRequest.UserID,
+		AgentID: &agent.ID,
 	}
 
 	log.V(1).Info("Creating session in database",
@@ -137,6 +192,12 @@ func (h *SessionsHandler) HandleUpdateSession(w ErrorResponseWriter, r *http.Req
 		return
 	}
 
+	if sessionRequest.AgentRef == nil {
+		w.RespondWithError(errors.NewBadRequestError("agent_ref is required", nil))
+		return
+	}
+	log = log.WithValues("agentRef", *sessionRequest.AgentRef)
+
 	// Get existing session
 	session, err := h.DatabaseService.GetSession(*sessionRequest.Name, sessionRequest.UserID)
 	if err != nil {
@@ -144,8 +205,14 @@ func (h *SessionsHandler) HandleUpdateSession(w ErrorResponseWriter, r *http.Req
 		return
 	}
 
+	agent, err := h.DatabaseService.GetAgent(*sessionRequest.AgentRef)
+	if err != nil {
+		w.RespondWithError(errors.NewNotFoundError("Agent not found", err))
+		return
+	}
+
 	// Update fields
-	session.AgentID = ptr.To(sessionRequest.AgentRef)
+	session.AgentID = &agent.ID
 
 	if err := h.DatabaseService.UpdateSession(session); err != nil {
 		w.RespondWithError(errors.NewInternalServerError("Failed to update session", err))

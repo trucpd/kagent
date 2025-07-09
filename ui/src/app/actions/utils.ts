@@ -66,7 +66,7 @@ export async function fetchApi<T>(path: string, options: ApiOptions = {}): Promi
     }
 
     const jsonResponse = await response.json();
-    return jsonResponse?.data || jsonResponse;
+    return jsonResponse;
   } catch (error) {
     if (error instanceof TypeError && error.message === "Failed to fetch") {
       throw new Error(`Network error - Could not reach backend server. ${url}`);

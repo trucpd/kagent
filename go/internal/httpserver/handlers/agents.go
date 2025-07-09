@@ -131,6 +131,7 @@ func (h *AgentsHandler) getAgentResponse(ctx context.Context, log logr.Logger, a
 	}
 
 	return api.AgentResponse{
+		ID:             dbAgent.ID,
 		Agent:          agent,
 		Component:      &dbAgent.Component,
 		ModelProvider:  modelConfig.Spec.Provider,

@@ -226,6 +226,20 @@ func (c *InMemmoryFakeClient) ListSessions(userID string) ([]database.Session, e
 	return result, nil
 }
 
+// ListSessionsForAgent lists all sessions for an agent
+func (c *InMemmoryFakeClient) ListSessionsForAgent(agentID uint, userID string) ([]database.Session, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	var result []database.Session
+	for _, session := range c.sessions {
+		if session.AgentID != nil && *session.AgentID == agentID && session.UserID == userID {
+			result = append(result, *session)
+		}
+	}
+	return result, nil
+}
+
 // ListAgents lists all agents
 func (c *InMemmoryFakeClient) ListAgents() ([]database.Agent, error) {
 	c.mu.RLock()

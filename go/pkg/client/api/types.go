@@ -77,6 +77,7 @@ type UpdateModelConfigRequest struct {
 // Agent types
 
 type AgentResponse struct {
+	ID             uint                   `json:"id"`
 	Agent          *v1alpha1.Agent        `json:"agent"`
 	Component      *autogen_api.Component `json:"component"`
 	ModelProvider  v1alpha1.ModelProvider `json:"modelProvider"`
@@ -90,7 +91,7 @@ type AgentResponse struct {
 
 // SessionRequest represents a session creation/update request
 type SessionRequest struct {
-	AgentRef string  `json:"agent_ref"`
+	AgentRef *string `json:"agent_ref,omitempty"`
 	Name     *string `json:"name,omitempty"`
 	UserID   string  `json:"user_id"`
 }

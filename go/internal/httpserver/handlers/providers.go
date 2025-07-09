@@ -5,6 +5,7 @@ import (
 	"reflect"
 
 	"github.com/kagent-dev/kagent/go/controller/api/v1alpha1"
+	"github.com/kagent-dev/kagent/go/pkg/client/api"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -79,7 +80,8 @@ func (h *ProviderHandler) HandleListSupportedMemoryProviders(w ErrorResponseWrit
 		})
 	}
 
-	RespondWithJSON(w, http.StatusOK, providersResponse)
+	data := api.NewResponse(providersResponse, "Successfully listed supported memory providers", false)
+	RespondWithJSON(w, http.StatusOK, data)
 }
 
 func (h *ProviderHandler) HandleListSupportedModelProviders(w ErrorResponseWriter, r *http.Request) {
@@ -122,5 +124,6 @@ func (h *ProviderHandler) HandleListSupportedModelProviders(w ErrorResponseWrite
 		})
 	}
 
-	RespondWithJSON(w, http.StatusOK, providersResponse)
+	data := api.NewResponse(providersResponse, "Successfully listed supported model providers", false)
+	RespondWithJSON(w, http.StatusOK, data)
 }

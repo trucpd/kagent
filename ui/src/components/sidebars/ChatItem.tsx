@@ -17,20 +17,21 @@ import { Button } from "../ui/button";
 
 interface ChatItemProps {
   sessionId: string;
-  onDelete: (sessionId: number) => Promise<void>;
+  onDelete: (sessionId: string) => Promise<void>;
   agentName?: string;
+  agentNamespace?: string;
   sessionName?: string;
-  onDownload?: (sessionId: number) => Promise<void>;
+  onDownload?: (sessionId: string) => Promise<void>;
 }
 
-const ChatItem = ({ sessionId, agentName, onDelete, sessionName, onDownload }: ChatItemProps) => {
+const ChatItem = ({ sessionId, agentName, agentNamespace, onDelete, sessionName, onDownload }: ChatItemProps) => {
   const title = sessionName || "Untitled";
   return (
     <>
       <SidebarMenu>
         <SidebarMenuItem key={sessionId}>
           <SidebarMenuButton asChild>
-            <Link href={`/agents/${agentName}/chat/${sessionId}`}>
+            <Link href={`/agents/${agentNamespace}/${agentName}/chat/${sessionId}`}>
               <span className="text-ellipsis truncate max-w-[300px] text-sm" title={title}>{title}</span>
             </Link>
           </SidebarMenuButton>

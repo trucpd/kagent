@@ -85,7 +85,7 @@ type Session struct {
 	UpdatedAt time.Time      `gorm:"autoUpdateTime" json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"deleted_at"`
 
-	AgentID *string `gorm:"index" json:"agent_id"`
+	AgentID *uint `gorm:"index" json:"agent_id"`
 }
 
 type Task struct {

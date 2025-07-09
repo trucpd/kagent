@@ -1,7 +1,7 @@
 "use server";
 
 import { BaseResponse } from "@/lib/types";
-import { Agent, AgentResponse, Tool, Component } from "@/types/datamodel";
+import { Agent, AgentResponse, Tool } from "@/types/datamodel";
 import { revalidatePath } from "next/cache";
 import { fetchApi, createErrorResponse } from "./utils";
 import { AgentFormData } from "@/components/AgentsProvider";
@@ -56,24 +56,6 @@ function extractToolsFromResponse(data: AgentResponse, allAgents: AgentResponse[
 }
 
 /**
- * Processes a config object, converting all values to strings
- * @param config The config object to process
- * @returns A new object with all values as strings
- */
-function processConfigObject(config: Record<string, unknown>): Record<string, string> {
-  return Object.entries(config).reduce((acc, [key, value]) => {
-    // If value is an object and not null, process it recursively
-    if (typeof value === "object" && value !== null) {
-      acc[key] = JSON.stringify(processConfigObject(value as Record<string, unknown>));
-    } else {
-      // For primitive values, convert to string
-      acc[key] = String(value);
-    }
-    return acc;
-  }, {} as Record<string, string>);
-}
-
-/**
  * Converts AgentFormData to Agent format
  * @param agentFormData The form data to convert
  * @returns An Agent object
@@ -117,28 +99,23 @@ function fromAgentFormDataToAgent(agentFormData: AgentFormData): Agent {
   };
 }
 
-/**
- * Gets a team by label or ID
- * @param teamLabel The team label or ID
- * @returns A promise with the team data
- */
-export async function getAgent(agentName: string): Promise<BaseResponse<AgentResponse>> {
-  try {
-    const teamData = await fetchApi<AgentResponse>(`/agents/${agentName}`);
+export async function getAgent(agentName: string, namespace: string): Promise<BaseResponse<AgentResponse>> {
+  try { 
+    const teamData = await fetchApi<BaseResponse<AgentResponse>>(`/agents/${namespace}/${agentName}`);
 
     // Fetch all teams to get descriptions for agent tools
     // We use fetchApi directly to avoid circular dependency/logic issues with calling getTeams() here
-    const allTeamsData = await fetchApi<AgentResponse[]>(`/teams`);
+    const allTeamsData = await fetchApi<BaseResponse<AgentResponse[]>>(`/agents`);
     
     // Extract and augment tools using the list of all teams
-    const tools = extractToolsFromResponse(teamData, allTeamsData);
+    const tools = extractToolsFromResponse(teamData.data!, allTeamsData.data!);
 
     const response: AgentResponse = {
-      ...teamData,
+      ...teamData.data!,
       agent: {
-        ...teamData.agent,
+        ...teamData.data!.agent,
         spec: {
-          ...teamData.agent.spec,
+          ...teamData.data!.agent.spec,
           tools,
         },
       },
@@ -155,9 +132,9 @@ export async function getAgent(agentName: string): Promise<BaseResponse<AgentRes
  * @param teamLabel The team label
  * @returns A promise with the delete result
  */
-export async function deleteTeam(teamLabel: string): Promise<BaseResponse<void>> {
+export async function deleteAgent(agentName: string): Promise<BaseResponse<void>> {
   try {
-    await fetchApi(`/teams/${teamLabel}`, {
+    await fetchApi(`/agents/${agentName}`, {
       method: "DELETE",
       headers: {
         "Content-Type": "application/json",
@@ -180,7 +157,7 @@ export async function deleteTeam(teamLabel: string): Promise<BaseResponse<void>>
 export async function createAgent(agentConfig: AgentFormData, update: boolean = false): Promise<BaseResponse<Agent>> {
   try {
     const agentPayload = fromAgentFormDataToAgent(agentConfig);
-    const response = await fetchApi<Agent>(`/teams`, {
+    const response = await fetchApi<BaseResponse<Agent>>(`/agents`, {
       method: update ? "PUT" : "POST",
       headers: {
         "Content-Type": "application/json",
@@ -193,12 +170,12 @@ export async function createAgent(agentConfig: AgentFormData, update: boolean = 
     }
 
     const agentRef = k8sRefUtils.toRef(
-      response.metadata.namespace || "",
-      response.metadata.name,
+      response.data!.metadata.namespace || "",
+      response.data!.metadata.name,
     )
 
     revalidatePath(`/agents/${agentRef}/chat`);
-    return { message: "Successfully created agent", data: response };
+    return { message: "Successfully created agent", data: response.data };
   } catch (error) {
     return createErrorResponse<Agent>(error, "Error creating team");
   }
@@ -210,12 +187,11 @@ export async function createAgent(agentConfig: AgentFormData, update: boolean = 
  */
 export async function getAgents(): Promise<BaseResponse<AgentResponse[]>> {
   try {
-    const data = await fetchApi<AgentResponse[]>(`/agents`);
-    
-    const validTeams = data.filter(team => !!team.agent);
-    const agentMap = new Map(validTeams.map(agentResp => [agentResp.agent.metadata.name, agentResp]));
+    const data = await fetchApi<BaseResponse<AgentResponse[]>>(`/agents`);
+    const validTeams = data.data?.filter(team => !!team.agent);
+    const agentMap = new Map(validTeams?.map(agentResp => [agentResp.agent.metadata.name, agentResp]));
 
-    const convertedData: AgentResponse[] = validTeams.map(team => {
+    const convertedData: AgentResponse[] = validTeams!.map(team => {
       const augmentedTools = team.tools?.map(tool => {
         // Check if it's an Agent tool reference needing description
         if (isAgentTool(tool)) {
@@ -253,7 +229,7 @@ export async function getAgents(): Promise<BaseResponse<AgentResponse[]>> {
       return aRef.localeCompare(bRef)
     });
     
-    return { message: "Successfully fetched agents", data: sortedData };
+    return { message: "Successfully fetched agents", data: sortedData || [] };
   } catch (error) {
     return createErrorResponse<AgentResponse[]>(error, "Error getting teams");
   }

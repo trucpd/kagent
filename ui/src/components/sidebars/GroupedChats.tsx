@@ -11,10 +11,11 @@ import { toast } from "sonner";
 
 interface GroupedChatsProps {
   agentName: string;
+  agentNamespace: string;
   sessions: Session[];
 }
 
-export default function GroupedChats({ agentName, sessions }: GroupedChatsProps) {
+export default function GroupedChats({ agentName, agentNamespace, sessions }: GroupedChatsProps) {
   // Local state to manage sessions for immediate UI updates
   const [localSessions, setLocalSessions] = useState<Session[]>(sessions);
 
@@ -62,7 +63,7 @@ export default function GroupedChats({ agentName, sessions }: GroupedChatsProps)
     };
   }, [localSessions]);
 
-  const onDeleteClick = async (sessionId: number) => {
+  const onDeleteClick = async (sessionId: string) => {
     try {
       // Immediately remove from local state
       setLocalSessions(prev => prev.filter(session => session.id !== sessionId));
@@ -76,7 +77,7 @@ export default function GroupedChats({ agentName, sessions }: GroupedChatsProps)
     }
   };
 
-  const onDownloadClick = async (sessionId: number) => {
+  const onDownloadClick = async (sessionId: string) => {
     toast.promise(
       getSessionMessages(String(sessionId)).then(messages => {
         const blob = new Blob([JSON.stringify(messages, null, 2)], { type: "application/json" });
@@ -120,11 +121,11 @@ export default function GroupedChats({ agentName, sessions }: GroupedChatsProps)
         <EmptyState />
       ) : (
         <>
-          {groupedChats.today.length > 0 && <ChatGroup title="Today" sessions={groupedChats.today} agentName={agentName} onDeleteSession={(sessionId) => onDeleteClick(sessionId)} onDownloadSession={(sessionId) => onDownloadClick(sessionId)} />}
+          {groupedChats.today.length > 0 && <ChatGroup title="Today" sessions={groupedChats.today} agentName={agentName} agentNamespace={agentNamespace} onDeleteSession={(sessionId) => onDeleteClick(sessionId)} onDownloadSession={(sessionId) => onDownloadClick(sessionId)} />}
           {groupedChats.yesterday.length > 0 && (
-            <ChatGroup title="Yesterday" sessions={groupedChats.yesterday} agentName={agentName} onDeleteSession={(sessionId) => onDeleteClick(sessionId)} onDownloadSession={(sessionId) => onDownloadClick(sessionId)} />
+            <ChatGroup title="Yesterday" sessions={groupedChats.yesterday} agentName={agentName} agentNamespace={agentNamespace} onDeleteSession={(sessionId) => onDeleteClick(sessionId)} onDownloadSession={(sessionId) => onDownloadClick(sessionId)} />
           )}
-          {groupedChats.older.length > 0 && <ChatGroup title="Older" sessions={groupedChats.older} agentId={agentId} onDeleteSession={(sessionId) => onDeleteClick(sessionId)} onDownloadSession={(sessionId) => onDownloadClick(sessionId)} />}
+          {groupedChats.older.length > 0 && <ChatGroup title="Older" sessions={groupedChats.older} agentName={agentName} agentNamespace={agentNamespace} onDeleteSession={(sessionId) => onDeleteClick(sessionId)} onDownloadSession={(sessionId) => onDownloadClick(sessionId)} />}
         </>
       )}
     </>

@@ -4,11 +4,12 @@ import React, { useState, useEffect } from "react";
 import SessionsSidebar from "@/components/sidebars/SessionsSidebar";
 import { AgentDetailsSidebar } from "@/components/sidebars/AgentDetailsSidebar";
 import { AgentResponse, Session, Component, ToolConfig } from "@/types/datamodel";
-import { getSessions } from "@/app/actions/sessions";
+import { getSessionsForAgent } from "@/app/actions/sessions";
 import { toast } from "sonner";
 
 interface ChatLayoutUIProps {
   agentName: string;
+  namespace: string;
   currentAgent: AgentResponse;
   allAgents: AgentResponse[];
   allTools: Component<ToolConfig>[];
@@ -17,6 +18,7 @@ interface ChatLayoutUIProps {
 
 export default function ChatLayoutUI({
   agentName,
+  namespace,
   currentAgent,
   allAgents,
   allTools,
@@ -28,7 +30,7 @@ export default function ChatLayoutUI({
   const refreshSessions = async () => {
     setIsLoadingSessions(true);
     try {
-      const sessionsResponse = await getSessions(agentName);
+      const sessionsResponse = await getSessionsForAgent(namespace, agentName);
       if (!sessionsResponse.error && sessionsResponse.data) {
         setSessions(sessionsResponse.data);
       } else {
@@ -73,6 +75,7 @@ export default function ChatLayoutUI({
     <>
       <SessionsSidebar
         agentName={agentName}
+        agentNamespace={namespace}
         currentAgent={currentAgent}
         allAgents={allAgents}
         agentSessions={sessions}

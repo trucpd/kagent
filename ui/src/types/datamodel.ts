@@ -346,7 +346,7 @@ export interface Team extends DBModel {
 export interface Session {
   id: string;
   name: string;
-  agent_id: string;
+  agent_id: number;
   user_id: string;
   created_at: string;
   updated_at: string;

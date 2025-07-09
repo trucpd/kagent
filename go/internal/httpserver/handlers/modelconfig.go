@@ -66,7 +66,8 @@ func (h *ModelConfigHandler) HandleListModelConfigs(w ErrorResponseWriter, r *ht
 	}
 
 	log.Info("Successfully listed ModelConfigs", "count", len(configs))
-	RespondWithJSON(w, http.StatusOK, configs)
+	data := api.NewResponse(configs, "Successfully listed ModelConfigs", false)
+	RespondWithJSON(w, http.StatusOK, data)
 }
 
 // HandleGetModelConfig handles GET /api/modelconfigs/{namespace}/{name} requests

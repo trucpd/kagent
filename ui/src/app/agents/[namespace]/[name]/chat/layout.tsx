@@ -1,14 +1,14 @@
 import React from "react";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { ErrorState } from "@/components/ErrorState";
-import { getAgent, getAgents } from "@/app/actions/teams";
+import { getAgent, getAgents } from "@/app/actions/agents";
 import { getTools } from "@/app/actions/tools";
 import ChatLayoutUI from "@/components/chat/ChatLayoutUI";
 
-async function getData(agentName: string) {
+async function getData(agentName: string, namespace: string) {
   try {
     const [teamResponse, teamsResponse, toolsResponse] = await Promise.all([
-      getAgent(agentName),
+      getAgent(agentName, namespace),
       getAgents(),
       getTools()
     ]);
@@ -19,13 +19,10 @@ async function getData(agentName: string) {
     if (teamsResponse.error || !teamsResponse.data) {
       return { error: teamsResponse.error || "Failed to fetch agents" };
     }
-    if (toolsResponse.error || !toolsResponse.data) {
-      return { error: toolsResponse.error || "Failed to fetch tools" };
-    }
 
     const currentAgent = teamResponse.data;
     const allAgents = teamsResponse.data || [];
-    const allTools = toolsResponse.data || [];
+    const allTools = toolsResponse || [];
 
     return {
       currentAgent,
@@ -40,10 +37,10 @@ async function getData(agentName: string) {
   }
 }
 
-export default async function ChatLayout({ children, params }: { children: React.ReactNode, params: { agentName: string } }) {
+export default async function ChatLayout({ children, params }: { children: React.ReactNode, params: { name: string, namespace: string } }) {
   const resolvedParams = await params;
-  const { agentName } = resolvedParams;
-  const { currentAgent, allAgents, allTools, error } = await getData(agentName);
+  const { name, namespace } = resolvedParams;
+  const { currentAgent, allAgents, allTools, error } = await getData(name, namespace);
 
   if (error || !currentAgent) {
     return (
@@ -59,7 +56,8 @@ export default async function ChatLayout({ children, params }: { children: React
       "--sidebar-width-mobile": "150px",
     } as React.CSSProperties}>
       <ChatLayoutUI
-        agentName={agentName}
+        agentName={name}
+        namespace={namespace}
         currentAgent={currentAgent}
         allAgents={allAgents}
         allTools={allTools}
