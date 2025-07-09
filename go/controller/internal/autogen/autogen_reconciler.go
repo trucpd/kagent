@@ -17,6 +17,7 @@ import (
 
 	"github.com/kagent-dev/kagent/go/controller/api/v1alpha1"
 	"github.com/kagent-dev/kagent/go/controller/internal/a2a"
+	"github.com/kagent-dev/kagent/go/controller/translator"
 	"github.com/kagent-dev/kagent/go/internal/autogen/api"
 	autogen_client "github.com/kagent-dev/kagent/go/internal/autogen/client"
 	"github.com/kagent-dev/kagent/go/internal/database"
@@ -40,7 +41,7 @@ type AutogenReconciler interface {
 }
 
 type autogenReconciler struct {
-	autogenTranslator ApiTranslator
+	autogenTranslator translator.ApiTranslator
 	a2aReconciler     a2a.A2AReconciler
 
 	kube          client.Client
@@ -52,7 +53,7 @@ type autogenReconciler struct {
 }
 
 func NewAutogenReconciler(
-	translator ApiTranslator,
+	translator translator.ApiTranslator,
 	kube client.Client,
 	autogenClient autogen_client.Client,
 	dbClient database.Client,

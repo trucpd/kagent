@@ -116,7 +116,13 @@ func (c *InMemmoryFakeClient) DeleteAgent(agentName string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	_, exists := c.agents[agentName]
+	if !exists {
+		return gorm.ErrRecordNotFound
+	}
+
 	delete(c.agents, agentName)
+
 	return nil
 }
 
@@ -220,8 +226,8 @@ func (c *InMemmoryFakeClient) ListSessions(userID string) ([]database.Session, e
 	return result, nil
 }
 
-// ListAgents lists all agents for a user
-func (c *InMemmoryFakeClient) ListAgents(userID string) ([]database.Agent, error) {
+// ListAgents lists all agents
+func (c *InMemmoryFakeClient) ListAgents() ([]database.Agent, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 

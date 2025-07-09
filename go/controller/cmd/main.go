@@ -34,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	autogen "github.com/kagent-dev/kagent/go/controller/internal/autogen"
+	"github.com/kagent-dev/kagent/go/controller/translator"
 	"github.com/kagent-dev/kagent/go/internal/a2a"
 	autogen_client "github.com/kagent-dev/kagent/go/internal/autogen/client"
 	"github.com/kagent-dev/kagent/go/internal/database"
@@ -298,7 +299,7 @@ func main() {
 
 	kubeClient := mgr.GetClient()
 
-	apiTranslator := autogen.NewAutogenApiTranslator(
+	apiTranslator := translator.NewAutogenApiTranslator(
 		kubeClient,
 		defaultModelConfig,
 	)

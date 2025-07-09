@@ -40,7 +40,7 @@ type Client interface {
 	ListFeedback(userID string) ([]Feedback, error)
 	ListSessionTasks(sessionName string, userID string) ([]Task, error)
 	ListSessions(userID string) ([]Session, error)
-	ListAgents(userID string) ([]Agent, error)
+	ListAgents() ([]Agent, error)
 	ListToolServers() ([]ToolServer, error)
 	ListToolsForServer(serverName string) ([]Tool, error)
 	ListMessagesForTask(taskID, userID string) ([]Message, error)
@@ -171,9 +171,9 @@ func (c *clientImpl) ListSessions(userID string) ([]Session, error) {
 	return list[Session](c.db, Clause{Key: "user_id", Value: userID})
 }
 
-// ListAgents lists all agents for a user
-func (c *clientImpl) ListAgents(userID string) ([]Agent, error) {
-	return list[Agent](c.db, Clause{Key: "user_id", Value: userID})
+// ListAgents lists all agents
+func (c *clientImpl) ListAgents() ([]Agent, error) {
+	return list[Agent](c.db)
 }
 
 // ListToolServers lists all tool servers for a user

@@ -1,4 +1,4 @@
-package client_wrapper
+package utils
 
 import (
 	"context"

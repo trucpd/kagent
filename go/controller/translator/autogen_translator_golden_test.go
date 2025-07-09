@@ -1,4 +1,4 @@
-package autogen_test
+package translator_test
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/kagent-dev/kagent/go/controller/api/v1alpha1"
-	"github.com/kagent-dev/kagent/go/controller/internal/autogen"
+	"github.com/kagent-dev/kagent/go/controller/translator"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -108,7 +108,7 @@ func runGoldenTest(t *testing.T, inputFile, outputsDir, testName string, updateG
 		}
 	}
 
-	translator := autogen.NewAutogenApiTranslator(kubeClient, defaultModel)
+	translator := translator.NewAutogenApiTranslator(kubeClient, defaultModel)
 
 	// Execute the specified operation
 	var result interface{}

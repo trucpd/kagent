@@ -43,7 +43,7 @@ async def invoke(request: InvokeTaskRequest):
     try:
         previous_messages = _convert_message_config_to_chat_message(request.messages or [])
         task = _prepare_task_with_history(request.task, previous_messages)
-        result_message = await team_manager.run(task=task, team_config=request.team_config)
+        result_message: TeamResult = await team_manager.run(task=task, team_config=request.team_config)
         # remove the previous messages from the result messages
         result_message.task_result.messages = result_message.task_result.messages[len(previous_messages) :]
         formatted_result = format_team_result(result_message)

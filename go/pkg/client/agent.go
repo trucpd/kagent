@@ -4,15 +4,16 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/kagent-dev/kagent/go/controller/api/v1alpha1"
 	"github.com/kagent-dev/kagent/go/pkg/client/api"
 )
 
 // Agent defines the agent operations
 type Agent interface {
-	ListAgents(ctx context.Context, userID string) (*api.StandardResponse[[]api.Agent], error)
-	CreateAgent(ctx context.Context, request *api.AgentRequest) (*api.StandardResponse[*api.Agent], error)
-	GetAgent(ctx context.Context, agentRef string) (*api.StandardResponse[*api.Agent], error)
-	UpdateAgent(ctx context.Context, request *api.AgentRequest) (*api.StandardResponse[*api.Agent], error)
+	ListAgents(ctx context.Context, userID string) (*api.StandardResponse[[]api.AgentResponse], error)
+	CreateAgent(ctx context.Context, request *v1alpha1.Agent) (*api.StandardResponse[*v1alpha1.Agent], error)
+	GetAgent(ctx context.Context, agentRef string) (*api.StandardResponse[*api.AgentResponse], error)
+	UpdateAgent(ctx context.Context, request *v1alpha1.Agent) (*api.StandardResponse[*v1alpha1.Agent], error)
 	DeleteAgent(ctx context.Context, agentRef string) error
 }
 
@@ -27,7 +28,7 @@ func NewTeamClient(client *BaseClient) Agent {
 }
 
 // ListTeams lists all teams for a user
-func (c *teamClient) ListAgents(ctx context.Context, userID string) (*api.StandardResponse[[]api.Agent], error) {
+func (c *teamClient) ListAgents(ctx context.Context, userID string) (*api.StandardResponse[[]api.AgentResponse], error) {
 	userID = c.client.GetUserIDOrDefault(userID)
 	if userID == "" {
 		return nil, fmt.Errorf("userID is required")
@@ -38,7 +39,7 @@ func (c *teamClient) ListAgents(ctx context.Context, userID string) (*api.Standa
 		return nil, err
 	}
 
-	var response api.StandardResponse[[]api.Agent]
+	var response api.StandardResponse[[]api.AgentResponse]
 	if err := DecodeResponse(resp, &response); err != nil {
 		return nil, err
 	}
@@ -47,13 +48,13 @@ func (c *teamClient) ListAgents(ctx context.Context, userID string) (*api.Standa
 }
 
 // CreateTeam creates a new team
-func (c *teamClient) CreateAgent(ctx context.Context, request *api.AgentRequest) (*api.StandardResponse[*api.Agent], error) {
+func (c *teamClient) CreateAgent(ctx context.Context, request *v1alpha1.Agent) (*api.StandardResponse[*v1alpha1.Agent], error) {
 	resp, err := c.client.Post(ctx, "/api/agents", request, "")
 	if err != nil {
 		return nil, err
 	}
 
-	var response api.StandardResponse[*api.Agent]
+	var response api.StandardResponse[*v1alpha1.Agent]
 	if err := DecodeResponse(resp, &response); err != nil {
 		return nil, err
 	}
@@ -62,14 +63,14 @@ func (c *teamClient) CreateAgent(ctx context.Context, request *api.AgentRequest)
 }
 
 // GetTeam retrieves a specific team
-func (c *teamClient) GetAgent(ctx context.Context, agentRef string) (*api.StandardResponse[*api.Agent], error) {
+func (c *teamClient) GetAgent(ctx context.Context, agentRef string) (*api.StandardResponse[*api.AgentResponse], error) {
 	path := fmt.Sprintf("/api/agents/%s", agentRef)
 	resp, err := c.client.Get(ctx, path, "")
 	if err != nil {
 		return nil, err
 	}
 
-	var response api.StandardResponse[*api.Agent]
+	var response api.StandardResponse[*api.AgentResponse]
 	if err := DecodeResponse(resp, &response); err != nil {
 		return nil, err
 	}
@@ -78,14 +79,14 @@ func (c *teamClient) GetAgent(ctx context.Context, agentRef string) (*api.Standa
 }
 
 // UpdateTeam updates an existing team
-func (c *teamClient) UpdateAgent(ctx context.Context, request *api.AgentRequest) (*api.StandardResponse[*api.Agent], error) {
-	path := fmt.Sprintf("/api/agents/%s", request.AgentRef)
+func (c *teamClient) UpdateAgent(ctx context.Context, request *v1alpha1.Agent) (*api.StandardResponse[*v1alpha1.Agent], error) {
+	path := fmt.Sprintf("/api/agents/%s/%s", request.Namespace, request.Name)
 	resp, err := c.client.Put(ctx, path, request, "")
 	if err != nil {
 		return nil, err
 	}
 
-	var response api.StandardResponse[*api.Agent]
+	var response api.StandardResponse[*v1alpha1.Agent]
 	if err := DecodeResponse(resp, &response); err != nil {
 		return nil, err
 	}

@@ -1,4 +1,4 @@
-package client_wrapper_test
+package utils_test
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/kagent-dev/kagent/go/internal/utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
@@ -14,24 +15,22 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-
-	"github.com/kagent-dev/kagent/go/controller/internal/client_wrapper"
 )
 
 func TestNewKubeClientWrapper(t *testing.T) {
 	t.Run("should create new wrapper with valid client", func(t *testing.T) {
 		fakeClient := fake.NewClientBuilder().WithScheme(scheme.Scheme).Build()
-		wrapper := client_wrapper.NewKubeClientWrapper(fakeClient)
+		wrapper := utils.NewKubeClientWrapper(fakeClient)
 
 		assert.NotNil(t, wrapper)
-		assert.Implements(t, (*client_wrapper.KubeClientWrapper)(nil), wrapper)
+		assert.Implements(t, (*utils.KubeClientWrapper)(nil), wrapper)
 	})
 }
 
 func TestAddInMemory(t *testing.T) {
 	ctx := context.Background()
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme.Scheme).Build()
-	wrapper := client_wrapper.NewKubeClientWrapper(fakeClient)
+	wrapper := utils.NewKubeClientWrapper(fakeClient)
 
 	t.Run("should add configmap to memory", func(t *testing.T) {
 		configMap := &v1.ConfigMap{
@@ -133,7 +132,7 @@ func TestGet(t *testing.T) {
 
 	t.Run("should get object from memory cache", func(t *testing.T) {
 		fakeClient := fake.NewClientBuilder().WithScheme(scheme.Scheme).Build()
-		wrapper := client_wrapper.NewKubeClientWrapper(fakeClient)
+		wrapper := utils.NewKubeClientWrapper(fakeClient)
 
 		// Add object to memory
 		configMap := &v1.ConfigMap{
@@ -176,7 +175,7 @@ func TestGet(t *testing.T) {
 			WithObjects(configMap).
 			Build()
 
-		wrapper := client_wrapper.NewKubeClientWrapper(fakeClient)
+		wrapper := utils.NewKubeClientWrapper(fakeClient)
 
 		// Get object (should come from underlying client)
 		retrieved := &v1.ConfigMap{}
@@ -206,7 +205,7 @@ func TestGet(t *testing.T) {
 			WithObjects(k8sConfigMap).
 			Build()
 
-		wrapper := client_wrapper.NewKubeClientWrapper(fakeClient)
+		wrapper := utils.NewKubeClientWrapper(fakeClient)
 
 		// Add different object with same key to memory
 		memoryConfigMap := &v1.ConfigMap{
@@ -234,7 +233,7 @@ func TestGet(t *testing.T) {
 
 	t.Run("should return error when object not found anywhere", func(t *testing.T) {
 		fakeClient := fake.NewClientBuilder().WithScheme(scheme.Scheme).Build()
-		wrapper := client_wrapper.NewKubeClientWrapper(fakeClient)
+		wrapper := utils.NewKubeClientWrapper(fakeClient)
 
 		retrieved := &v1.ConfigMap{}
 		err := wrapper.Get(ctx, types.NamespacedName{
@@ -249,7 +248,7 @@ func TestGet(t *testing.T) {
 func TestConcurrentAccess(t *testing.T) {
 	ctx := context.Background()
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme.Scheme).Build()
-	wrapper := client_wrapper.NewKubeClientWrapper(fakeClient)
+	wrapper := utils.NewKubeClientWrapper(fakeClient)
 
 	t.Run("should handle concurrent AddInMemory and Get operations", func(t *testing.T) {
 		var wg sync.WaitGroup
@@ -314,7 +313,7 @@ func TestConcurrentAccess(t *testing.T) {
 func TestDifferentObjectTypes(t *testing.T) {
 	ctx := context.Background()
 	fakeClient := fake.NewClientBuilder().WithScheme(scheme.Scheme).Build()
-	wrapper := client_wrapper.NewKubeClientWrapper(fakeClient)
+	wrapper := utils.NewKubeClientWrapper(fakeClient)
 
 	t.Run("should handle different object types independently", func(t *testing.T) {
 		// Add ConfigMap
@@ -381,7 +380,7 @@ func (m *mockObject) DeepCopyObject() runtime.Object {
 func TestInvalidScheme(t *testing.T) {
 	t.Run("should handle objects not in scheme gracefully", func(t *testing.T) {
 		fakeClient := fake.NewClientBuilder().WithScheme(scheme.Scheme).Build()
-		wrapper := client_wrapper.NewKubeClientWrapper(fakeClient)
+		wrapper := utils.NewKubeClientWrapper(fakeClient)
 
 		// Create an object that's not registered in the scheme
 		mockObj := &mockObject{

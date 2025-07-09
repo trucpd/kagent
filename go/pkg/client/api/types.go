@@ -2,7 +2,7 @@ package api
 
 import (
 	"github.com/kagent-dev/kagent/go/controller/api/v1alpha1"
-	"github.com/kagent-dev/kagent/go/internal/autogen/api"
+	autogen_api "github.com/kagent-dev/kagent/go/internal/autogen/api"
 	"github.com/kagent-dev/kagent/go/internal/database"
 )
 
@@ -74,6 +74,18 @@ type UpdateModelConfigRequest struct {
 	OllamaParams    *v1alpha1.OllamaConfig      `json:"ollama,omitempty"`
 }
 
+// Agent types
+
+type AgentResponse struct {
+	Agent          *v1alpha1.Agent        `json:"agent"`
+	Component      *autogen_api.Component `json:"component"`
+	ModelProvider  v1alpha1.ModelProvider `json:"modelProvider"`
+	Model          string                 `json:"model"`
+	ModelConfigRef string                 `json:"modelConfigRef"`
+	MemoryRefs     []string               `json:"memoryRefs"`
+	Tools          []*v1alpha1.Tool       `json:"tools"`
+}
+
 // Session types
 
 // SessionRequest represents a session creation/update request
@@ -98,14 +110,6 @@ type Message = database.Message
 
 // Session represents a session from the database
 type Session = database.Session
-
-// Team types
-
-// AgentRequest represents an agent creation/update request
-type AgentRequest struct {
-	AgentRef  string        `json:"agent_ref"`
-	Component api.Component `json:"component"`
-}
 
 // Agent represents an agent from the database
 type Agent = database.Agent
