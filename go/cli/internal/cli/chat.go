@@ -13,6 +13,7 @@ import (
 	"github.com/kagent-dev/kagent/go/internal/utils"
 	"github.com/kagent-dev/kagent/go/pkg/client/api"
 	"github.com/spf13/pflag"
+	"k8s.io/utils/ptr"
 	a2aclient "trpc.group/trpc-go/trpc-a2a-go/client"
 	"trpc.group/trpc-go/trpc-a2a-go/protocol"
 )
@@ -35,34 +36,34 @@ func ChatCmd(c *ishell.Context) {
 	cfg := config.GetCfg(c)
 	clientSet := config.GetClient(c)
 
-	var team *api.AgentResponse
+	var agentResp *api.AgentResponse
 	if len(flagSet.Args()) > 0 {
-		teamName := flagSet.Args()[0]
+		agentName := flagSet.Args()[0]
 		var err error
-		agtResp, err := clientSet.Agent.GetAgent(context.Background(), teamName)
+		agtResp, err := clientSet.Agent.GetAgent(context.Background(), agentName)
 		if err != nil {
 			c.Println(err)
 			return
 		}
-		team = agtResp.Data
+		agentResp = agtResp.Data
 	}
 	// If team is not found or not passed as an argument, prompt the user to select from available teams
-	if team == nil {
+	if agentResp == nil {
 		c.Printf("Please select from available teams.\n")
 		// Get the teams based on the input + userID
-		agtResp, err := clientSet.Agent.ListAgents(context.Background(), cfg.UserID)
+		agentListResp, err := clientSet.Agent.ListAgents(context.Background(), cfg.UserID)
 		if err != nil {
 			c.Println(err)
 			return
 		}
 
-		if len(agtResp.Data) == 0 {
+		if len(agentListResp.Data) == 0 {
 			c.Println("No teams found, please create one via the web UI or CRD before chatting.")
 			return
 		}
 
-		agentNames := make([]string, len(agtResp.Data))
-		for i, team := range agtResp.Data {
+		agentNames := make([]string, len(agentListResp.Data))
+		for i, team := range agentListResp.Data {
 			if team.Component.Label == "" {
 				continue
 			}
@@ -70,7 +71,7 @@ func ChatCmd(c *ishell.Context) {
 		}
 
 		selectedTeamIdx := c.MultiChoice(agentNames, "Select an agent:")
-		team = &agtResp.Data[selectedTeamIdx]
+		agentResp = &agentListResp.Data[selectedTeamIdx]
 	}
 
 	sessions, err := clientSet.Session.ListSessions(context.Background(), cfg.UserID)
@@ -107,7 +108,7 @@ func ChatCmd(c *ishell.Context) {
 		c.ShowPrompt(true)
 		sessionResp, err := clientSet.Session.CreateSession(context.Background(), &api.SessionRequest{
 			UserID: cfg.UserID,
-			Name:   sessionName,
+			Name:   ptr.To(sessionName),
 		})
 		if err != nil {
 			c.Printf("Failed to create session: %v\n", err)
@@ -119,7 +120,7 @@ func ChatCmd(c *ishell.Context) {
 	}
 
 	// Setup A2A client
-	a2aURL := fmt.Sprintf("%s/a2a/%s/%s", cfg.APIURL, cfg.Namespace, team.Component.Label)
+	a2aURL := fmt.Sprintf("%s/a2a/%s/%s", cfg.APIURL, cfg.Namespace, agentResp.Component.Label)
 	a2aClient, err := a2aclient.NewA2AClient(a2aURL)
 	if err != nil {
 		c.Printf("Failed to create A2A client: %v\n", err)
@@ -130,7 +131,7 @@ func ChatCmd(c *ishell.Context) {
 	cancel := startPortForward(context.Background())
 	defer cancel()
 
-	promptStr := config.BoldGreen(fmt.Sprintf("%s--%s> ", team.Component.Label, session.ID))
+	promptStr := config.BoldGreen(fmt.Sprintf("%s--%s> ", agentResp.Component.Label, session.ID))
 	c.SetPrompt(promptStr)
 	c.ShowPrompt(true)
 

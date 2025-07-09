@@ -90,9 +90,9 @@ type AgentResponse struct {
 
 // SessionRequest represents a session creation/update request
 type SessionRequest struct {
-	AgentRef string `json:"agent_ref"`
-	Name     string `json:"name"`
-	UserID   string `json:"user_id"`
+	AgentRef string  `json:"agent_ref"`
+	Name     *string `json:"name,omitempty"`
+	UserID   string  `json:"user_id"`
 }
 
 // Run types

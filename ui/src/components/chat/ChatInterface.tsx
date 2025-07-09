@@ -14,7 +14,7 @@ import { TokenStats } from "@/lib/types";
 import StatusDisplay from "./StatusDisplay";
 import { createSession, getSessionMessages, checkSessionExists, updateSession } from "@/app/actions/sessions";
 import { getCurrentUserId } from "@/app/actions/utils";
-import { getTeam } from "@/app/actions/teams";
+import { getAgent } from "@/app/actions/teams";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { createMessageHandlers } from "@/lib/messageHandlers";
@@ -117,7 +117,7 @@ export default function ChatInterface({ selectedAgentId, selectedSession, sessio
   useEffect(() => {
     async function loadTeamConfig() {
       try {
-        const teamResponse = await getTeam(selectedAgentId);
+        const teamResponse = await getAgent(selectedAgentId);
         if (teamResponse.success && teamResponse.data) {
           setTeamConfig(teamResponse.data.component);
         }

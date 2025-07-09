@@ -8,6 +8,7 @@ import (
 
 	"github.com/kagent-dev/kagent/go/internal/autogen/api"
 	"gorm.io/gorm"
+	"trpc.group/trpc-go/trpc-a2a-go/protocol"
 )
 
 // JSONMap is a custom type for handling JSON columns in GORM
@@ -55,8 +56,30 @@ type Message struct {
 	TaskID    *string `gorm:"index" json:"task_id"`
 }
 
+func (m *Message) Parse() (protocol.Message, error) {
+	var data protocol.Message
+	err := json.Unmarshal([]byte(m.Data), &data)
+	if err != nil {
+		return protocol.Message{}, err
+	}
+	return data, nil
+}
+
+func ParseMessages(messages []Message) ([]protocol.Message, error) {
+	result := make([]protocol.Message, 0, len(messages))
+	for _, message := range messages {
+		parsedMessage, err := message.Parse()
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, parsedMessage)
+	}
+	return result, nil
+}
+
 type Session struct {
-	ID        string         `gorm:"primaryKey" json:"id"`
+	ID        string         `gorm:"primaryKey;not null" json:"id"`
+	Name      string         `gorm:"index;not null" json:"name"`
 	UserID    string         `gorm:"primaryKey" json:"user_id"`
 	CreatedAt time.Time      `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt time.Time      `gorm:"autoUpdateTime" json:"updated_at"`
@@ -66,13 +89,23 @@ type Session struct {
 }
 
 type Task struct {
-	ID        string         `gorm:"primaryKey" json:"id"`
+	ID        string         `gorm:"primaryKey;not null" json:"id"`
+	Name      *string        `gorm:"index" json:"name,omitempty"`
 	UserID    string         `gorm:"primaryKey" json:"user_id"`
 	CreatedAt time.Time      `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt time.Time      `gorm:"autoUpdateTime" json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"deleted_at"`
 	Data      string         `gorm:"type:text;not null" json:"data"` // JSON serialized task data
 	SessionID *string        `gorm:"index" json:"session_id"`
+}
+
+func (t *Task) Parse() (protocol.Task, error) {
+	var data protocol.Task
+	err := json.Unmarshal([]byte(t.Data), &data)
+	if err != nil {
+		return protocol.Task{}, err
+	}
+	return data, nil
 }
 
 type PushNotification struct {
@@ -104,7 +137,7 @@ type Feedback struct {
 // Tool represents a single tool that can be used by an agent
 type Tool struct {
 	gorm.Model
-	Name       string        `gorm:"unique" json:"name"`
+	Name       string        `gorm:"index;unique;not null" json:"name"`
 	Component  api.Component `gorm:"type:json;not null" json:"component"`
 	ServerName string        `gorm:"not null;index" json:"server_name,omitempty"`
 }
@@ -112,7 +145,7 @@ type Tool struct {
 // ToolServer represents a tool server that provides tools
 type ToolServer struct {
 	gorm.Model
-	Name          string        `gorm:"primaryKey" json:"name"`
+	Name          string        `gorm:"primaryKey;not null" json:"name"`
 	LastConnected *time.Time    `json:"last_connected,omitempty"`
 	Component     api.Component `gorm:"type:json;not null" json:"component"`
 }

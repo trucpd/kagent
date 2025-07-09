@@ -16,21 +16,21 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Button } from "../ui/button";
 
 interface ChatItemProps {
-  sessionId: number;
+  sessionId: string;
   onDelete: (sessionId: number) => Promise<void>;
-  agentId?: number;
+  agentName?: string;
   sessionName?: string;
   onDownload?: (sessionId: number) => Promise<void>;
 }
 
-const ChatItem = ({ sessionId, agentId, onDelete, sessionName, onDownload }: ChatItemProps) => {
+const ChatItem = ({ sessionId, agentName, onDelete, sessionName, onDownload }: ChatItemProps) => {
   const title = sessionName || "Untitled";
   return (
     <>
       <SidebarMenu>
         <SidebarMenuItem key={sessionId}>
           <SidebarMenuButton asChild>
-            <Link href={`/agents/${agentId}/chat/${sessionId}`}>
+            <Link href={`/agents/${agentName}/chat/${sessionId}`}>
               <span className="text-ellipsis truncate max-w-[300px] text-sm" title={title}>{title}</span>
             </Link>
           </SidebarMenuButton>

@@ -8,7 +8,7 @@ import { AgentResponse, Session } from "@/types/datamodel";
 import { Loader2 } from "lucide-react";
 
 interface SessionsSidebarProps {
-  agentId: number;
+  agentName: string;
   currentAgent: AgentResponse;
   allAgents: AgentResponse[];
   agentSessions: Session[];
@@ -16,7 +16,7 @@ interface SessionsSidebarProps {
 }
 
 export default function SessionsSidebar({ 
-  agentId, 
+  agentName, 
   currentAgent, 
   allAgents, 
   agentSessions, 
@@ -35,7 +35,7 @@ export default function SessionsSidebar({
               <span className="ml-2 text-sm text-muted-foreground">Loading sessions...</span>
             </div>
           ) : (
-            <GroupedChats agentId={agentId} sessions={agentSessions} />
+            <GroupedChats agentName={agentName} sessions={agentSessions} />
           )}
         </ScrollArea>
       </SidebarContent>

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 )
 
@@ -33,6 +34,10 @@ type ModelInfo struct {
 type SseEvent struct {
 	Event string `json:"event"`
 	Data  []byte `json:"data"`
+}
+
+func (e *SseEvent) String() string {
+	return fmt.Sprintf("event: %s\ndata: %s\n\n", e.Event, e.Data)
 }
 
 func streamSseResponse(r io.ReadCloser) chan *SseEvent {

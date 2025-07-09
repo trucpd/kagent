@@ -2,7 +2,6 @@ package a2a
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -11,10 +10,10 @@ import (
 	"github.com/kagent-dev/kagent/go/internal/a2a"
 	autogen_client "github.com/kagent-dev/kagent/go/internal/autogen/client"
 	"github.com/kagent-dev/kagent/go/internal/database"
+	"github.com/kagent-dev/kagent/go/internal/utils"
 	common "github.com/kagent-dev/kagent/go/internal/utils"
 	"gorm.io/gorm"
 	"k8s.io/utils/ptr"
-	"trpc.group/trpc-go/trpc-a2a-go/protocol"
 	"trpc.group/trpc-go/trpc-a2a-go/server"
 )
 
@@ -185,6 +184,7 @@ func (t *taskHandler) getOrCreateSession(ctx context.Context, contextID string) 
 				ID:      contextID,
 				UserID:  common.GetGlobalUserID(),
 				AgentID: ptr.To(t.team.Name),
+				Name:    contextID,
 			}
 			err := t.dbService.CreateSession(session)
 			if err != nil {
@@ -205,37 +205,16 @@ func (t *taskHandler) prepareMessages(ctx context.Context, session *database.Ses
 
 	log.Printf("Retrieved %d messages for session %s", len(messages), session.ID)
 
-	var result []autogen_client.Event
-	for _, message := range messages {
-		var parsedMessage protocol.Message
-		log.Printf("parsing message: %s", message.Data)
-		err := json.Unmarshal([]byte(message.Data), &parsedMessage)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse message: %w", err)
-		}
-		source := "user"
-		if parsedMessage.Role == protocol.MessageRoleAgent {
-			source = "agent"
-		}
-		for _, part := range parsedMessage.Parts {
-			if textPart, ok := part.(*protocol.TextPart); ok {
-				events := autogen_client.NewTextMessage(textPart.Text, source)
-				result = append(result, events)
-			} else if dataPart, ok := part.(*protocol.DataPart); ok {
-				fmt.Printf("dataPart type: %T\n", dataPart.Data)
-				byt, err := json.Marshal(dataPart.Data)
-				if err != nil {
-					return nil, fmt.Errorf("failed to marshal data part: %w", err)
-				}
-				parsedEvent, err := autogen_client.ParseEvent(byt)
-				if err != nil {
-					return nil, fmt.Errorf("failed to parse event: %w", err)
-				}
-				result = append(result, parsedEvent)
-			}
-		}
+	parsedMessages, err := database.ParseMessages(messages)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse messages: %w", err)
 	}
-	return result, nil
+
+	autogenEvents, err := utils.ConvertMessagesToAutogenEvents(parsedMessages)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert messages to autogen events: %w", err)
+	}
+	return autogenEvents, nil
 }
 
 func (t *taskHandler) HandleMessageStream(ctx context.Context, task string, contextID *string) (<-chan autogen_client.Event, error) {

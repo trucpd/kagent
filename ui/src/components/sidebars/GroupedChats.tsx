@@ -10,11 +10,11 @@ import { PlusCircle } from "lucide-react";
 import { toast } from "sonner";
 
 interface GroupedChatsProps {
-  agentId: number;
+  agentName: string;
   sessions: Session[];
 }
 
-export default function GroupedChats({ agentId, sessions }: GroupedChatsProps) {
+export default function GroupedChats({ agentName, sessions }: GroupedChatsProps) {
   // Local state to manage sessions for immediate UI updates
   const [localSessions, setLocalSessions] = useState<Session[]>(sessions);
 
@@ -98,7 +98,7 @@ export default function GroupedChats({ agentId, sessions }: GroupedChatsProps) {
 
   const handleNewChat = () => {
     // Force a full page reload instead of client-side navigation
-    window.location.href = `/agents/${agentId}/chat`;
+    window.location.href = `/agents/${agentName}/chat`;
   };
 
   const hasNoSessions = !groupedChats.today.length && !groupedChats.yesterday.length && !groupedChats.older.length;
@@ -120,9 +120,9 @@ export default function GroupedChats({ agentId, sessions }: GroupedChatsProps) {
         <EmptyState />
       ) : (
         <>
-          {groupedChats.today.length > 0 && <ChatGroup title="Today" sessions={groupedChats.today} agentId={agentId} onDeleteSession={(sessionId) => onDeleteClick(sessionId)} onDownloadSession={(sessionId) => onDownloadClick(sessionId)} />}
+          {groupedChats.today.length > 0 && <ChatGroup title="Today" sessions={groupedChats.today} agentName={agentName} onDeleteSession={(sessionId) => onDeleteClick(sessionId)} onDownloadSession={(sessionId) => onDownloadClick(sessionId)} />}
           {groupedChats.yesterday.length > 0 && (
-            <ChatGroup title="Yesterday" sessions={groupedChats.yesterday} agentId={agentId} onDeleteSession={(sessionId) => onDeleteClick(sessionId)} onDownloadSession={(sessionId) => onDownloadClick(sessionId)} />
+            <ChatGroup title="Yesterday" sessions={groupedChats.yesterday} agentName={agentName} onDeleteSession={(sessionId) => onDeleteClick(sessionId)} onDownloadSession={(sessionId) => onDownloadClick(sessionId)} />
           )}
           {groupedChats.older.length > 0 && <ChatGroup title="Older" sessions={groupedChats.older} agentId={agentId} onDeleteSession={(sessionId) => onDeleteClick(sessionId)} onDownloadSession={(sessionId) => onDownloadClick(sessionId)} />}
         </>

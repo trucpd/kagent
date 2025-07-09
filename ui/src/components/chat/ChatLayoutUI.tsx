@@ -8,7 +8,7 @@ import { getSessions } from "@/app/actions/sessions";
 import { toast } from "sonner";
 
 interface ChatLayoutUIProps {
-  agentId: number;
+  agentName: string;
   currentAgent: AgentResponse;
   allAgents: AgentResponse[];
   allTools: Component<ToolConfig>[];
@@ -16,7 +16,7 @@ interface ChatLayoutUIProps {
 }
 
 export default function ChatLayoutUI({
-  agentId,
+  agentName,
   currentAgent,
   allAgents,
   allTools,
@@ -28,11 +28,11 @@ export default function ChatLayoutUI({
   const refreshSessions = async () => {
     setIsLoadingSessions(true);
     try {
-      const sessionsResponse = await getSessions(agentId);
-      if (sessionsResponse.success && sessionsResponse.data) {
+      const sessionsResponse = await getSessions(agentName);
+      if (!sessionsResponse.error && sessionsResponse.data) {
         setSessions(sessionsResponse.data);
       } else {
-        console.log(`No sessions found for agent ${agentId}`);
+        console.log(`No sessions found for agent ${agentName}`);
         setSessions([]);
       }
     } catch (error) {
@@ -45,14 +45,14 @@ export default function ChatLayoutUI({
 
   useEffect(() => {
     refreshSessions();
-  }, [agentId]);
+  }, [agentName]);
 
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const handleNewSession = (event: any) => {
-      const { agentId: eventAgentId, session } = event.detail;
+      const { agentName: eventAgentName, session } = event.detail;
       // Only update if this is for our current agent
-      if (Number(eventAgentId) === Number(agentId) && session) {
+      if (eventAgentName === agentName && session) {
         setSessions(prevSessions => {
           const exists = prevSessions.some(s => s.id === session.id);
           if (exists) {
@@ -67,12 +67,12 @@ export default function ChatLayoutUI({
     return () => {
       window.removeEventListener('new-session-created', handleNewSession);
     };
-  }, [agentId]);
+  }, [agentName]);
 
   return (
     <>
       <SessionsSidebar
-        agentId={agentId}
+        agentName={agentName}
         currentAgent={currentAgent}
         allAgents={allAgents}
         agentSessions={sessions}
@@ -82,7 +82,7 @@ export default function ChatLayoutUI({
         {children}
       </main>
       <AgentDetailsSidebar
-        selectedAgentId={agentId}
+        selectedAgentName={agentName}
         currentAgent={currentAgent}
         allTools={allTools}
       />

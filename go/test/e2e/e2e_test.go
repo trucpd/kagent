@@ -75,7 +75,7 @@ func TestE2E(t *testing.T) {
 
 		sess, err := agentClient.Session.CreateSession(ctx, &api.SessionRequest{
 			UserID: GlobalUserID,
-			Name:   fmt.Sprintf("e2e-test-%s-%s", agentName, testStartTime),
+			Name:   ptr.To(fmt.Sprintf("e2e-test-%s-%s", agentName, testStartTime)),
 		})
 		require.NoError(t, err)
 

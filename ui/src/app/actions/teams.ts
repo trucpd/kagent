@@ -122,9 +122,9 @@ function fromAgentFormDataToAgent(agentFormData: AgentFormData): Agent {
  * @param teamLabel The team label or ID
  * @returns A promise with the team data
  */
-export async function getTeam(teamLabel: string | number): Promise<BaseResponse<AgentResponse>> {
+export async function getAgent(agentName: string): Promise<BaseResponse<AgentResponse>> {
   try {
-    const teamData = await fetchApi<AgentResponse>(`/teams/${teamLabel}`);
+    const teamData = await fetchApi<AgentResponse>(`/agents/${agentName}`);
 
     // Fetch all teams to get descriptions for agent tools
     // We use fetchApi directly to avoid circular dependency/logic issues with calling getTeams() here
@@ -144,7 +144,7 @@ export async function getTeam(teamLabel: string | number): Promise<BaseResponse<
       },
     };
 
-    return { success: true, data: response };
+    return { message: "Successfully fetched agent", data: response };
   } catch (error) {
     return createErrorResponse<AgentResponse>(error, "Error getting team");
   }
@@ -165,7 +165,7 @@ export async function deleteTeam(teamLabel: string): Promise<BaseResponse<void>>
     });
 
     revalidatePath("/");
-    return { success: true };
+    return { message: "Successfully deleted team" };
   } catch (error) {
     return createErrorResponse<void>(error, "Error deleting team");
   }
@@ -198,7 +198,7 @@ export async function createAgent(agentConfig: AgentFormData, update: boolean = 
     )
 
     revalidatePath(`/agents/${agentRef}/chat`);
-    return { success: true, data: response };
+    return { message: "Successfully created agent", data: response };
   } catch (error) {
     return createErrorResponse<Agent>(error, "Error creating team");
   }
@@ -208,9 +208,9 @@ export async function createAgent(agentConfig: AgentFormData, update: boolean = 
  * Gets all teams
  * @returns A promise with all teams
  */
-export async function getTeams(): Promise<BaseResponse<AgentResponse[]>> {
+export async function getAgents(): Promise<BaseResponse<AgentResponse[]>> {
   try {
-    const data = await fetchApi<AgentResponse[]>(`/teams`);
+    const data = await fetchApi<AgentResponse[]>(`/agents`);
     
     const validTeams = data.filter(team => !!team.agent);
     const agentMap = new Map(validTeams.map(agentResp => [agentResp.agent.metadata.name, agentResp]));
@@ -253,7 +253,7 @@ export async function getTeams(): Promise<BaseResponse<AgentResponse[]>> {
       return aRef.localeCompare(bRef)
     });
     
-    return { success: true, data: sortedData };
+    return { message: "Successfully fetched agents", data: sortedData };
   } catch (error) {
     return createErrorResponse<AgentResponse[]>(error, "Error getting teams");
   }

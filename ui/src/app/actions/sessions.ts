@@ -41,11 +41,11 @@ export async function getSession(sessionId: string): Promise<BaseResponse<Sessio
  * Gets all sessions
  * @returns A promise with all sessions
  */
-export async function getSessions(agentId: number): Promise<BaseResponse<Session[]>> {
+export async function getSessions(agentName: string): Promise<BaseResponse<Session[]>> {
   try {
-    const data = await fetchApi<Session[]>(`/sessions`);
-    const filteredSessions = data.filter((session) => Number(session.team_id) === Number(agentId));
-    return { success: true, data: filteredSessions };
+    const data = await fetchApi<BaseResponse<Session[]>>(`/sessions`);
+    const filteredSessions = data.data?.filter((session) => session.agent.ref === agentName);
+    return { message: "Successfully fetched sessions", data: filteredSessions };
   } catch (error) {
     return createErrorResponse<Session[]>(error, "Error getting sessions");
   }

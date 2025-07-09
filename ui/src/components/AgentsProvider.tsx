@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from "react";
-import { getTeams, createAgent } from "@/app/actions/teams";
+import { getAgents, createAgent } from "@/app/actions/teams";
 import { Component, ToolConfig, Agent, Tool, AgentResponse } from "@/types/datamodel";
 import { getTools } from "@/app/actions/tools";
 import type { BaseResponse, ModelConfig } from "@/lib/types";
@@ -66,7 +66,7 @@ export function AgentsProvider({ children }: AgentsProviderProps) {
   const fetchTeams = async () => {
     try {
       setLoading(true);
-      const teamsResult = await getTeams();
+      const teamsResult = await getAgents();
 
       if (!teamsResult.data || teamsResult.error) {
         throw new Error(teamsResult.error || "Failed to fetch teams");
@@ -154,7 +154,7 @@ export function AgentsProvider({ children }: AgentsProviderProps) {
   const getAgentById = async (id: string): Promise<AgentResponse | null> => {
     try {
       // Fetch all teams
-      const teamsResult = await getTeams();
+      const teamsResult = await getAgents();
       if (!teamsResult.data || teamsResult.error) {
         console.error("Failed to get teams:", teamsResult.error);
         setError("Failed to get teams");

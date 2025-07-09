@@ -10,7 +10,7 @@ interface ChatGroupProps {
   sessions: Session[];
   onDeleteSession: (sessionId: number) => Promise<void>;
   onDownloadSession: (sessionId: number) => Promise<void>;
-  agentId?: number;
+  agentId: number;
 }
 
 // The sessions are grouped by today, yesterday, and older

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/glebarez/sqlite"
 	"gorm.io/driver/postgres"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -45,11 +45,11 @@ func NewManager(config *Config) (*Manager, error) {
 	switch config.DatabaseType {
 	case DatabaseTypeSqlite:
 		db, err = gorm.Open(sqlite.Open(config.SqliteConfig.DatabasePath), &gorm.Config{
-			Logger: logger.Default.LogMode(logger.Info),
+			Logger: logger.Default.LogMode(logger.Warn),
 		})
 	case DatabaseTypePostgres:
 		db, err = gorm.Open(postgres.Open(config.PostgresConfig.URL), &gorm.Config{
-			Logger: logger.Default.LogMode(logger.Info),
+			Logger: logger.Default.LogMode(logger.Warn),
 		})
 	default:
 		return nil, fmt.Errorf("invalid database type: %s", config.DatabaseType)
