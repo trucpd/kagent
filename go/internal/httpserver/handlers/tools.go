@@ -18,8 +18,8 @@ func NewToolsHandler(base *Base) *ToolsHandler {
 	return &ToolsHandler{Base: base}
 }
 
-// HandleListToolsDB handles GET /api/tools requests using database
-func (h *ToolsHandler) HandleListToolsDB(w ErrorResponseWriter, r *http.Request) {
+// HandleListTools handles GET /api/tools requests using database
+func (h *ToolsHandler) HandleListTools(w ErrorResponseWriter, r *http.Request) {
 	log := ctrllog.FromContext(r.Context()).WithName("tools-handler").WithValues("operation", "list-db")
 
 	userID, err := GetUserID(r)
