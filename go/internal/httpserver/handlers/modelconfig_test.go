@@ -73,13 +73,13 @@ func TestModelConfigHandler(t *testing.T) {
 
 			assert.Equal(t, http.StatusOK, responseRecorder.Code)
 
-			var configs []api.ModelConfigResponse
+			var configs api.StandardResponse[[]api.ModelConfigResponse]
 			err = json.Unmarshal(responseRecorder.Body.Bytes(), &configs)
 			require.NoError(t, err)
-			assert.Len(t, configs, 1)
+			assert.Len(t, configs.Data, 1)
 
 			// Verify model config response
-			config := configs[0]
+			config := configs.Data[0]
 			assert.Equal(t, "default/test-config-1", config.Ref)
 			assert.Equal(t, "OpenAI", config.ProviderName)
 			assert.Equal(t, "gpt-4", config.Model)
@@ -96,10 +96,10 @@ func TestModelConfigHandler(t *testing.T) {
 
 			assert.Equal(t, http.StatusOK, responseRecorder.Code)
 
-			var configs []api.ModelConfigResponse
+			var configs api.StandardResponse[[]api.ModelConfigResponse]
 			err := json.Unmarshal(responseRecorder.Body.Bytes(), &configs)
 			require.NoError(t, err)
-			assert.Len(t, configs, 0)
+			assert.Len(t, configs.Data, 0)
 		})
 	})
 

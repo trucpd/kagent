@@ -122,14 +122,14 @@ func printSessions(sessions []*database.Session) error {
 	headers := []string{"#", "NAME", "AGENT", "CREATED"}
 	rows := make([][]string, len(sessions))
 	for i, session := range sessions {
-		agentID := "N/A"
+		agentID := -1
 		if session.AgentID != nil {
-			agentID = *session.AgentID
+			agentID = int(*session.AgentID)
 		}
 		rows[i] = []string{
 			strconv.Itoa(i + 1),
 			session.ID,
-			agentID,
+			strconv.Itoa(agentID),
 			session.CreatedAt.Format(time.RFC3339),
 		}
 	}
