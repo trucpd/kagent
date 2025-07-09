@@ -119,27 +119,27 @@ func TestToolServersHandler(t *testing.T) {
 			req := httptest.NewRequest("GET", "/api/toolservers/", nil)
 			handler.HandleListToolServers(responseRecorder, req)
 
-			assert.Equal(t, http.StatusOK, responseRecorder.Code)
+			require.Equal(t, http.StatusOK, responseRecorder.Code)
 
-			var toolServers []api.ToolServerResponse
+			var toolServers api.StandardResponse[[]api.ToolServerResponse]
 			err = json.Unmarshal(responseRecorder.Body.Bytes(), &toolServers)
 			require.NoError(t, err)
-			assert.Len(t, toolServers, 2)
+			require.Len(t, toolServers.Data, 2)
 
 			// Verify first tool server response
-			toolServer := toolServers[0]
-			assert.Equal(t, "default/test-toolserver-1", toolServer.Ref)
-			assert.NotNil(t, toolServer.Config.Stdio)
-			assert.Equal(t, "python", toolServer.Config.Stdio.Command)
-			assert.Equal(t, []string{"-m", "test_tool"}, toolServer.Config.Stdio.Args)
-			assert.Len(t, toolServer.DiscoveredTools, 1)
-			assert.Equal(t, "test-tool", toolServer.DiscoveredTools[0].Name)
+			toolServer := toolServers.Data[0]
+			require.Equal(t, "default/test-toolserver-1", toolServer.Ref)
+			require.NotNil(t, toolServer.Config.Stdio)
+			require.Equal(t, "python", toolServer.Config.Stdio.Command)
+			require.Equal(t, []string{"-m", "test_tool"}, toolServer.Config.Stdio.Args)
+			require.Len(t, toolServer.DiscoveredTools, 1)
+			require.Equal(t, "test-tool", toolServer.DiscoveredTools[0].Name)
 
 			// Verify second tool server response
-			toolServer = toolServers[1]
-			assert.Equal(t, "test-ns/test-toolserver-2", toolServer.Ref)
-			assert.NotNil(t, toolServer.Config.Sse)
-			assert.Equal(t, "https://example.com/sse", toolServer.Config.Sse.URL)
+			toolServer = toolServers.Data[1]
+			require.Equal(t, "test-ns/test-toolserver-2", toolServer.Ref)
+			require.NotNil(t, toolServer.Config.Sse)
+			require.Equal(t, "https://example.com/sse", toolServer.Config.Sse.URL)
 		})
 
 		t.Run("EmptyList", func(t *testing.T) {
@@ -148,12 +148,12 @@ func TestToolServersHandler(t *testing.T) {
 			req := httptest.NewRequest("GET", "/api/toolservers/", nil)
 			handler.HandleListToolServers(responseRecorder, req)
 
-			assert.Equal(t, http.StatusOK, responseRecorder.Code)
+			require.Equal(t, http.StatusOK, responseRecorder.Code)
 
-			var toolServers []api.ToolServerResponse
+			var toolServers api.StandardResponse[[]api.ToolServerResponse]
 			err := json.Unmarshal(responseRecorder.Body.Bytes(), &toolServers)
 			require.NoError(t, err)
-			assert.Len(t, toolServers, 0)
+			require.Len(t, toolServers.Data, 0)
 		})
 	})
 
@@ -186,16 +186,16 @@ func TestToolServersHandler(t *testing.T) {
 
 			handler.HandleCreateToolServer(responseRecorder, req)
 
-			assert.Equal(t, http.StatusCreated, responseRecorder.Code)
+			require.Equal(t, http.StatusCreated, responseRecorder.Code)
 
-			var toolServer v1alpha1.ToolServer
+			var toolServer api.StandardResponse[v1alpha1.ToolServer]
 			err := json.Unmarshal(responseRecorder.Body.Bytes(), &toolServer)
 			require.NoError(t, err)
-			assert.Equal(t, "test-toolserver", toolServer.Name)
-			assert.Equal(t, "default", toolServer.Namespace)
-			assert.Equal(t, "Test tool server", toolServer.Spec.Description)
-			assert.NotNil(t, toolServer.Spec.Config.Stdio)
-			assert.Equal(t, "python", toolServer.Spec.Config.Stdio.Command)
+			assert.Equal(t, "test-toolserver", toolServer.Data.Name)
+			assert.Equal(t, "default", toolServer.Data.Namespace)
+			assert.Equal(t, "Test tool server", toolServer.Data.Spec.Description)
+			assert.NotNil(t, toolServer.Data.Spec.Config.Stdio)
+			assert.Equal(t, "python", toolServer.Data.Spec.Config.Stdio.Command)
 		})
 
 		t.Run("Success_Sse", func(t *testing.T) {
@@ -239,15 +239,15 @@ func TestToolServersHandler(t *testing.T) {
 
 			handler.HandleCreateToolServer(responseRecorder, req)
 
-			assert.Equal(t, http.StatusCreated, responseRecorder.Code)
+			require.Equal(t, http.StatusCreated, responseRecorder.Code)
 
-			var toolServer v1alpha1.ToolServer
+			var toolServer api.StandardResponse[v1alpha1.ToolServer]
 			err := json.Unmarshal(responseRecorder.Body.Bytes(), &toolServer)
 			require.NoError(t, err)
-			assert.Equal(t, "test-sse-toolserver", toolServer.Name)
-			assert.Equal(t, "default", toolServer.Namespace)
-			assert.NotNil(t, toolServer.Spec.Config.Sse)
-			assert.Equal(t, "https://example.com/sse", toolServer.Spec.Config.Sse.URL)
+			assert.Equal(t, "test-sse-toolserver", toolServer.Data.Name)
+			assert.Equal(t, "default", toolServer.Data.Namespace)
+			assert.NotNil(t, toolServer.Data.Spec.Config.Sse)
+			assert.Equal(t, "https://example.com/sse", toolServer.Data.Spec.Config.Sse.URL)
 		})
 
 		t.Run("Success_DefaultNamespace", func(t *testing.T) {
@@ -274,13 +274,13 @@ func TestToolServersHandler(t *testing.T) {
 
 			handler.HandleCreateToolServer(responseRecorder, req)
 
-			assert.Equal(t, http.StatusCreated, responseRecorder.Code)
+			require.Equal(t, http.StatusCreated, responseRecorder.Code)
 
 			defaultNamespace := common.GetResourceNamespace()
-			var toolServer v1alpha1.ToolServer
+			var toolServer api.StandardResponse[v1alpha1.ToolServer]
 			err := json.Unmarshal(responseRecorder.Body.Bytes(), &toolServer)
 			require.NoError(t, err)
-			assert.Equal(t, defaultNamespace, toolServer.Namespace)
+			assert.Equal(t, defaultNamespace, toolServer.Data.Namespace)
 		})
 
 		t.Run("InvalidJSON", func(t *testing.T) {
@@ -291,8 +291,8 @@ func TestToolServersHandler(t *testing.T) {
 
 			handler.HandleCreateToolServer(responseRecorder, req)
 
-			assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
-			assert.NotNil(t, responseRecorder.errorReceived)
+			require.Equal(t, http.StatusBadRequest, responseRecorder.Code)
+			require.NotNil(t, responseRecorder.errorReceived)
 		})
 
 		t.Run("ToolServerAlreadyExists", func(t *testing.T) {
@@ -337,8 +337,8 @@ func TestToolServersHandler(t *testing.T) {
 
 			handler.HandleCreateToolServer(responseRecorder, req)
 
-			assert.Equal(t, http.StatusInternalServerError, responseRecorder.Code)
-			assert.NotNil(t, responseRecorder.errorReceived)
+			require.Equal(t, http.StatusInternalServerError, responseRecorder.Code)
+			require.NotNil(t, responseRecorder.errorReceived)
 		})
 	})
 
@@ -368,13 +368,13 @@ func TestToolServersHandler(t *testing.T) {
 			req := httptest.NewRequest("DELETE", "/api/toolservers/default/test-toolserver", nil)
 
 			router := mux.NewRouter()
-			router.HandleFunc("/api/toolservers/{namespace}/{toolServerName}", func(w http.ResponseWriter, r *http.Request) {
+			router.HandleFunc("/api/toolservers/{namespace}/{name}", func(w http.ResponseWriter, r *http.Request) {
 				handler.HandleDeleteToolServer(responseRecorder, r)
 			}).Methods("DELETE")
 
 			router.ServeHTTP(responseRecorder, req)
 
-			assert.Equal(t, http.StatusNoContent, responseRecorder.Code)
+			require.Equal(t, http.StatusOK, responseRecorder.Code, responseRecorder.Body.String())
 		})
 
 		t.Run("NotFound", func(t *testing.T) {
@@ -383,14 +383,14 @@ func TestToolServersHandler(t *testing.T) {
 			req := httptest.NewRequest("DELETE", "/api/toolservers/default/nonexistent", nil)
 
 			router := mux.NewRouter()
-			router.HandleFunc("/api/toolservers/{namespace}/{toolServerName}", func(w http.ResponseWriter, r *http.Request) {
+			router.HandleFunc("/api/toolservers/{namespace}/{name}", func(w http.ResponseWriter, r *http.Request) {
 				handler.HandleDeleteToolServer(responseRecorder, r)
 			}).Methods("DELETE")
 
 			router.ServeHTTP(responseRecorder, req)
 
-			assert.Equal(t, http.StatusNotFound, responseRecorder.Code)
-			assert.NotNil(t, responseRecorder.errorReceived)
+			require.Equal(t, http.StatusNotFound, responseRecorder.Code)
+			require.NotNil(t, responseRecorder.errorReceived)
 		})
 
 		t.Run("MissingNamespaceParam", func(t *testing.T) {
@@ -400,8 +400,8 @@ func TestToolServersHandler(t *testing.T) {
 			req := httptest.NewRequest("DELETE", "/api/toolservers/", nil)
 			handler.HandleDeleteToolServer(responseRecorder, req)
 
-			assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
-			assert.NotNil(t, responseRecorder.errorReceived)
+			require.Equal(t, http.StatusBadRequest, responseRecorder.Code)
+			require.NotNil(t, responseRecorder.errorReceived)
 		})
 
 		t.Run("MissingToolServerNameParam", func(t *testing.T) {
@@ -416,8 +416,8 @@ func TestToolServersHandler(t *testing.T) {
 			// Call handler directly
 			handler.HandleDeleteToolServer(responseRecorder, req)
 
-			assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
-			assert.NotNil(t, responseRecorder.errorReceived)
+			require.Equal(t, http.StatusBadRequest, responseRecorder.Code)
+			require.NotNil(t, responseRecorder.errorReceived)
 		})
 	})
 }

@@ -10,7 +10,9 @@ import (
 
 	"github.com/kagent-dev/kagent/go/cli/internal/config"
 	"github.com/kagent-dev/kagent/go/internal/database"
+	"github.com/kagent-dev/kagent/go/internal/utils"
 	"github.com/kagent-dev/kagent/go/pkg/client"
+	"github.com/kagent-dev/kagent/go/pkg/client/api"
 )
 
 func GetAgentCmd(cfg *config.Config, resourceName string) {
@@ -101,16 +103,15 @@ func printTools(tools []database.Tool) error {
 	return printOutput(tools, headers, rows)
 }
 
-func printAgents(teams []database.Agent) error {
+func printAgents(teams []api.AgentResponse) error {
 	// Prepare table data
-	headers := []string{"#", "NAME", "ID", "CREATED"}
+	headers := []string{"#", "NAME", "CREATED"}
 	rows := make([][]string, len(teams))
 	for i, team := range teams {
 		rows[i] = []string{
 			strconv.Itoa(i + 1),
-			team.Component.Label,
-			strconv.Itoa(int(team.ID)),
-			team.CreatedAt.Format(time.RFC3339),
+			utils.GetObjectRef(team.Agent),
+			team.Agent.CreationTimestamp.Format(time.RFC3339),
 		}
 	}
 

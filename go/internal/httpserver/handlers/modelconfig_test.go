@@ -127,13 +127,13 @@ func TestModelConfigHandler(t *testing.T) {
 
 			assert.Equal(t, http.StatusCreated, responseRecorder.Code)
 
-			var config v1alpha1.ModelConfig
+			var config api.StandardResponse[v1alpha1.ModelConfig]
 			err := json.Unmarshal(responseRecorder.Body.Bytes(), &config)
 			require.NoError(t, err)
-			assert.Equal(t, "test-config", config.Name)
-			assert.Equal(t, "default", config.Namespace)
-			assert.Equal(t, v1alpha1.OpenAI, config.Spec.Provider)
-			assert.Equal(t, "gpt-4", config.Spec.Model)
+			assert.Equal(t, "test-config", config.Data.Name)
+			assert.Equal(t, "default", config.Data.Namespace)
+			assert.Equal(t, v1alpha1.OpenAI, config.Data.Spec.Provider)
+			assert.Equal(t, "gpt-4", config.Data.Spec.Model)
 		})
 
 		t.Run("Success_Anthropic", func(t *testing.T) {
@@ -159,10 +159,10 @@ func TestModelConfigHandler(t *testing.T) {
 
 			assert.Equal(t, http.StatusCreated, responseRecorder.Code)
 
-			var config v1alpha1.ModelConfig
+			var config api.StandardResponse[v1alpha1.ModelConfig]
 			err := json.Unmarshal(responseRecorder.Body.Bytes(), &config)
 			require.NoError(t, err)
-			assert.Equal(t, v1alpha1.Anthropic, config.Spec.Provider)
+			assert.Equal(t, v1alpha1.Anthropic, config.Data.Spec.Provider)
 		})
 
 		t.Run("Success_Ollama_NoAPIKey", func(t *testing.T) {
@@ -188,19 +188,21 @@ func TestModelConfigHandler(t *testing.T) {
 
 			assert.Equal(t, http.StatusCreated, responseRecorder.Code)
 
-			var config v1alpha1.ModelConfig
+			var config api.StandardResponse[v1alpha1.ModelConfig]
 			err := json.Unmarshal(responseRecorder.Body.Bytes(), &config)
 			require.NoError(t, err)
-			assert.Equal(t, v1alpha1.Ollama, config.Spec.Provider)
-			assert.Empty(t, config.Spec.APIKeySecretRef)
+			assert.Equal(t, v1alpha1.Ollama, config.Data.Spec.Provider)
+			assert.Empty(t, config.Data.Spec.APIKeySecretRef)
 		})
 
 		t.Run("Success_AzureOpenAI", func(t *testing.T) {
 			handler, _, responseRecorder := setupHandler()
 
 			reqBody := api.CreateModelConfigRequest{
-				Model:  "gpt-4",
-				APIKey: "test-api-key",
+				Ref:      "default/test-azure",
+				Provider: api.Provider{Type: "AzureOpenAI"},
+				Model:    "gpt-4",
+				APIKey:   "test-api-key",
 				AzureParams: &v1alpha1.AzureOpenAIConfig{
 					Endpoint:   "https://myresource.openai.azure.com/",
 					APIVersion: "2023-05-15",
@@ -213,12 +215,12 @@ func TestModelConfigHandler(t *testing.T) {
 
 			handler.HandleCreateModelConfig(responseRecorder, req)
 
-			assert.Equal(t, http.StatusCreated, responseRecorder.Code)
+			assert.Equal(t, http.StatusCreated, responseRecorder.Code, responseRecorder.Body.String())
 
-			var config v1alpha1.ModelConfig
+			var config api.StandardResponse[v1alpha1.ModelConfig]
 			err := json.Unmarshal(responseRecorder.Body.Bytes(), &config)
 			require.NoError(t, err)
-			assert.Equal(t, v1alpha1.AzureOpenAI, config.Spec.Provider)
+			assert.Equal(t, v1alpha1.AzureOpenAI, config.Data.Spec.Provider)
 		})
 
 		t.Run("InvalidJSON", func(t *testing.T) {
@@ -359,20 +361,23 @@ func TestModelConfigHandler(t *testing.T) {
 			req := httptest.NewRequest("GET", "/api/modelconfigs/default/test-config", nil)
 
 			router := mux.NewRouter()
-			router.HandleFunc("/api/modelconfigs/{namespace}/{configName}", func(w http.ResponseWriter, r *http.Request) {
+			router.HandleFunc("/api/modelconfigs/{namespace}/{name}", func(w http.ResponseWriter, r *http.Request) {
 				handler.HandleGetModelConfig(responseRecorder, r)
 			}).Methods("GET")
 
 			router.ServeHTTP(responseRecorder, req)
 
-			assert.Equal(t, http.StatusOK, responseRecorder.Code)
+			assert.Equal(t, http.StatusOK, responseRecorder.Code, responseRecorder.Body.String())
 
-			var configResponse api.ModelConfigResponse
+			var configResponse api.StandardResponse[api.ModelConfigResponse]
 			err = json.Unmarshal(responseRecorder.Body.Bytes(), &configResponse)
 			require.NoError(t, err)
-			assert.Equal(t, "default/test-config", configResponse.Ref)
-			assert.Equal(t, "OpenAI", configResponse.ProviderName)
-			assert.Equal(t, "gpt-4", configResponse.Model)
+			assert.Equal(t, "default/test-config", configResponse.Data.Ref)
+			assert.Equal(t, "OpenAI", configResponse.Data.ProviderName)
+			assert.Equal(t, "gpt-4", configResponse.Data.Model)
+			assert.Equal(t, "test-secret", configResponse.Data.APIKeySecretRef)
+			assert.Equal(t, "OPENAI_API_KEY", configResponse.Data.APIKeySecretKey)
+			assert.NotEmpty(t, configResponse.Data.ModelParams)
 		})
 
 		t.Run("NotFound", func(t *testing.T) {
@@ -381,13 +386,13 @@ func TestModelConfigHandler(t *testing.T) {
 			req := httptest.NewRequest("GET", "/api/modelconfigs/default/nonexistent", nil)
 
 			router := mux.NewRouter()
-			router.HandleFunc("/api/modelconfigs/{namespace}/{configName}", func(w http.ResponseWriter, r *http.Request) {
+			router.HandleFunc("/api/modelconfigs/{namespace}/{name}", func(w http.ResponseWriter, r *http.Request) {
 				handler.HandleGetModelConfig(responseRecorder, r)
 			}).Methods("GET")
 
 			router.ServeHTTP(responseRecorder, req)
 
-			assert.Equal(t, http.StatusNotFound, responseRecorder.Code)
+			assert.Equal(t, http.StatusNotFound, responseRecorder.Code, responseRecorder.Body.String())
 			assert.NotNil(t, responseRecorder.errorReceived)
 		})
 	})
@@ -432,19 +437,19 @@ func TestModelConfigHandler(t *testing.T) {
 			req.Header.Set("Content-Type", "application/json")
 
 			router := mux.NewRouter()
-			router.HandleFunc("/api/modelconfigs/{namespace}/{configName}", func(w http.ResponseWriter, r *http.Request) {
+			router.HandleFunc("/api/modelconfigs/{namespace}/{name}", func(w http.ResponseWriter, r *http.Request) {
 				handler.HandleUpdateModelConfig(responseRecorder, r)
 			}).Methods("PUT")
 
 			router.ServeHTTP(responseRecorder, req)
 
-			assert.Equal(t, http.StatusOK, responseRecorder.Code)
+			assert.Equal(t, http.StatusOK, responseRecorder.Code, responseRecorder.Body.String())
 
-			var updatedConfig api.ModelConfigResponse
+			var updatedConfig api.StandardResponse[api.ModelConfigResponse]
 			err = json.Unmarshal(responseRecorder.Body.Bytes(), &updatedConfig)
 			require.NoError(t, err)
-			assert.Equal(t, "gpt-4", updatedConfig.Model)
-			assert.Contains(t, updatedConfig.ModelParams, "temperature")
+			assert.Equal(t, "gpt-4", updatedConfig.Data.Model)
+			assert.Contains(t, updatedConfig.Data.ModelParams, "temperature")
 		})
 
 		t.Run("InvalidJSON", func(t *testing.T) {
@@ -480,13 +485,13 @@ func TestModelConfigHandler(t *testing.T) {
 			req.Header.Set("Content-Type", "application/json")
 
 			router := mux.NewRouter()
-			router.HandleFunc("/api/modelconfigs/{namespace}/{configName}", func(w http.ResponseWriter, r *http.Request) {
+			router.HandleFunc("/api/modelconfigs/{namespace}/{name}", func(w http.ResponseWriter, r *http.Request) {
 				handler.HandleUpdateModelConfig(responseRecorder, r)
 			}).Methods("PUT")
 
 			router.ServeHTTP(responseRecorder, req)
 
-			assert.Equal(t, http.StatusNotFound, responseRecorder.Code)
+			assert.Equal(t, http.StatusNotFound, responseRecorder.Code, responseRecorder.Body.String())
 			assert.NotNil(t, responseRecorder.errorReceived)
 		})
 	})
@@ -513,7 +518,7 @@ func TestModelConfigHandler(t *testing.T) {
 			req := httptest.NewRequest("DELETE", "/api/modelconfigs/default/test-config", nil)
 
 			router := mux.NewRouter()
-			router.HandleFunc("/api/modelconfigs/{namespace}/{configName}", func(w http.ResponseWriter, r *http.Request) {
+			router.HandleFunc("/api/modelconfigs/{namespace}/{name}", func(w http.ResponseWriter, r *http.Request) {
 				handler.HandleDeleteModelConfig(responseRecorder, r)
 			}).Methods("DELETE")
 
@@ -528,7 +533,7 @@ func TestModelConfigHandler(t *testing.T) {
 			req := httptest.NewRequest("DELETE", "/api/modelconfigs/default/nonexistent", nil)
 
 			router := mux.NewRouter()
-			router.HandleFunc("/api/modelconfigs/{namespace}/{configName}", func(w http.ResponseWriter, r *http.Request) {
+			router.HandleFunc("/api/modelconfigs/{namespace}/{name}", func(w http.ResponseWriter, r *http.Request) {
 				handler.HandleDeleteModelConfig(responseRecorder, r)
 			}).Methods("DELETE")
 

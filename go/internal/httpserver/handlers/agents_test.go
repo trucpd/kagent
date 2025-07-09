@@ -1,4 +1,4 @@
-package handlers
+package handlers_test
 
 import (
 	"bytes"
@@ -19,6 +19,7 @@ import (
 	autogen_fake "github.com/kagent-dev/kagent/go/internal/autogen/client/fake"
 	"github.com/kagent-dev/kagent/go/internal/database"
 	database_fake "github.com/kagent-dev/kagent/go/internal/database/fake"
+	"github.com/kagent-dev/kagent/go/internal/httpserver/handlers"
 	common "github.com/kagent-dev/kagent/go/internal/utils"
 	"github.com/kagent-dev/kagent/go/pkg/client/api"
 )
@@ -49,7 +50,7 @@ func createTestAgent(name string, modelConfig *v1alpha1.ModelConfig) *v1alpha1.A
 	}
 }
 
-func setupTestHandler(objects ...client.Object) (*AgentsHandler, string) {
+func setupTestHandler(objects ...client.Object) (*handlers.AgentsHandler, string) {
 	kubeClient := fake.NewClientBuilder().
 		WithScheme(setupScheme()).
 		WithObjects(objects...).
@@ -59,7 +60,7 @@ func setupTestHandler(objects ...client.Object) (*AgentsHandler, string) {
 	autogenClient := autogen_fake.NewInMemoryAutogenClient()
 	dbClient := database_fake.NewClient()
 
-	base := &Base{
+	base := &handlers.Base{
 		KubeClient:    kubeClient,
 		AutogenClient: autogenClient,
 		DefaultModelConfig: types.NamespacedName{
@@ -69,7 +70,7 @@ func setupTestHandler(objects ...client.Object) (*AgentsHandler, string) {
 		DatabaseService: dbClient,
 	}
 
-	return NewAgentsHandler(base), userID
+	return handlers.NewAgentsHandler(base), userID
 }
 
 func createAutogenTeam(client database.Client, agent *v1alpha1.Agent) {

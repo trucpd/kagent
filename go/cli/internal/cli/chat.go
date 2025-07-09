@@ -10,7 +10,6 @@ import (
 	"github.com/abiosoft/ishell/v2"
 	"github.com/abiosoft/readline"
 	"github.com/kagent-dev/kagent/go/cli/internal/config"
-	"github.com/kagent-dev/kagent/go/internal/database"
 	"github.com/kagent-dev/kagent/go/internal/utils"
 	"github.com/kagent-dev/kagent/go/pkg/client/api"
 	"github.com/spf13/pflag"
@@ -36,7 +35,7 @@ func ChatCmd(c *ishell.Context) {
 	cfg := config.GetCfg(c)
 	clientSet := config.GetClient(c)
 
-	var team *database.Agent
+	var team *api.AgentResponse
 	if len(flagSet.Args()) > 0 {
 		teamName := flagSet.Args()[0]
 		var err error

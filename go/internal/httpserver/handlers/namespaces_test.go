@@ -73,14 +73,14 @@ func TestNamespacesHandler(t *testing.T) {
 
 			assert.Equal(t, http.StatusOK, responseRecorder.Code)
 
-			var responseNamespaces []api.NamespaceResponse
+			var responseNamespaces api.StandardResponse[[]api.NamespaceResponse]
 			err = json.Unmarshal(responseRecorder.Body.Bytes(), &responseNamespaces)
 			require.NoError(t, err)
 
 			// Check that all namespaces are returned
-			assert.Len(t, responseNamespaces, 3)
+			assert.Len(t, responseNamespaces.Data, 3)
 			namespaceNames := make(map[string]api.NamespaceResponse)
-			for _, ns := range responseNamespaces {
+			for _, ns := range responseNamespaces.Data {
 				namespaceNames[ns.Name] = ns
 			}
 
@@ -117,14 +117,14 @@ func TestNamespacesHandler(t *testing.T) {
 
 			assert.Equal(t, http.StatusOK, responseRecorder.Code)
 
-			var responseNamespaces []api.NamespaceResponse
+			var responseNamespaces api.StandardResponse[[]api.NamespaceResponse]
 			err = json.Unmarshal(responseRecorder.Body.Bytes(), &responseNamespaces)
 			require.NoError(t, err)
-			assert.Len(t, responseNamespaces, 2)
+			assert.Len(t, responseNamespaces.Data, 2)
 
 			// Check that different phases are returned correctly
 			namespaceStatuses := make(map[string]string)
-			for _, ns := range responseNamespaces {
+			for _, ns := range responseNamespaces.Data {
 				namespaceStatuses[ns.Name] = ns.Status
 			}
 
@@ -154,14 +154,14 @@ func TestNamespacesHandler(t *testing.T) {
 
 			assert.Equal(t, http.StatusOK, responseRecorder.Code)
 
-			var responseNamespaces []api.NamespaceResponse
+			var responseNamespaces api.StandardResponse[[]api.NamespaceResponse]
 			err = json.Unmarshal(responseRecorder.Body.Bytes(), &responseNamespaces)
 			require.NoError(t, err)
 
 			// Check that only watched namespaces are returned
-			assert.Len(t, responseNamespaces, 2)
-			namespaceNames := make([]string, len(responseNamespaces))
-			for i, ns := range responseNamespaces {
+			assert.Len(t, responseNamespaces.Data, 2)
+			namespaceNames := make([]string, len(responseNamespaces.Data))
+			for i, ns := range responseNamespaces.Data {
 				namespaceNames[i] = ns.Name
 			}
 			assert.Contains(t, namespaceNames, "default")
@@ -188,14 +188,14 @@ func TestNamespacesHandler(t *testing.T) {
 
 			assert.Equal(t, http.StatusOK, responseRecorder.Code)
 
-			var responseNamespaces []api.NamespaceResponse
+			var responseNamespaces api.StandardResponse[[]api.NamespaceResponse]
 			err = json.Unmarshal(responseRecorder.Body.Bytes(), &responseNamespaces)
 			require.NoError(t, err)
 
 			// Check that only existing watched namespaces were returned
-			assert.Len(t, responseNamespaces, 2)
-			namespaceNames := make([]string, len(responseNamespaces))
-			for i, ns := range responseNamespaces {
+			assert.Len(t, responseNamespaces.Data, 2)
+			namespaceNames := make([]string, len(responseNamespaces.Data))
+			for i, ns := range responseNamespaces.Data {
 				namespaceNames[i] = ns.Name
 			}
 			assert.Contains(t, namespaceNames, "default")
@@ -222,12 +222,12 @@ func TestNamespacesHandler(t *testing.T) {
 
 			assert.Equal(t, http.StatusOK, responseRecorder.Code)
 
-			var responseNamespaces []api.NamespaceResponse
+			var responseNamespaces api.StandardResponse[[]api.NamespaceResponse]
 			err = json.Unmarshal(responseRecorder.Body.Bytes(), &responseNamespaces)
 			require.NoError(t, err)
 
 			// We should get an empty list because we are only watching non-existent namespaces
-			assert.Len(t, responseNamespaces, 0)
+			assert.Len(t, responseNamespaces.Data, 0)
 		})
 
 		t.Run("Success_EmptyResult_NoNamespaces", func(t *testing.T) {
@@ -239,10 +239,10 @@ func TestNamespacesHandler(t *testing.T) {
 
 			assert.Equal(t, http.StatusOK, responseRecorder.Code)
 
-			var responseNamespaces []api.NamespaceResponse
+			var responseNamespaces api.StandardResponse[[]api.NamespaceResponse]
 			err := json.Unmarshal(responseRecorder.Body.Bytes(), &responseNamespaces)
 			require.NoError(t, err)
-			assert.Len(t, responseNamespaces, 0)
+			assert.Len(t, responseNamespaces.Data, 0)
 		})
 	})
 }
