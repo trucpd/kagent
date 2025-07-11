@@ -11,6 +11,7 @@ import (
 	"github.com/kagent-dev/kagent/go/internal/utils"
 	"github.com/kagent-dev/kagent/go/pkg/client/api"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
+	"trpc.group/trpc-go/trpc-a2a-go/protocol"
 )
 
 // SessionsHandler handles session-related requests
@@ -283,6 +284,10 @@ func (h *SessionsHandler) HandleListSessionTasks(w ErrorResponseWriter, r *http.
 	RespondWithJSON(w, http.StatusOK, data)
 }
 
+func (h *SessionsHandler) HandleAddEventToSession(w ErrorResponseWriter, r *http.Request) {
+	panic("TODO")
+}
+
 func (h *SessionsHandler) HandleInvokeSession(w ErrorResponseWriter, r *http.Request) {
 	log := ctrllog.FromContext(r.Context()).WithName("sessions-handler").WithValues("operation", "invoke-session")
 
@@ -383,6 +388,10 @@ func (h *SessionsHandler) HandleInvokeSessionStream(w ErrorResponseWriter, r *ht
 		w.RespondWithError(errors.NewInternalServerError("Failed to parse messages", err))
 		return
 	}
+	h.handleInvokeSessionStreamAutogen(w, r, req, parsedMessages)
+}
+
+func (h *SessionsHandler) handleInvokeSessionStreamAutogen(w ErrorResponseWriter, r *http.Request, req autogen_client.InvokeTaskRequest, parsedMessages []protocol.Message) {
 
 	autogenEvents, err := utils.ConvertMessagesToAutogenEvents(parsedMessages)
 	if err != nil {
