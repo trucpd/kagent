@@ -41,7 +41,7 @@ type AutogenReconciler interface {
 }
 
 type autogenReconciler struct {
-	autogenTranslator translator.ApiTranslator
+	autogenTranslator translator.AutogenApiTranslator
 	a2aReconciler     a2a.A2AReconciler
 
 	kube          client.Client
@@ -53,7 +53,7 @@ type autogenReconciler struct {
 }
 
 func NewAutogenReconciler(
-	translator translator.ApiTranslator,
+	translator translator.AutogenApiTranslator,
 	kube client.Client,
 	autogenClient autogen_client.Client,
 	dbClient database.Client,

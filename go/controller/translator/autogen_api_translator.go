@@ -20,10 +20,10 @@ import (
 )
 
 var (
-	log = ctrllog.Log.WithName("autogen")
+	autogenLog = ctrllog.Log.WithName("autogen")
 )
 
-type ApiTranslator interface {
+type AutogenApiTranslator interface {
 	TranslateGroupChatForTeam(
 		ctx context.Context,
 		team *v1alpha1.Team,
@@ -37,12 +37,12 @@ type ApiTranslator interface {
 	TranslateToolServer(ctx context.Context, toolServer *v1alpha1.ToolServer) (*database.ToolServer, error)
 }
 
-type apiTranslator struct {
+type autogenApiTranslator struct {
 	kube               client.Client
 	defaultModelConfig types.NamespacedName
 }
 
-func (a *apiTranslator) TranslateToolServer(ctx context.Context, toolServer *v1alpha1.ToolServer) (*database.ToolServer, error) {
+func (a *autogenApiTranslator) TranslateToolServer(ctx context.Context, toolServer *v1alpha1.ToolServer) (*database.ToolServer, error) {
 	// provder = "kagent.tool_servers.StdioMcpToolServer" || "kagent.tool_servers.SseMcpToolServer"
 	provider, toolServerConfig, err := a.translateToolServerConfig(ctx, toolServer.Spec.Config, toolServer.Namespace)
 	if err != nil {
@@ -63,23 +63,23 @@ func (a *apiTranslator) TranslateToolServer(ctx context.Context, toolServer *v1a
 }
 
 // resolveValueSource resolves a value from a ValueSource
-func (a *apiTranslator) resolveValueSource(ctx context.Context, source *v1alpha1.ValueSource, namespace string) (string, error) {
+func resolveValueSource(ctx context.Context, kube client.Client, source *v1alpha1.ValueSource, namespace string) (string, error) {
 	if source == nil {
 		return "", fmt.Errorf("source cannot be nil")
 	}
 
 	switch source.Type {
 	case v1alpha1.ConfigMapValueSource:
-		return a.getConfigMapValue(ctx, source, namespace)
+		return getConfigMapValue(ctx, kube, source, namespace)
 	case v1alpha1.SecretValueSource:
-		return a.getSecretValue(ctx, source, namespace)
+		return getSecretValue(ctx, kube, source, namespace)
 	default:
 		return "", fmt.Errorf("unknown value source type: %s", source.Type)
 	}
 }
 
 // getConfigMapValue fetches a value from a ConfigMap
-func (a *apiTranslator) getConfigMapValue(ctx context.Context, source *v1alpha1.ValueSource, namespace string) (string, error) {
+func getConfigMapValue(ctx context.Context, kube client.Client, source *v1alpha1.ValueSource, namespace string) (string, error) {
 	if source == nil {
 		return "", fmt.Errorf("source cannot be nil")
 	}
@@ -87,7 +87,7 @@ func (a *apiTranslator) getConfigMapValue(ctx context.Context, source *v1alpha1.
 	configMap := &corev1.ConfigMap{}
 	err := common.GetObject(
 		ctx,
-		a.kube,
+		kube,
 		configMap,
 		source.ValueRef,
 		namespace,
@@ -104,7 +104,7 @@ func (a *apiTranslator) getConfigMapValue(ctx context.Context, source *v1alpha1.
 }
 
 // getSecretValue fetches a value from a Secret
-func (a *apiTranslator) getSecretValue(ctx context.Context, source *v1alpha1.ValueSource, namespace string) (string, error) {
+func getSecretValue(ctx context.Context, kube client.Client, source *v1alpha1.ValueSource, namespace string) (string, error) {
 	if source == nil {
 		return "", fmt.Errorf("source cannot be nil")
 	}
@@ -112,7 +112,7 @@ func (a *apiTranslator) getSecretValue(ctx context.Context, source *v1alpha1.Val
 	secret := &corev1.Secret{}
 	err := common.GetObject(
 		ctx,
-		a.kube,
+		kube,
 		secret,
 		source.ValueRef,
 		namespace,
@@ -128,7 +128,7 @@ func (a *apiTranslator) getSecretValue(ctx context.Context, source *v1alpha1.Val
 	return string(value), nil
 }
 
-func (a *apiTranslator) translateToolServerConfig(ctx context.Context, config v1alpha1.ToolServerConfig, namespace string) (string, api.ComponentConfig, error) {
+func (a *autogenApiTranslator) translateToolServerConfig(ctx context.Context, config v1alpha1.ToolServerConfig, namespace string) (string, api.ComponentConfig, error) {
 	switch {
 	case config.Stdio != nil:
 		env := make(map[string]string)
@@ -142,7 +142,7 @@ func (a *apiTranslator) translateToolServerConfig(ctx context.Context, config v1
 		if len(config.Stdio.EnvFrom) > 0 {
 			for _, envVar := range config.Stdio.EnvFrom {
 				if envVar.ValueFrom != nil {
-					value, err := a.resolveValueSource(ctx, envVar.ValueFrom, namespace)
+					value, err := resolveValueSource(ctx, a.kube, envVar.ValueFrom, namespace)
 
 					if err != nil {
 						return "", nil, fmt.Errorf("failed to resolve environment variable %s: %v", envVar.Name, err)
@@ -170,7 +170,7 @@ func (a *apiTranslator) translateToolServerConfig(ctx context.Context, config v1
 		if len(config.Sse.HeadersFrom) > 0 {
 			for _, header := range config.Sse.HeadersFrom {
 				if header.ValueFrom != nil {
-					value, err := a.resolveValueSource(ctx, header.ValueFrom, namespace)
+					value, err := resolveValueSource(ctx, a.kube, header.ValueFrom, namespace)
 
 					if err != nil {
 						return "", nil, fmt.Errorf("failed to resolve header %s: %v", header.Name, err)
@@ -209,7 +209,7 @@ func (a *apiTranslator) translateToolServerConfig(ctx context.Context, config v1
 		if len(config.StreamableHttp.HeadersFrom) > 0 {
 			for _, header := range config.StreamableHttp.HeadersFrom {
 				if header.ValueFrom != nil {
-					value, err := a.resolveValueSource(ctx, header.ValueFrom, namespace)
+					value, err := resolveValueSource(ctx, a.kube, header.ValueFrom, namespace)
 
 					if err != nil {
 						return "", nil, fmt.Errorf("failed to resolve header %s: %v", header.Name, err)
@@ -246,14 +246,14 @@ func (a *apiTranslator) translateToolServerConfig(ctx context.Context, config v1
 func NewAutogenApiTranslator(
 	kube client.Client,
 	defaultModelConfig types.NamespacedName,
-) ApiTranslator {
-	return &apiTranslator{
+) AutogenApiTranslator {
+	return &autogenApiTranslator{
 		kube:               kube,
 		defaultModelConfig: defaultModelConfig,
 	}
 }
 
-func (a *apiTranslator) TranslateGroupChatForAgent(ctx context.Context, agent *v1alpha1.Agent) (*database.Agent, error) {
+func (a *autogenApiTranslator) TranslateGroupChatForAgent(ctx context.Context, agent *v1alpha1.Agent) (*database.Agent, error) {
 	stream := true
 	if agent.Spec.Stream != nil {
 		stream = *agent.Spec.Stream
@@ -264,7 +264,7 @@ func (a *apiTranslator) TranslateGroupChatForAgent(ctx context.Context, agent *v
 	return a.translateGroupChatForAgent(ctx, agent, opts, &tState{})
 }
 
-func (a *apiTranslator) TranslateGroupChatForTeam(
+func (a *autogenApiTranslator) TranslateGroupChatForTeam(
 	ctx context.Context,
 	team *v1alpha1.Team,
 ) (*database.Agent, error) {
@@ -302,7 +302,7 @@ func defaultTeamOptions() *teamOptions {
 	}
 }
 
-func (a *apiTranslator) translateGroupChatForAgent(
+func (a *autogenApiTranslator) translateGroupChatForAgent(
 	ctx context.Context,
 	agent *v1alpha1.Agent,
 	opts *teamOptions,
@@ -316,7 +316,7 @@ func (a *apiTranslator) translateGroupChatForAgent(
 	return a.translateGroupChatForTeam(ctx, simpleTeam, opts, state)
 }
 
-func (a *apiTranslator) translateGroupChatForTeam(
+func (a *autogenApiTranslator) translateGroupChatForTeam(
 	ctx context.Context,
 	team *v1alpha1.Team,
 	opts *teamOptions,
@@ -371,7 +371,6 @@ func (a *apiTranslator) translateGroupChatForTeam(
 		participant, err := a.translateAssistantAgent(
 			ctx,
 			agentObj,
-			modelConfigObj,
 			modelClientWithStreaming,
 			modelClientWithoutStreaming,
 			modelContext,
@@ -419,7 +418,7 @@ func (a *apiTranslator) translateGroupChatForTeam(
 	}, nil
 }
 
-func (a *apiTranslator) simpleRoundRobinTeam(ctx context.Context, agent *v1alpha1.Agent) (*v1alpha1.Team, error) {
+func (a *autogenApiTranslator) simpleRoundRobinTeam(ctx context.Context, agent *v1alpha1.Agent) (*v1alpha1.Team, error) {
 	modelConfigObj, err := common.GetModelConfig(
 		ctx,
 		a.kube,
@@ -459,10 +458,9 @@ func (a *apiTranslator) simpleRoundRobinTeam(ctx context.Context, agent *v1alpha
 	return team, nil
 }
 
-func (a *apiTranslator) translateAssistantAgent(
+func (a *autogenApiTranslator) translateAssistantAgent(
 	ctx context.Context,
 	agent *v1alpha1.Agent,
-	modelConfig *v1alpha1.ModelConfig,
 	modelClientWithStreaming *api.Component,
 	modelClientWithoutStreaming *api.Component,
 	modelContext *api.Component,
@@ -476,9 +474,8 @@ func (a *apiTranslator) translateAssistantAgent(
 		switch {
 		case tool.McpServer != nil:
 			for _, toolName := range tool.McpServer.ToolNames {
-				autogenTool, err := translateToolServerTool(
+				autogenTool, err := a.translateToolServerTool(
 					ctx,
-					a.kube,
 					tool.McpServer.ToolServer,
 					toolName,
 					agent.Namespace,
@@ -594,7 +591,7 @@ func (a *apiTranslator) translateAssistantAgent(
 	}, nil
 }
 
-func (a *apiTranslator) translateMemory(ctx context.Context, memoryRef string, defaultNamespace string) (*api.Component, error) {
+func (a *autogenApiTranslator) translateMemory(ctx context.Context, memoryRef string, defaultNamespace string) (*api.Component, error) {
 	memoryObj := &v1alpha1.Memory{}
 	if err := common.GetObject(ctx, a.kube, memoryObj, memoryRef, defaultNamespace); err != nil {
 		return nil, err
@@ -630,9 +627,8 @@ func (a *apiTranslator) translateMemory(ctx context.Context, memoryRef string, d
 	return nil, fmt.Errorf("unsupported memory provider: %s", memoryObj.Spec.Provider)
 }
 
-func translateToolServerTool(
+func (a *autogenApiTranslator) translateToolServerTool(
 	ctx context.Context,
-	kube client.Client,
 	toolServerRef string,
 	toolName string,
 	defaultNamespace string,
@@ -640,7 +636,7 @@ func translateToolServerTool(
 	toolServerObj := &v1alpha1.ToolServer{}
 	err := common.GetObject(
 		ctx,
-		kube,
+		a.kube,
 		toolServerObj,
 		toolServerRef,
 		defaultNamespace,
@@ -831,7 +827,7 @@ func addOpenaiApiKeyToConfig(
 }
 
 // createModelClientForProvider creates a model client component based on the model provider
-func (a *apiTranslator) createModelClientForProvider(ctx context.Context, modelConfig *v1alpha1.ModelConfig, stream bool) (*api.Component, error) {
+func (a *autogenApiTranslator) createModelClientForProvider(ctx context.Context, modelConfig *v1alpha1.ModelConfig, stream bool) (*api.Component, error) {
 
 	switch modelConfig.Spec.Provider {
 	case v1alpha1.Anthropic:
@@ -1177,7 +1173,7 @@ func translateModelInfo(modelInfo *v1alpha1.ModelInfo) *api.ModelInfo {
 	}
 }
 
-func (a *apiTranslator) getSecretKey(ctx context.Context, secretRef string, secretKey string, namespace string) ([]byte, error) {
+func (a *autogenApiTranslator) getSecretKey(ctx context.Context, secretRef string, secretKey string, namespace string) ([]byte, error) {
 	secret := &corev1.Secret{}
 	if err := common.GetObject(
 		ctx,
@@ -1201,11 +1197,11 @@ func (a *apiTranslator) getSecretKey(ctx context.Context, secretRef string, secr
 	return value, nil
 }
 
-func (a *apiTranslator) getMemoryApiKey(ctx context.Context, memory *v1alpha1.Memory) ([]byte, error) {
+func (a *autogenApiTranslator) getMemoryApiKey(ctx context.Context, memory *v1alpha1.Memory) ([]byte, error) {
 	return a.getSecretKey(ctx, memory.Spec.APIKeySecretRef, memory.Spec.APIKeySecretKey, memory.Namespace)
 }
 
-func (a *apiTranslator) getModelConfigGoogleApplicationCredentials(ctx context.Context, modelConfig *v1alpha1.ModelConfig) (map[string]interface{}, error) {
+func (a *autogenApiTranslator) getModelConfigGoogleApplicationCredentials(ctx context.Context, modelConfig *v1alpha1.ModelConfig) (map[string]interface{}, error) {
 	googleApplicationCredentialsSecret := &corev1.Secret{}
 	err := common.GetObject(
 		ctx,
@@ -1236,6 +1232,6 @@ func (a *apiTranslator) getModelConfigGoogleApplicationCredentials(ctx context.C
 	return credsMap, nil
 }
 
-func (a *apiTranslator) getModelConfigApiKey(ctx context.Context, modelConfig *v1alpha1.ModelConfig) ([]byte, error) {
+func (a *autogenApiTranslator) getModelConfigApiKey(ctx context.Context, modelConfig *v1alpha1.ModelConfig) ([]byte, error) {
 	return a.getSecretKey(ctx, modelConfig.Spec.APIKeySecretRef, modelConfig.Spec.APIKeySecretKey, modelConfig.Namespace)
 }

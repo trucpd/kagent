@@ -62,8 +62,9 @@ type ValueRef struct {
 }
 
 type StdioMcpServerConfig struct {
-	Command string            `json:"command"`
-	Args    []string          `json:"args,omitempty"`
+	Command string   `json:"command"`
+	Args    []string `json:"args,omitempty"`
+	// Deprecated: Use EnvFrom instead
 	Env     map[string]string `json:"env,omitempty"`
 	EnvFrom []ValueRef        `json:"envFrom,omitempty"`
 	// Default value is 10 seconds
@@ -75,6 +76,7 @@ type HttpToolServerConfig struct {
 	URL string `json:"url"`
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:Schemaless
+	// Deprecated: Use HeadersFrom instead
 	Headers     map[string]AnyType `json:"headers,omitempty"`
 	HeadersFrom []ValueRef         `json:"headersFrom,omitempty"`
 	// +optional

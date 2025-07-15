@@ -46,6 +46,7 @@ spec:
                   sse:
                     properties:
                       headers:
+                        description: 'Deprecated: Use HeadersFrom instead'
                         x-kubernetes-preserve-unknown-fields: true
                       headersFrom:
                         items:
@@ -104,6 +105,7 @@ spec:
                       env:
                         additionalProperties:
                           type: string
+                        description: 'Deprecated: Use EnvFrom instead'
                         type: object
                       envFrom:
                         items:
@@ -152,6 +154,7 @@ spec:
                   streamableHttp:
                     properties:
                       headers:
+                        description: 'Deprecated: Use HeadersFrom instead'
                         x-kubernetes-preserve-unknown-fields: true
                       headersFrom:
                         items:
