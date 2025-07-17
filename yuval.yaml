@@ -1,0 +1,22 @@
+apiVersion: kagent.dev/v1alpha1
+kind: Agent
+metadata:
+  name: k8s-agent
+  namespace: kagent
+spec:
+  description: yuval
+  modelConfig: default-model-config
+  systemMessage: yuval
+  hackyYuvalConfig:
+    string: http://localhost:8000/run_live
+  tools:
+  - mcpServer:
+      toolNames:
+      - checkKubernetesClusterFixed
+      toolServer: check-kubernetes-cluster-fixed
+    type: McpServer
+  - mcpServer:
+      toolNames:
+      - searchDocs
+      toolServer: search-documentation
+    type: McpServer

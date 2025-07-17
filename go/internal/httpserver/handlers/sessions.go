@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 
 	"github.com/google/uuid"
+	"github.com/kagent-dev/kagent/go/internal/a2a/manager"
 	autogen_client "github.com/kagent-dev/kagent/go/internal/autogen/client"
 	"github.com/kagent-dev/kagent/go/internal/database"
 	"github.com/kagent-dev/kagent/go/internal/httpserver/errors"
@@ -133,6 +135,7 @@ func (h *SessionsHandler) HandleCreateSession(w ErrorResponseWriter, r *http.Req
 		Name:    name,
 		UserID:  sessionRequest.UserID,
 		AgentID: &agent.ID,
+		Url:     agent.Url,
 	}
 
 	log.V(1).Info("Creating session in database",
@@ -284,8 +287,74 @@ func (h *SessionsHandler) HandleListSessionTasks(w ErrorResponseWriter, r *http.
 	RespondWithJSON(w, http.StatusOK, data)
 }
 
+// EventRequest represents an event/message append request
+type EventRequest struct {
+	Event map[string]interface{} `json:"event"`
+}
+
 func (h *SessionsHandler) HandleAddEventToSession(w ErrorResponseWriter, r *http.Request) {
-	panic("TODO")
+	log := ctrllog.FromContext(r.Context()).WithName("sessions-handler").WithValues("operation", "add-event")
+
+	sessionName, err := GetPathParam(r, "session_name")
+	if err != nil {
+		w.RespondWithError(errors.NewBadRequestError("Failed to get session name from path", err))
+		return
+	}
+	log = log.WithValues("session_name", sessionName)
+
+	userID, err := GetUserID(r)
+	if err != nil {
+		w.RespondWithError(errors.NewBadRequestError("Failed to get user ID", err))
+		return
+	}
+	log = log.WithValues("userID", userID)
+
+	var eventRequest EventRequest
+	if err := DecodeJSONBody(r, &eventRequest); err != nil {
+		w.RespondWithError(errors.NewBadRequestError("Invalid request body", err))
+		return
+	}
+
+	// Get session to verify it exists
+	session, err := h.DatabaseService.GetSession(sessionName, userID)
+	if err != nil {
+		w.RespondWithError(errors.NewNotFoundError("Session not found", err))
+		return
+	}
+
+	// Convert event to JSON string for storage
+	eventData, err := json.Marshal(eventRequest.Event)
+	if err != nil {
+		w.RespondWithError(errors.NewInternalServerError("Failed to serialize event", err))
+		return
+	}
+
+	// Create a message entry for the event
+	messageID := uuid.New().String()
+	message := &database.Message{
+		ID:        messageID,
+		UserID:    userID,
+		Data:      string(eventData),
+		SessionID: &session.ID,
+	}
+
+	if err := h.DatabaseService.(manager.Storage).StoreMessage(protocol.Message{
+		MessageID: messageID,
+		ContextID: &session.ID,
+		Metadata: map[string]interface{}{
+			"event_type": "session_event",
+		},
+		Parts: []protocol.Part{
+			protocol.DataPart{Data: eventData},
+		},
+	}); err != nil {
+		w.RespondWithError(errors.NewInternalServerError("Failed to store event", err))
+		return
+	}
+
+	log.Info("Successfully added event to session")
+	data := api.NewResponse(message, "Event added to session successfully", false)
+	RespondWithJSON(w, http.StatusCreated, data)
 }
 
 func (h *SessionsHandler) HandleInvokeSession(w ErrorResponseWriter, r *http.Request) {
@@ -334,19 +403,58 @@ func (h *SessionsHandler) HandleInvokeSession(w ErrorResponseWriter, r *http.Req
 	}
 	req.Messages = autogenEvents
 
-	result, err := h.AutogenClient.InvokeTask(r.Context(), &req)
-	if err != nil {
-		w.RespondWithError(errors.NewInternalServerError("Failed to invoke session", err))
-		return
-	}
+	var messagesToClient []autogen_client.Event
+	var messageToSave []*protocol.Message
+	if session.Url != "" {
+		b := bytes.NewBuffer(nil)
 
-	messageToSave := utils.ConvertAutogenEventsToMessages(nil, &sessionID, result.TaskResult.Messages...)
+		if err := json.NewEncoder(b).Encode(req); err != nil {
+			w.RespondWithError(errors.NewInternalServerError("Failed to encode request", err))
+			return
+		}
+
+		req, err := http.NewRequest("POST", session.Url, b)
+		if err != nil {
+			w.RespondWithError(errors.NewInternalServerError("Failed to invoke session", err))
+			return
+		}
+		result, err := http.DefaultClient.Do(req)
+		if err != nil {
+			w.RespondWithError(errors.NewInternalServerError("Failed to invoke session", err))
+			return
+		}
+		defer result.Body.Close()
+		if result.StatusCode != http.StatusOK {
+			w.RespondWithError(errors.NewInternalServerError("Failed to invoke session", nil))
+			return
+		}
+		d := json.NewDecoder(result.Body)
+		if err := d.Decode(&messageToSave); err != nil {
+			w.RespondWithError(errors.NewInternalServerError("Failed to decode response", err))
+			return
+		}
+		for _, msg := range messageToSave {
+			m := &autogen_client.BaseEvent{
+				Type: *msg.ContextID,
+			}
+			messagesToClient = append(messagesToClient, m)
+		}
+
+	} else {
+		result, err := h.AutogenClient.InvokeTask(r.Context(), &req)
+		if err != nil {
+			w.RespondWithError(errors.NewInternalServerError("Failed to invoke session", err))
+			return
+		}
+		messagesToClient = result.TaskResult.Messages
+		messageToSave = utils.ConvertAutogenEventsToMessages(nil, &sessionID, result.TaskResult.Messages...)
+	}
 	if err := h.DatabaseService.CreateMessages(messageToSave...); err != nil {
 		w.RespondWithError(errors.NewInternalServerError("Failed to create messages", err))
 		return
 	}
 
-	data := api.NewResponse(result.TaskResult.Messages, "Successfully invoked session", false)
+	data := api.NewResponse(messagesToClient, "Successfully invoked session", false)
 	RespondWithJSON(w, http.StatusOK, data)
 }
 
@@ -388,10 +496,49 @@ func (h *SessionsHandler) HandleInvokeSessionStream(w ErrorResponseWriter, r *ht
 		w.RespondWithError(errors.NewInternalServerError("Failed to parse messages", err))
 		return
 	}
-	h.handleInvokeSessionStreamAutogen(w, r, req, parsedMessages)
+	if session.Url != "" {
+		b := bytes.NewBuffer(nil)
+
+		if err := json.NewEncoder(b).Encode(req); err != nil {
+			w.RespondWithError(errors.NewInternalServerError("Failed to encode request", err))
+			return
+		}
+
+		req, err := http.NewRequest("POST", session.Url, b)
+		if err != nil {
+			w.RespondWithError(errors.NewInternalServerError("Failed to invoke session", err))
+			return
+		}
+		result, err := http.DefaultClient.Do(req)
+		if err != nil {
+			w.RespondWithError(errors.NewInternalServerError("Failed to invoke session", err))
+			return
+		}
+		defer result.Body.Close()
+		if result.StatusCode != http.StatusOK {
+			w.RespondWithError(errors.NewInternalServerError("Failed to invoke session", nil))
+			return
+		}
+		var messageToSave []*protocol.Message
+
+		d := json.NewDecoder(result.Body)
+		if err := d.Decode(&messageToSave); err != nil {
+			w.RespondWithError(errors.NewInternalServerError("Failed to decode response", err))
+			return
+		}
+		log.Info("Saving messages", "count", len(messageToSave))
+		if err := h.DatabaseService.CreateMessages(messageToSave...); err != nil {
+			log.Error(err, "Failed to create messages")
+		}
+
+	} else {
+
+		h.handleInvokeSessionStreamAutogen(w, r, session, req, parsedMessages)
+	}
 }
 
-func (h *SessionsHandler) handleInvokeSessionStreamAutogen(w ErrorResponseWriter, r *http.Request, req autogen_client.InvokeTaskRequest, parsedMessages []protocol.Message) {
+func (h *SessionsHandler) handleInvokeSessionStreamAutogen(w ErrorResponseWriter, r *http.Request, session *database.Session, req autogen_client.InvokeTaskRequest, parsedMessages []protocol.Message) {
+	log := ctrllog.FromContext(r.Context()).WithName("sessions-handler").WithValues("operation", "invoke-session")
 
 	autogenEvents, err := utils.ConvertMessagesToAutogenEvents(parsedMessages)
 	if err != nil {
@@ -426,7 +573,7 @@ func (h *SessionsHandler) handleInvokeSessionStreamAutogen(w ErrorResponseWriter
 
 	}
 
-	messageToSave := utils.ConvertAutogenEventsToMessages(nil, &sessionID, taskResult.TaskResult.Messages...)
+	messageToSave := utils.ConvertAutogenEventsToMessages(nil, &session.ID, taskResult.TaskResult.Messages...)
 	log.Info("Saving messages", "count", len(messageToSave))
 	if err := h.DatabaseService.CreateMessages(messageToSave...); err != nil {
 		log.Error(err, "Failed to create messages")

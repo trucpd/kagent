@@ -16,6 +16,7 @@ from google.adk.sessions.base_session_service import (
 from google.adk.events.event import Event
 from google.adk.agents.live_request_queue import LiveRequestQueue, LiveRequest
 from google.adk.agents import BaseAgent
+import uvicorn
 
 from pydantic import ValidationError
 
@@ -27,21 +28,26 @@ from typing_extensions import override
 from typing import Any
 
 import asyncio,traceback
+import httpx
 
 logger = logging.getLogger("kagent." + __name__)
 
 
 class KagentSessionService(BaseSessionService):
-    """An in-memory implementation of the session service.
-
-    It is not suitable for multi-threaded production environments. Use it for
-    testing and development only.
+    """A session service implementation that uses the Kagent API.
+    
+    This service integrates with the Kagent server to manage session state
+    and persistence through HTTP API calls.
     """
 
     def __init__(self, kagent_url: str):
         super().__init__()
-        self.kagent_url = kagent_url
-        pass
+        self.kagent_url = kagent_url.rstrip("/")
+        self.client = httpx.AsyncClient()
+
+    async def _get_user_id(self) -> str:
+        """Get the default user ID. Override this method to implement custom user ID logic."""
+        return "default-user"
 
     @override
     async def create_session(
@@ -52,7 +58,34 @@ class KagentSessionService(BaseSessionService):
         state: Optional[dict[str, Any]] = None,
         session_id: Optional[str] = None,
     ) -> Session:
-        raise NotImplementedError("TODO")
+        # Prepare request data
+        request_data = {
+            "user_id": user_id,
+            "agent_ref": app_name,  # Use app_name as agent reference
+        }
+        if session_id:
+            request_data["name"] = session_id
+
+        # Make API call to create session
+        response = await self.client.post(
+            f"{self.kagent_url}/api/sessions",
+            json=request_data,
+            headers={"X-User-ID": user_id}
+        )
+        response.raise_for_status()
+        
+        data = response.json()
+        if not data.get("data"):
+            raise RuntimeError(f"Failed to create session: {data.get('message', 'Unknown error')}")
+        
+        session_data = data["data"]
+        
+        # Convert to ADK Session format
+        return Session(
+            id=session_data["id"],
+            user_id=session_data["user_id"],
+            state=state or {}
+        )
 
     @override
     async def get_session(
@@ -63,13 +96,56 @@ class KagentSessionService(BaseSessionService):
         session_id: str,
         config: Optional[GetSessionConfig] = None,
     ) -> Optional[Session]:
-        raise NotImplementedError("TODO")
+        try:
+            # Make API call to get session
+            response = await self.client.get(
+                f"{self.kagent_url}/api/sessions/{session_id}",
+                headers={"X-User-ID": user_id}
+            )
+            response.raise_for_status()
+            
+            data = response.json()
+            if not data.get("data"):
+                return None
+            
+            session_data = data["data"]
+            
+            # Convert to ADK Session format
+            return Session(
+                id=session_data["id"],
+                user_id=session_data["user_id"],
+                state={}  # State would need to be stored separately if needed
+            )
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                return None
+            raise
 
     @override
     async def list_sessions(
         self, *, app_name: str, user_id: str
     ) -> ListSessionsResponse:
-        raise NotImplementedError("TODO")
+        # Make API call to list sessions
+        response = await self.client.get(
+            f"{self.kagent_url}/api/sessions",
+            headers={"X-User-ID": user_id}
+        )
+        response.raise_for_status()
+        
+        data = response.json()
+        sessions_data = data.get("data", [])
+        
+        # Convert to ADK Session format
+        sessions = []
+        for session_data in sessions_data:
+            session = Session(
+                id=session_data["id"],
+                user_id=session_data["user_id"],
+                state={}
+            )
+            sessions.append(session)
+        
+        return ListSessionsResponse(sessions=sessions)
 
     def list_sessions_sync(
         self, *, app_name: str, user_id: str
@@ -80,11 +156,32 @@ class KagentSessionService(BaseSessionService):
     async def delete_session(
         self, *, app_name: str, user_id: str, session_id: str
     ) -> None:
-        raise NotImplementedError("TODO")
+        # Make API call to delete session
+        response = await self.client.delete(
+            f"{self.kagent_url}/api/sessions/{session_id}",
+            headers={"X-User-ID": user_id}
+        )
+        response.raise_for_status()
 
     @override
     async def append_event(self, session: Session, event: Event) -> Event:
-        raise NotImplementedError("TODO")
+        # Convert ADK Event to JSON format
+        event_data = {
+            "event": {
+                "type": event.__class__.__name__,
+                "data": event.model_dump() if hasattr(event, 'model_dump') else event.__dict__
+            }
+        }
+        
+        # Make API call to append event to session
+        response = await self.client.post(
+            f"{self.kagent_url}/api/sessions/{session.id}/events",
+            json=event_data,
+            headers={"X-User-ID": session.user_id}
+        )
+        response.raise_for_status()
+        
+        return event
 
 
 class KagentAdkAgent:
@@ -97,7 +194,7 @@ class KagentAdkAgent:
     async def session_stream(self, session: Session) -> None:
         pass
 
-    async def _create_runner_async(self, app_name: str) -> Runner:
+    def _create_runner_async(self, app_name: str) -> Runner:
         # envs.load_dotenv_for_agent(os.path.basename(app_name), agents_dir)
         runner = Runner(
             app_name=app_name,
@@ -117,7 +214,7 @@ class SessionHandler:
         self.websocket: WebSocket = websocket
         self.agent: BaseAgent = agent
         self.session: Session = session
-        self.runner: Runner = self._get_runner_async(self.agent.name)
+        self.runner: Runner = runner  # Use the passed runner instead of creating a new one
         self.live_request_queue: LiveRequestQueue = LiveRequestQueue()
 
     async def run_live(self) -> None:
@@ -163,10 +260,10 @@ class SessionHandler:
         except ValidationError as ve:
             logger.error("Validation error in process_messages: %s", ve)
 
-def run_server(agent: BaseAgent):
+async def run_server(agent: BaseAgent):
     # Run the FastAPI server.
     kagent_agent = KagentAdkAgent(agent)
-    app = FastAPI(lifespan=internal_lifespan)
+    app = FastAPI()
 
     @app.websocket("/run_live")
     async def agent_live_run(
@@ -179,10 +276,27 @@ def run_server(agent: BaseAgent):
         #),  # Only allows "TEXT" or "AUDIO"
     ) -> None:
         await websocket.accept()
-        session = await kagent_agent.session_service.get_session(session_id=session_id, app_name=app_name, user_id=user_id)
+        session = await kagent_agent.session_service.get_session(
+            session_id=session_id, 
+            app_name=app_name, 
+            user_id=user_id
+        )
+        if session is None:
+            await websocket.close(code=1008, reason="Session not found")
+            return
+            
         h = SessionHandler(websocket, kagent_agent.agent, kagent_agent.runner, session)
-        await kagent_agent.session_stream()
+        await h.run_live()
 
+    config = uvicorn.Config(
+        app,
+        host="0.0.0.0",
+        port=8000,
+    #    reload=reload,
+    )
+
+    server = uvicorn.Server(config)
+    await server.serve()
 # async def run_agent():
 #     host: str = "0.0.0.0"
 #     port: int = 8000
@@ -230,9 +344,48 @@ def run_server(agent: BaseAgent):
 #
 #     except Exception as e:
 #         logger.error("Failed to setup A2A agent %s: %s", app_name, e)
-def main():
+async def main():
     print("Hello from agent-py!")
+    await run_server(root_agent)
+    # Example usage of KagentSessionService:
+    # 
+    # from google.adk.sessions import Session
+    # from google.adk.events.event import Event
+    # 
+    # async def demo_session_service():
+    #     service = KagentSessionService("http://localhost:8000")
+    #     
+    #     # Create a session
+    #     session = await service.create_session(
+    #         app_name="my-agent",
+    #         user_id="user123",
+    #         session_id="demo-session"
+    #     )
+    #     
+    #     # Get session
+    #     retrieved_session = await service.get_session(
+    #         app_name="my-agent", 
+    #         user_id="user123",
+    #         session_id="demo-session"
+    #     )
+    #     
+    #     # List sessions
+    #     sessions_response = await service.list_sessions(
+    #         app_name="my-agent",
+    #         user_id="user123"
+    #     )
+    #     
+    #     # Append an event to the session
+    #     from google.adk.events.event import Event
+    #     event = Event()  # Create your event
+    #     await service.append_event(session, event)
+    #     
+    #     # Delete session
+    #     await service.delete_session(
+    #         app_name="my-agent",
+    #         user_id="user123", 
+    #         session_id="demo-session"
+    #     )
 
-
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+  asyncio.run(main())

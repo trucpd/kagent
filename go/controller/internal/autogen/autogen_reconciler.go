@@ -519,15 +519,17 @@ func (a *autogenReconciler) upsertAgent(ctx context.Context, agent *database.Age
 	a.upsertLock.Lock()
 	defer a.upsertLock.Unlock()
 	// validate the team
-	req := autogen_client.ValidationRequest{
-		Component: &agent.Component,
-	}
-	resp, err := a.autogenClient.Validate(ctx, &req)
-	if err != nil {
-		return fmt.Errorf("failed to validate agent %s: %v", agent.Name, err)
-	}
-	if !resp.IsValid {
-		return fmt.Errorf("agent %s is invalid: %v", agent.Name, resp.ErrorMsg())
+	if agent.Url == "" {
+		req := autogen_client.ValidationRequest{
+			Component: &agent.Component,
+		}
+		resp, err := a.autogenClient.Validate(ctx, &req)
+		if err != nil {
+			return fmt.Errorf("failed to validate agent %s: %v", agent.Name, err)
+		}
+		if !resp.IsValid {
+			return fmt.Errorf("agent %s is invalid: %v", agent.Name, resp.ErrorMsg())
+		}
 	}
 
 	// delete if team exists

@@ -268,7 +268,7 @@ func (a *apiTranslator) TranslateGroupChatForTeam(
 	ctx context.Context,
 	team *v1alpha1.Team,
 ) (*database.Agent, error) {
-	return a.translateGroupChatForTeam(ctx, team, defaultTeamOptions(), &tState{})
+	return a.translateGroupChatForTeam(ctx, team, defaultTeamOptions(), &tState{}, nil)
 }
 
 type teamOptions struct {
@@ -313,7 +313,7 @@ func (a *apiTranslator) translateGroupChatForAgent(
 		return nil, err
 	}
 
-	return a.translateGroupChatForTeam(ctx, simpleTeam, opts, state)
+	return a.translateGroupChatForTeam(ctx, simpleTeam, opts, state, agent)
 }
 
 func (a *apiTranslator) translateGroupChatForTeam(
@@ -321,7 +321,19 @@ func (a *apiTranslator) translateGroupChatForTeam(
 	team *v1alpha1.Team,
 	opts *teamOptions,
 	state *tState,
+	agent *v1alpha1.Agent,
 ) (*database.Agent, error) {
+	var u string
+	if agent != nil {
+		if b := agent.Spec.HackyYuvalConfig; b != nil {
+			u = b.String
+			return &database.Agent{
+				Name: common.GetObjectRef(team),
+				Url:  u,
+			}, nil
+		}
+	}
+
 	// get model config
 	roundRobinTeamConfig := team.Spec.RoundRobinTeamConfig
 
@@ -527,7 +539,7 @@ func (a *apiTranslator) translateAssistantAgent(
 			if err != nil {
 				return nil, err
 			}
-			autogenTool, err := a.translateGroupChatForTeam(ctx, team, &teamOptions{}, state.with(agent))
+			autogenTool, err := a.translateGroupChatForTeam(ctx, team, &teamOptions{}, state.with(agent), agent)
 			if err != nil {
 				return nil, err
 			}

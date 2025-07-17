@@ -1,4 +1,4 @@
-# Development
+ # Development
 
 To understand how to develop for kagent, It's important to understand the architecture of the project. Please refer to the [README.md](README.md#architecture) file for an overview of the project.
 
@@ -47,7 +47,7 @@ Now you can run the components locally:
 uv sync --all-extras
 
 # Run the autogen backend
-uv run kagent-engine serve
+uv run kagent-engine
 ```
 
 If you get an error that looks like this:
@@ -66,17 +66,17 @@ npm install
 npm run dev
 ```
 
-3. Run the tool-server locally, from the `go` folder:
+3. Run the tool-server locally, from the tools repo:
 
 
 ```bash
-make run/tool-server
+make run
 ```
 
 4. Run the controller locally, from the `go` folder:
 
 ```bash
-make run 
+make run
 ```
 ## How to run everything in Kubernetes
 
@@ -103,7 +103,7 @@ make helm-install
 To access the UI, port-forward to the app service:
 
 ```shell
-kubectl port-forward svc/app 8001:80
+kubectl port-forward svc/kagent 8001:80
 ```
 
 Then open your browser and go to `http://localhost:8001`.

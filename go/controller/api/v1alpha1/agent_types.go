@@ -53,6 +53,13 @@ type AgentSpec struct {
 	// Read more about the A2A protocol here: https://github.com/google/A2A
 	// +optional
 	A2AConfig *A2AConfig `json:"a2aConfig,omitempty"`
+
+	// Config owned by yuval
+	HackyYuvalConfig *HackyYuvalConfig `json:"hackyYuvalConfig,omitempty"`
+}
+
+type HackyYuvalConfig struct {
+	String string `json:"string,omitempty"`
 }
 
 // ToolProviderType represents the tool provider type

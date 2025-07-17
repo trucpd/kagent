@@ -42,6 +42,7 @@ type Agent struct {
 	gorm.Model
 	Name      string        `gorm:"unique;not null" json:"name"`
 	Component api.Component `gorm:"type:json;not null" json:"component"`
+	Url       string        `gorm:"not null" json:"url"`
 }
 
 type Message struct {
@@ -85,7 +86,8 @@ type Session struct {
 	UpdatedAt time.Time      `gorm:"autoUpdateTime" json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"deleted_at"`
 
-	AgentID *uint `gorm:"index" json:"agent_id"`
+	AgentID *uint  `gorm:"index" json:"agent_id"`
+	Url     string `gorm:"not null" json:"url"`
 }
 
 type Task struct {
