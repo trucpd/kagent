@@ -6,7 +6,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/kagent-dev/kagent/go/internal/autogen/api"
+	"github.com/kagent-dev/kagent/go/controller/api/v1alpha1"
+	"github.com/kagent-dev/kagent/go/internal/adk"
 	"gorm.io/gorm"
 	"trpc.group/trpc-go/trpc-a2a-go/protocol"
 )
@@ -40,8 +41,8 @@ func (j JSONMap) Value() (driver.Value, error) {
 // Agent represents an agent configuration
 type Agent struct {
 	gorm.Model
-	Name      string        `gorm:"unique;not null" json:"name"`
-	Component api.Component `gorm:"type:json;not null" json:"component"`
+	Name   string           `gorm:"unique;not null" json:"name"`
+	Config *adk.AgentConfig `gorm:"type:json;not null" json:"config"`
 }
 
 type Message struct {
@@ -65,14 +66,14 @@ func (m *Message) Parse() (protocol.Message, error) {
 	return data, nil
 }
 
-func ParseMessages(messages []Message) ([]protocol.Message, error) {
-	result := make([]protocol.Message, 0, len(messages))
+func ParseMessages(messages []Message) ([]*protocol.Message, error) {
+	result := make([]*protocol.Message, 0, len(messages))
 	for _, message := range messages {
 		parsedMessage, err := message.Parse()
 		if err != nil {
 			return nil, err
 		}
-		result = append(result, parsedMessage)
+		result = append(result, &parsedMessage)
 	}
 	return result, nil
 }
@@ -96,7 +97,7 @@ type Task struct {
 	UpdatedAt time.Time      `gorm:"autoUpdateTime" json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"deleted_at"`
 	Data      string         `gorm:"type:text;not null" json:"data"` // JSON serialized task data
-	SessionID *string        `gorm:"index" json:"session_id"`
+	SessionID string         `gorm:"index" json:"session_id"`
 }
 
 func (t *Task) Parse() (protocol.Task, error) {
@@ -108,10 +109,25 @@ func (t *Task) Parse() (protocol.Task, error) {
 	return data, nil
 }
 
+func ParseTasks(tasks []Task) ([]*protocol.Task, error) {
+	result := make([]*protocol.Task, 0, len(tasks))
+	for _, task := range tasks {
+		parsedTask, err := task.Parse()
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, &parsedTask)
+	}
+	return result, nil
+}
+
 type PushNotification struct {
-	gorm.Model
-	TaskID string `gorm:"not null;index" json:"task_id"`
-	Data   string `gorm:"type:text;not null" json:"data"` // JSON serialized push notification config
+	ID        string         `gorm:"primaryKey;not null" json:"id"`
+	TaskID    string         `gorm:"not null;index" json:"task_id"`
+	CreatedAt time.Time      `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt time.Time      `gorm:"autoUpdateTime" json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"deleted_at"`
+	Data      string         `gorm:"type:text;not null" json:"data"` // JSON serialized push notification config
 }
 
 // FeedbackIssueType represents the category of feedback issue
@@ -137,17 +153,18 @@ type Feedback struct {
 // Tool represents a single tool that can be used by an agent
 type Tool struct {
 	gorm.Model
-	Name       string        `gorm:"index;unique;not null" json:"name"`
-	Component  api.Component `gorm:"type:json;not null" json:"component"`
-	ServerName string        `gorm:"not null;index" json:"server_name,omitempty"`
+	Name        string `gorm:"index;unique;not null" json:"name"`
+	Description string `json:"description"`
+	ServerName  string `gorm:"not null;index" json:"server_name,omitempty"`
 }
 
 // ToolServer represents a tool server that provides tools
 type ToolServer struct {
 	gorm.Model
-	Name          string        `gorm:"primaryKey;not null" json:"name"`
-	LastConnected *time.Time    `json:"last_connected,omitempty"`
-	Component     api.Component `gorm:"type:json;not null" json:"component"`
+	Name          string                    `gorm:"primaryKey;not null" json:"name"`
+	Description   string                    `json:"description"`
+	LastConnected *time.Time                `json:"last_connected,omitempty"`
+	Config        v1alpha1.ToolServerConfig `gorm:"type:json" json:"config"`
 }
 
 // TableName methods to match Python table names

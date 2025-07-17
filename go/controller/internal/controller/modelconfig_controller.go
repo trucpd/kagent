@@ -19,7 +19,7 @@ package controller
 import (
 	"context"
 
-	"github.com/kagent-dev/kagent/go/controller/internal/autogen"
+	"github.com/kagent-dev/kagent/go/controller/internal/reconciler"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
@@ -31,29 +31,29 @@ import (
 	agentv1alpha1 "github.com/kagent-dev/kagent/go/controller/api/v1alpha1"
 )
 
-// AutogenTeamReconciler reconciles a AutogenTeam object
-type AutogenTeamReconciler struct {
+// AutogenModelConfigReconciler reconciles a AutogenModelConfig object
+type AutogenModelConfigReconciler struct {
 	client.Client
 	Scheme     *runtime.Scheme
-	Reconciler autogen.AutogenReconciler
+	Reconciler reconciler.KagentReconciler
 }
 
-// +kubebuilder:rbac:groups=kagent.dev,resources=teams,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=kagent.dev,resources=teams/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=kagent.dev,resources=teams/finalizers,verbs=update
+// +kubebuilder:rbac:groups=kagent.dev,resources=modelconfigs,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=kagent.dev,resources=modelconfigs/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=kagent.dev,resources=modelconfigs/finalizers,verbs=update
 
-func (r *AutogenTeamReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *AutogenModelConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
-	return ctrl.Result{}, r.Reconciler.ReconcileAutogenTeam(ctx, req)
+	return ctrl.Result{}, r.Reconciler.ReconcileKagentModelConfig(ctx, req)
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *AutogenTeamReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *AutogenModelConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		WithOptions(controller.Options{
 			NeedLeaderElection: ptr.To(true),
 		}).
-		For(&agentv1alpha1.Team{}).
-		Named("autogenteam").
+		For(&agentv1alpha1.ModelConfig{}).
+		Named("autogenmodelconfig").
 		Complete(r)
 }

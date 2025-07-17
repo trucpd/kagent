@@ -159,7 +159,7 @@ func TestTaskHandlerWithSession(t *testing.T) {
 			UserID:  "admin@kagent.dev",
 			AgentID: ptr.To(uint(1)),
 		}
-		err := dbService.CreateSession(session)
+		err := dbService.StoreSession(session)
 		require.NoError(t, err)
 		assert.Equal(t, sessionID, session.ID)
 		assert.Equal(t, "test-session", session.ID)
@@ -446,7 +446,7 @@ func TestTaskHandlerStreamingSupport(t *testing.T) {
 		dbService := fake_db.NewClient()
 
 		// Create a session
-		err := dbService.CreateSession(&database.Session{
+		err := dbService.StoreSession(&database.Session{
 			ID:     sessionID,
 			UserID: "admin@kagent.dev",
 		})

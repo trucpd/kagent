@@ -17,6 +17,9 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"database/sql/driver"
+	"encoding/json"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -26,10 +29,38 @@ type ToolServerSpec struct {
 	Config      ToolServerConfig `json:"config"`
 }
 
+type ToolServerProtocol string
+
+const (
+	ToolServerProtocolSse            ToolServerProtocol = "sse"
+	ToolServerProtocolStreamableHttp ToolServerProtocol = "streamableHttp"
+)
+
+// Only one of sse or streamableHttp must be specified
 type ToolServerConfig struct {
-	Stdio          *StdioMcpServerConfig       `json:"stdio,omitempty"`
-	Sse            *SseMcpServerConfig         `json:"sse,omitempty"`
-	StreamableHttp *StreamableHttpServerConfig `json:"streamableHttp,omitempty"`
+	// Default protocol is streamableHttp
+	// +kubebuilder:validation:Enum=sse;streamableHttp
+	Protocol ToolServerProtocol `json:"protocol"`
+	// URL of the tool server
+	URL string `json:"url"`
+	// List of headers to send with the request
+	// +optional
+	HeadersFrom []ValueRef `json:"headersFrom,omitempty"`
+	// +optional
+	Timeout *metav1.Duration `json:"timeout,omitempty"`
+	// +optional
+	SseReadTimeout *metav1.Duration `json:"sseReadTimeout,omitempty"`
+	// Only applicable for streamableHttp
+	// +optional
+	TerminateOnClose bool `json:"terminateOnClose,omitempty"`
+}
+
+func (t *ToolServerConfig) Scan(value interface{}) error {
+	return json.Unmarshal(value.([]byte), t)
+}
+
+func (t ToolServerConfig) Value() (driver.Value, error) {
+	return json.Marshal(t)
 }
 
 type ValueSourceType string
@@ -46,12 +77,12 @@ type ValueSource struct {
 	// The reference to the ConfigMap or Secret. Can either be a reference to a resource in the same namespace,
 	// or a reference to a resource in a different namespace in the form "namespace/name".
 	// If namespace is not provided, the default namespace is used.
-	// +optional
 	ValueRef string `json:"valueRef"`
 	Key      string `json:"key"`
 }
 
 // ValueRef represents a configuration value
+// Only one of value or valueFrom must be specified
 // +kubebuilder:validation:XValidation:rule="(has(self.value) && !has(self.valueFrom)) || (!has(self.value) && has(self.valueFrom))",message="Exactly one of value or valueFrom must be specified"
 type ValueRef struct {
 	Name string `json:"name"`
@@ -59,39 +90,6 @@ type ValueRef struct {
 	Value string `json:"value,omitempty"`
 	// +optional
 	ValueFrom *ValueSource `json:"valueFrom,omitempty"`
-}
-
-type StdioMcpServerConfig struct {
-	Command string   `json:"command"`
-	Args    []string `json:"args,omitempty"`
-	// Deprecated: Use EnvFrom instead
-	Env     map[string]string `json:"env,omitempty"`
-	EnvFrom []ValueRef        `json:"envFrom,omitempty"`
-	// Default value is 10 seconds
-	// +kubebuilder:default:=10
-	ReadTimeoutSeconds uint8 `json:"readTimeoutSeconds,omitempty"`
-}
-
-type HttpToolServerConfig struct {
-	URL string `json:"url"`
-	// +kubebuilder:pruning:PreserveUnknownFields
-	// +kubebuilder:validation:Schemaless
-	// Deprecated: Use HeadersFrom instead
-	Headers     map[string]AnyType `json:"headers,omitempty"`
-	HeadersFrom []ValueRef         `json:"headersFrom,omitempty"`
-	// +optional
-	Timeout *metav1.Duration `json:"timeout,omitempty"`
-	// +optional
-	SseReadTimeout *metav1.Duration `json:"sseReadTimeout,omitempty"`
-}
-
-type SseMcpServerConfig struct {
-	HttpToolServerConfig `json:",inline"`
-}
-
-type StreamableHttpServerConfig struct {
-	HttpToolServerConfig `json:",inline"`
-	TerminateOnClose     bool `json:"terminateOnClose,omitempty"`
 }
 
 // ToolServerStatus defines the observed state of ToolServer.
@@ -105,21 +103,8 @@ type ToolServerStatus struct {
 }
 
 type MCPTool struct {
-	Name      string    `json:"name"`
-	Component Component `json:"component"`
-}
-
-type Component struct {
-	Provider         string `json:"provider"`
-	ComponentType    string `json:"component_type"`
-	Version          int    `json:"version"`
-	ComponentVersion int    `json:"component_version"`
-	Description      string `json:"description"`
-	Label            string `json:"label"`
-	// note: this implementation is due to the kubebuilder limitation https://github.com/kubernetes-sigs/controller-tools/issues/636
-	// +kubebuilder:pruning:PreserveUnknownFields
-	// +kubebuilder:validation:Schemaless
-	Config map[string]AnyType `json:"config,omitempty"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
 }
 
 // +kubebuilder:object:root=true

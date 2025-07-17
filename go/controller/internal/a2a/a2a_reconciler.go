@@ -33,7 +33,7 @@ type a2aReconciler struct {
 	a2aHandler    a2a.A2AHandlerMux
 }
 
-func NewAutogenReconciler(
+func NewReconciler(
 	autogenClient autogen_client.Client,
 	a2aHandler a2a.A2AHandlerMux,
 	a2aBaseUrl string,

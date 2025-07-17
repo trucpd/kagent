@@ -138,7 +138,7 @@ func (h *SessionsHandler) HandleCreateSession(w ErrorResponseWriter, r *http.Req
 		"agentRef", sessionRequest.AgentRef,
 		"name", sessionRequest.Name)
 
-	if err := h.DatabaseService.CreateSession(session); err != nil {
+	if err := h.DatabaseService.StoreSession(session); err != nil {
 		w.RespondWithError(errors.NewInternalServerError("Failed to create session", err))
 		return
 	}
@@ -316,13 +316,7 @@ func (h *SessionsHandler) HandleInvokeSession(w ErrorResponseWriter, r *http.Req
 		return
 	}
 
-	parsedMessages, err := database.ParseMessages(messages)
-	if err != nil {
-		w.RespondWithError(errors.NewInternalServerError("Failed to parse messages", err))
-		return
-	}
-
-	autogenEvents, err := utils.ConvertMessagesToAutogenEvents(parsedMessages)
+	autogenEvents, err := utils.ConvertMessagesToAutogenEvents(messages)
 	if err != nil {
 		w.RespondWithError(errors.NewInternalServerError("Failed to convert messages to autogen events", err))
 		return
@@ -336,7 +330,7 @@ func (h *SessionsHandler) HandleInvokeSession(w ErrorResponseWriter, r *http.Req
 	}
 
 	messageToSave := utils.ConvertAutogenEventsToMessages(nil, &sessionID, result.TaskResult.Messages...)
-	if err := h.DatabaseService.CreateMessages(messageToSave...); err != nil {
+	if err := h.DatabaseService.StoreMessages(messageToSave...); err != nil {
 		w.RespondWithError(errors.NewInternalServerError("Failed to create messages", err))
 		return
 	}
@@ -378,13 +372,7 @@ func (h *SessionsHandler) HandleInvokeSessionStream(w ErrorResponseWriter, r *ht
 		return
 	}
 
-	parsedMessages, err := database.ParseMessages(messages)
-	if err != nil {
-		w.RespondWithError(errors.NewInternalServerError("Failed to parse messages", err))
-		return
-	}
-
-	autogenEvents, err := utils.ConvertMessagesToAutogenEvents(parsedMessages)
+	autogenEvents, err := utils.ConvertMessagesToAutogenEvents(messages)
 	if err != nil {
 		w.RespondWithError(errors.NewInternalServerError("Failed to convert messages to autogen events", err))
 		return
@@ -419,7 +407,7 @@ func (h *SessionsHandler) HandleInvokeSessionStream(w ErrorResponseWriter, r *ht
 
 	messageToSave := utils.ConvertAutogenEventsToMessages(nil, &sessionID, taskResult.TaskResult.Messages...)
 	log.Info("Saving messages", "count", len(messageToSave))
-	if err := h.DatabaseService.CreateMessages(messageToSave...); err != nil {
+	if err := h.DatabaseService.StoreMessages(messageToSave...); err != nil {
 		log.Error(err, "Failed to create messages")
 	}
 }
@@ -447,13 +435,7 @@ func (h *SessionsHandler) HandleListSessionMessages(w ErrorResponseWriter, r *ht
 		return
 	}
 
-	parsedMessages, err := database.ParseMessages(messages)
-	if err != nil {
-		w.RespondWithError(errors.NewInternalServerError("Failed to parse messages", err))
-		return
-	}
-
-	autogenEvents, err := utils.ConvertMessagesToAutogenEvents(parsedMessages)
+	autogenEvents, err := utils.ConvertMessagesToAutogenEvents(messages)
 	if err != nil {
 		w.RespondWithError(errors.NewInternalServerError("Failed to convert messages to autogen events", err))
 		return

@@ -1,0 +1,22 @@
+{
+  "agents": null,
+  "description": "A toolserver for math problems",
+  "http_tools": [
+    {
+      "params": {
+        "headers": {},
+        "read_timeout": 300,
+        "terminate_on_close": false,
+        "timeout": 30,
+        "url": "http://localhost:8084/mcp"
+      },
+      "tools": [
+        "k8s_get_resources"
+      ]
+    }
+  ],
+  "instruction": "You are a math toolserver. Focus on solving mathematical problems step by step.",
+  "model": "gemini-2.0-flash",
+  "name": "test__NS__agent",
+  "stdio_tools": null
+}

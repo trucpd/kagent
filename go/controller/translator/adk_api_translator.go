@@ -5,41 +5,13 @@ import (
 	"fmt"
 
 	"github.com/kagent-dev/kagent/go/controller/api/v1alpha1"
+	"github.com/kagent-dev/kagent/go/internal/adk"
+	"github.com/kagent-dev/kagent/go/internal/database"
 	common "github.com/kagent-dev/kagent/go/internal/utils"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 )
-
-type StreamableHTTPConnectionParams struct {
-	Url              string            `json:"url"`
-	Headers          map[string]string `json:"headers"`
-	Timeout          float64           `json:"timeout"`
-	ReadTimeout      float64           `json:"read_timeout"`
-	TerminateOnClose bool              `json:"terminate_on_close"`
-}
-
-type StdioServerParameters struct {
-	Command string            `json:"command"`
-	Args    []string          `json:"args"`
-	Env     map[string]string `json:"env"`
-	Cwd     *string           `json:"cwd"`
-}
-
-type StdioConnectionParams struct {
-	ServerParams StdioServerParameters `json:"server_params"`
-	Timeout      float64               `json:"timeout"`
-}
-
-type AgentConfig struct {
-	Name        string                           `json:"name"`
-	Model       string                           `json:"model"`
-	Description string                           `json:"description"`
-	Instruction string                           `json:"instruction"`
-	HttpTools   []StreamableHTTPConnectionParams `json:"http_tools"`
-	StdioTools  []StdioConnectionParams          `json:"stdio_tools"`
-	Agents      []string                         `json:"agents"`
-}
 
 var adkLog = ctrllog.Log.WithName("adk")
 
@@ -47,7 +19,15 @@ type AdkApiTranslator interface {
 	TranslateAgent(
 		ctx context.Context,
 		agent *v1alpha1.Agent,
-	) (*AgentConfig, error)
+	) (*database.Agent, error)
+	TranslateToolServer(ctx context.Context, toolServer *v1alpha1.ToolServer) (*database.ToolServer, error)
+}
+
+func NewAdkApiTranslator(kube client.Client, defaultModelConfig types.NamespacedName) AdkApiTranslator {
+	return &adkApiTranslator{
+		kube:               kube,
+		defaultModelConfig: defaultModelConfig,
+	}
 }
 
 type adkApiTranslator struct {
@@ -58,14 +38,21 @@ type adkApiTranslator struct {
 func (a *adkApiTranslator) TranslateAgent(
 	ctx context.Context,
 	agent *v1alpha1.Agent,
-) (*AgentConfig, error) {
+) (*database.Agent, error) {
 	stream := true
 	if agent.Spec.Stream != nil {
 		stream = *agent.Spec.Stream
 	}
 	opts := defaultTeamOptions()
 	opts.stream = stream
-	return a.translateAgent(ctx, agent, opts, &tState{})
+	adkAgent, err := a.translateAgent(ctx, agent, opts, &tState{})
+	if err != nil {
+		return nil, err
+	}
+	return &database.Agent{
+		Name:   adkAgent.Name,
+		Config: adkAgent,
+	}, nil
 }
 
 func (a *adkApiTranslator) translateAgent(
@@ -73,10 +60,10 @@ func (a *adkApiTranslator) translateAgent(
 	agent *v1alpha1.Agent,
 	opts *teamOptions,
 	state *tState,
-) (*AgentConfig, error) {
+) (*adk.AgentConfig, error) {
 
-	cfg := &AgentConfig{
-		Name:        common.GetObjectRef(agent),
+	cfg := &adk.AgentConfig{
+		Name:        common.ConvertToPythonIdentifier(common.GetObjectRef(agent)),
 		Model:       "gemini-2.0-flash",
 		Description: agent.Spec.Description,
 		Instruction: agent.Spec.SystemMessage,
@@ -86,11 +73,11 @@ func (a *adkApiTranslator) translateAgent(
 	for _, tool := range agent.Spec.Tools {
 		// Skip tools that are not applicable to the model provider
 		switch {
-		case tool.Type == v1alpha1.ToolProviderType_McpServer && tool.McpServer != nil:
+		case tool.McpServer != nil:
 			for _, toolName := range tool.McpServer.ToolNames {
 				toolsByServer[tool.McpServer.ToolServer] = append(toolsByServer[tool.McpServer.ToolServer], toolName)
 			}
-		case tool.Type == v1alpha1.ToolProviderType_Agent && tool.Agent != nil:
+		case tool.Agent != nil:
 			toolNamespacedName, err := common.ParseRefString(tool.Agent.Ref, agent.Namespace)
 			if err != nil {
 				return nil, err
@@ -125,7 +112,12 @@ func (a *adkApiTranslator) translateAgent(
 				return nil, err
 			}
 
-			cfg.Agents = append(cfg.Agents, common.GetObjectRef(toolAgent))
+			toolAgentCfg, err := a.translateAgent(ctx, toolAgent, opts, state.with(agent))
+			if err != nil {
+				return nil, err
+			}
+
+			cfg.Agents = append(cfg.Agents, *toolAgentCfg)
 
 		default:
 			return nil, fmt.Errorf("tool must have a provider or tool server")
@@ -141,7 +133,7 @@ func (a *adkApiTranslator) translateAgent(
 	return cfg, nil
 }
 
-func (a *adkApiTranslator) translateHttpTool(ctx context.Context, tool *v1alpha1.StreamableHttpServerConfig, namespace string) (*StreamableHTTPConnectionParams, error) {
+func (a *adkApiTranslator) translateStreamableHttpTool(ctx context.Context, tool *v1alpha1.ToolServerConfig, namespace string) (*adk.StreamableHTTPConnectionParams, error) {
 	headers := make(map[string]string)
 	for _, header := range tool.HeadersFrom {
 		if header.Value != "" {
@@ -154,7 +146,7 @@ func (a *adkApiTranslator) translateHttpTool(ctx context.Context, tool *v1alpha1
 			headers[header.Name] = value
 		}
 	}
-	return &StreamableHTTPConnectionParams{
+	return &adk.StreamableHTTPConnectionParams{
 		Url:              tool.URL,
 		Headers:          headers,
 		Timeout:          tool.Timeout.Seconds(),
@@ -163,33 +155,28 @@ func (a *adkApiTranslator) translateHttpTool(ctx context.Context, tool *v1alpha1
 	}, nil
 }
 
-func (a *adkApiTranslator) translateStdioTool(ctx context.Context, tool *v1alpha1.StdioMcpServerConfig, namespace string) (*StdioConnectionParams, error) {
-	envMap := make(map[string]string)
-	for key, val := range tool.Env {
-		envMap[key] = val
-	}
-	for _, envVar := range tool.EnvFrom {
-		if envVar.Value != "" {
-			envMap[envVar.Name] = envVar.Value
-		} else if envVar.ValueFrom != nil {
-			value, err := resolveValueSource(ctx, a.kube, envVar.ValueFrom, namespace)
+func (a *adkApiTranslator) translateSseHttpTool(ctx context.Context, tool *v1alpha1.ToolServerConfig, namespace string) (*adk.SseConnectionParams, error) {
+	headers := make(map[string]string)
+	for _, header := range tool.HeadersFrom {
+		if header.Value != "" {
+			headers[header.Name] = header.Value
+		} else if header.ValueFrom != nil {
+			value, err := resolveValueSource(ctx, a.kube, header.ValueFrom, namespace)
 			if err != nil {
 				return nil, err
 			}
-			envMap[envVar.Name] = value
+			headers[header.Name] = value
 		}
 	}
-	return &StdioConnectionParams{
-		ServerParams: StdioServerParameters{
-			Command: tool.Command,
-			Args:    tool.Args,
-			Env:     envMap,
-		},
-		Timeout: float64(tool.ReadTimeoutSeconds),
+	return &adk.SseConnectionParams{
+		Url:         tool.URL,
+		Headers:     headers,
+		Timeout:     tool.Timeout.Seconds(),
+		ReadTimeout: tool.SseReadTimeout.Seconds(),
 	}, nil
 }
 
-func (a *adkApiTranslator) translateToolServerTool(ctx context.Context, agent *AgentConfig, toolServerRef string, toolNames []string, defaultNamespace string) error {
+func (a *adkApiTranslator) translateToolServerTool(ctx context.Context, agent *adk.AgentConfig, toolServerRef string, toolNames []string, defaultNamespace string) error {
 	toolServerObj := &v1alpha1.ToolServer{}
 	err := common.GetObject(
 		ctx,
@@ -203,20 +190,32 @@ func (a *adkApiTranslator) translateToolServerTool(ctx context.Context, agent *A
 	}
 
 	switch {
-	case toolServerObj.Spec.Config.Stdio != nil:
-		tool, err := a.translateStdioTool(ctx, toolServerObj.Spec.Config.Stdio, defaultNamespace)
+	case toolServerObj.Spec.Config.Protocol == v1alpha1.ToolServerProtocolSse:
+		tool, err := a.translateSseHttpTool(ctx, &toolServerObj.Spec.Config, defaultNamespace)
 		if err != nil {
 			return err
 		}
-		agent.StdioTools = append(agent.StdioTools, *tool)
-	case toolServerObj.Spec.Config.Sse != nil:
-		return fmt.Errorf("SSE tool servers are not supported")
-	case toolServerObj.Spec.Config.StreamableHttp != nil:
-		tool, err := a.translateHttpTool(ctx, toolServerObj.Spec.Config.StreamableHttp, defaultNamespace)
+		agent.SseTools = append(agent.SseTools, adk.SseMcpServerConfig{
+			Params: *tool,
+			Tools:  toolNames,
+		})
+	case toolServerObj.Spec.Config.Protocol == v1alpha1.ToolServerProtocolStreamableHttp:
+		tool, err := a.translateStreamableHttpTool(ctx, &toolServerObj.Spec.Config, defaultNamespace)
 		if err != nil {
 			return err
 		}
-		agent.HttpTools = append(agent.HttpTools, *tool)
+		agent.HttpTools = append(agent.HttpTools, adk.HttpMcpServerConfig{
+			Params: *tool,
+			Tools:  toolNames,
+		})
 	}
 	return nil
+}
+
+func (a *adkApiTranslator) TranslateToolServer(ctx context.Context, toolServer *v1alpha1.ToolServer) (*database.ToolServer, error) {
+	return &database.ToolServer{
+		Name:        common.GetObjectRef(toolServer),
+		Description: toolServer.Spec.Description,
+		Config:      toolServer.Spec.Config,
+	}, nil
 }

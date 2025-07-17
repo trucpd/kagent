@@ -69,6 +69,7 @@ dependencies = [
   "distro>=1.8.0",
   "jiter>=0.4.0",
   "idna>=3.4",
+  "a2a-sdk>=0.2.12",
 ]
 
 [project.optional-dependencies]

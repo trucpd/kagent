@@ -1,4 +1,4 @@
-package autogen
+package reconciler
 
 import (
 	"context"
@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"strings"
 	"sync"
 
 	"github.com/hashicorp/go-multierror"
@@ -18,10 +17,11 @@ import (
 	"github.com/kagent-dev/kagent/go/controller/api/v1alpha1"
 	"github.com/kagent-dev/kagent/go/controller/internal/a2a"
 	"github.com/kagent-dev/kagent/go/controller/translator"
-	"github.com/kagent-dev/kagent/go/internal/autogen/api"
-	autogen_client "github.com/kagent-dev/kagent/go/internal/autogen/client"
 	"github.com/kagent-dev/kagent/go/internal/database"
 	common "github.com/kagent-dev/kagent/go/internal/utils"
+	mcp_client "github.com/mark3labs/mcp-go/client"
+	"github.com/mark3labs/mcp-go/client/transport"
+	"github.com/mark3labs/mcp-go/mcp"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -31,46 +31,45 @@ var (
 	reconcileLog = ctrl.Log.WithName("reconciler")
 )
 
-type AutogenReconciler interface {
-	ReconcileAutogenAgent(ctx context.Context, req ctrl.Request) error
-	ReconcileAutogenModelConfig(ctx context.Context, req ctrl.Request) error
-	ReconcileAutogenTeam(ctx context.Context, req ctrl.Request) error
-	ReconcileAutogenApiKeySecret(ctx context.Context, req ctrl.Request) error
-	ReconcileAutogenToolServer(ctx context.Context, req ctrl.Request) error
-	ReconcileAutogenMemory(ctx context.Context, req ctrl.Request) error
+type KagentReconciler interface {
+	ReconcileKagentAgent(ctx context.Context, req ctrl.Request) error
+	ReconcileKagentModelConfig(ctx context.Context, req ctrl.Request) error
+	ReconcileKagentApiKeySecret(ctx context.Context, req ctrl.Request) error
+	ReconcileKagentToolServer(ctx context.Context, req ctrl.Request) error
+	ReconcileKagentMemory(ctx context.Context, req ctrl.Request) error
 }
 
-type autogenReconciler struct {
-	autogenTranslator translator.AutogenApiTranslator
-	a2aReconciler     a2a.A2AReconciler
+type kagentReconciler struct {
+	adkTranslator translator.AdkApiTranslator
+	a2aReconciler a2a.A2AReconciler
 
-	kube          client.Client
-	autogenClient autogen_client.Client
-	dbClient      database.Client
+	kube client.Client
+	// autogenClient autogen_client.Client
+	dbClient database.Client
 
 	defaultModelConfig types.NamespacedName
-	upsertLock         sync.Mutex
+
+	// TODO: Remove this lock since we have a DB which we can batch anyway
+	upsertLock sync.Mutex
 }
 
-func NewAutogenReconciler(
-	translator translator.AutogenApiTranslator,
+func NewKagentReconciler(
+	translator translator.AdkApiTranslator,
 	kube client.Client,
-	autogenClient autogen_client.Client,
 	dbClient database.Client,
 	defaultModelConfig types.NamespacedName,
 	a2aReconciler a2a.A2AReconciler,
-) AutogenReconciler {
-	return &autogenReconciler{
-		autogenTranslator:  translator,
+) KagentReconciler {
+	return &kagentReconciler{
+		adkTranslator:      translator,
 		kube:               kube,
-		autogenClient:      autogenClient,
 		dbClient:           dbClient,
 		defaultModelConfig: defaultModelConfig,
 		a2aReconciler:      a2aReconciler,
 	}
 }
 
-func (a *autogenReconciler) ReconcileAutogenAgent(ctx context.Context, req ctrl.Request) error {
+func (a *kagentReconciler) ReconcileKagentAgent(ctx context.Context, req ctrl.Request) error {
 	// reconcile the agent team itself
 
 	// TODO(sbx0r): missing finalizer logic
@@ -87,7 +86,7 @@ func (a *autogenReconciler) ReconcileAutogenAgent(ctx context.Context, req ctrl.
 	return a.handleExistingAgent(ctx, agent, req)
 }
 
-func (a *autogenReconciler) handleAgentDeletion(req ctrl.Request) error {
+func (a *kagentReconciler) handleAgentDeletion(req ctrl.Request) error {
 	// TODO(sbx0r): handle deletion of agents with multiple teams assignment
 
 	// agents, err := a.findTeamsUsingAgent(ctx, req)
@@ -113,7 +112,7 @@ func (a *autogenReconciler) handleAgentDeletion(req ctrl.Request) error {
 	return nil
 }
 
-func (a *autogenReconciler) handleExistingAgent(ctx context.Context, agent *v1alpha1.Agent, req ctrl.Request) error {
+func (a *kagentReconciler) handleExistingAgent(ctx context.Context, agent *v1alpha1.Agent, req ctrl.Request) error {
 	isNewAgent := agent.Status.ObservedGeneration == 0
 	isUpdatedAgent := agent.Generation > agent.Status.ObservedGeneration
 
@@ -130,22 +129,10 @@ func (a *autogenReconciler) handleExistingAgent(ctx context.Context, agent *v1al
 			"newGeneration", agent.Generation)
 	}
 
-	err := a.reconcileAgents(ctx, agent)
-	if err != nil {
-		return fmt.Errorf("failed to reconcile agent %s/%s: %w",
-			req.Namespace, req.Name, err)
-	}
-
-	teams, err := a.findTeamsUsingAgent(ctx, req)
-	if err != nil {
-		return fmt.Errorf("failed to find teams for agent %s/%s: %w",
-			req.Namespace, req.Name, err)
-	}
-
-	return a.reconcileTeams(ctx, teams...)
+	return a.reconcileAgents(ctx, agent)
 }
 
-func (a *autogenReconciler) reconcileAgentStatus(ctx context.Context, agent *v1alpha1.Agent, err error) error {
+func (a *kagentReconciler) reconcileAgentStatus(ctx context.Context, agent *v1alpha1.Agent, err error) error {
 	var (
 		status  metav1.ConditionStatus
 		message string
@@ -179,7 +166,7 @@ func (a *autogenReconciler) reconcileAgentStatus(ctx context.Context, agent *v1a
 	return nil
 }
 
-func (a *autogenReconciler) ReconcileAutogenModelConfig(ctx context.Context, req ctrl.Request) error {
+func (a *kagentReconciler) ReconcileKagentModelConfig(ctx context.Context, req ctrl.Request) error {
 	modelConfig := &v1alpha1.ModelConfig{}
 	if err := a.kube.Get(ctx, req.NamespacedName, modelConfig); err != nil {
 		return fmt.Errorf("failed to get model %s: %v", req.Name, err)
@@ -190,23 +177,14 @@ func (a *autogenReconciler) ReconcileAutogenModelConfig(ctx context.Context, req
 		return fmt.Errorf("failed to find agents for model %s: %v", req.Name, err)
 	}
 
-	if err := a.reconcileAgents(ctx, agents...); err != nil {
-		return fmt.Errorf("failed to reconcile agents for model %s: %v", req.Name, err)
-	}
-
-	teams, err := a.findTeamsUsingModel(ctx, req)
-	if err != nil {
-		return fmt.Errorf("failed to find teams for model %s: %v", req.Name, err)
-	}
-
 	return a.reconcileModelConfigStatus(
 		ctx,
 		modelConfig,
-		a.reconcileTeams(ctx, teams...),
+		a.reconcileAgents(ctx, agents...),
 	)
 }
 
-func (a *autogenReconciler) reconcileModelConfigStatus(ctx context.Context, modelConfig *v1alpha1.ModelConfig, err error) error {
+func (a *kagentReconciler) reconcileModelConfigStatus(ctx context.Context, modelConfig *v1alpha1.ModelConfig, err error) error {
 	var (
 		status  metav1.ConditionStatus
 		message string
@@ -240,68 +218,16 @@ func (a *autogenReconciler) reconcileModelConfigStatus(ctx context.Context, mode
 	return nil
 }
 
-func (a *autogenReconciler) ReconcileAutogenTeam(ctx context.Context, req ctrl.Request) error {
-	team := &v1alpha1.Team{}
-	if err := a.kube.Get(ctx, req.NamespacedName, team); err != nil {
-		return fmt.Errorf("failed to get team %s: %v", req.Name, err)
-	}
-
-	return a.reconcileTeamStatus(ctx, team, a.reconcileTeams(ctx, team))
-}
-
-func (a *autogenReconciler) reconcileTeamStatus(ctx context.Context, team *v1alpha1.Team, err error) error {
-	var (
-		status  metav1.ConditionStatus
-		message string
-		reason  string
-	)
-	if err != nil {
-		status = metav1.ConditionFalse
-		message = err.Error()
-		reconcileLog.Error(err, "failed to reconcile team", "team", common.GetObjectRef(team))
-		reason = "TeamReconcileFailed"
-	} else {
-		status = metav1.ConditionTrue
-		reason = "TeamReconciled"
-	}
-
-	conditionChanged := meta.SetStatusCondition(&team.Status.Conditions, metav1.Condition{
-		Type:               v1alpha1.TeamConditionTypeAccepted,
-		Status:             status,
-		LastTransitionTime: metav1.Now(),
-		Reason:             reason,
-		Message:            message,
-	})
-
-	if conditionChanged || team.Status.ObservedGeneration != team.Generation {
-		team.Status.ObservedGeneration = team.Generation
-		if err := a.kube.Status().Update(ctx, team); err != nil {
-			return fmt.Errorf("failed to update team status: %v", err)
-		}
-	}
-
-	return nil
-}
-
-func (a *autogenReconciler) ReconcileAutogenApiKeySecret(ctx context.Context, req ctrl.Request) error {
+func (a *kagentReconciler) ReconcileKagentApiKeySecret(ctx context.Context, req ctrl.Request) error {
 	agents, err := a.findAgentsUsingApiKeySecret(ctx, req)
 	if err != nil {
 		return fmt.Errorf("failed to find agents for secret %s: %v", req.Name, err)
 	}
 
-	if err := a.reconcileAgents(ctx, agents...); err != nil {
-		return fmt.Errorf("failed to reconcile agents for secret %s: %v", req.Name, err)
-	}
-
-	teams, err := a.findTeamsUsingApiKeySecret(ctx, req)
-	if err != nil {
-		return fmt.Errorf("failed to find teams for api key secret %s: %v", req.Name, err)
-	}
-
-	return a.reconcileTeams(ctx, teams...)
+	return a.reconcileAgents(ctx, agents...)
 }
 
-func (a *autogenReconciler) ReconcileAutogenToolServer(ctx context.Context, req ctrl.Request) error {
+func (a *kagentReconciler) ReconcileKagentToolServer(ctx context.Context, req ctrl.Request) error {
 	// reconcile the agent team itself
 	toolServer := &v1alpha1.ToolServer{}
 	if err := a.kube.Get(ctx, req.NamespacedName, toolServer); err != nil {
@@ -337,7 +263,7 @@ func (a *autogenReconciler) ReconcileAutogenToolServer(ctx context.Context, req 
 	return nil
 }
 
-func (a *autogenReconciler) reconcileToolServerStatus(
+func (a *kagentReconciler) reconcileToolServerStatus(
 	ctx context.Context,
 	toolServer *v1alpha1.ToolServer,
 	serverRef string,
@@ -387,7 +313,7 @@ func (a *autogenReconciler) reconcileToolServerStatus(
 	return nil
 }
 
-func (a *autogenReconciler) ReconcileAutogenMemory(ctx context.Context, req ctrl.Request) error {
+func (a *kagentReconciler) ReconcileKagentMemory(ctx context.Context, req ctrl.Request) error {
 	memory := &v1alpha1.Memory{}
 	if err := a.kube.Get(ctx, req.NamespacedName, memory); err != nil {
 		if k8s_errors.IsNotFound(err) {
@@ -405,14 +331,14 @@ func (a *autogenReconciler) ReconcileAutogenMemory(ctx context.Context, req ctrl
 	return a.reconcileMemoryStatus(ctx, memory, a.reconcileAgents(ctx, agents...))
 }
 
-func (a *autogenReconciler) handleMemoryDeletion(req ctrl.Request) error {
+func (a *kagentReconciler) handleMemoryDeletion(req ctrl.Request) error {
 
 	// TODO(sbx0r): implement memory deletion
 
 	return nil
 }
 
-func (a *autogenReconciler) reconcileMemoryStatus(ctx context.Context, memory *v1alpha1.Memory, err error) error {
+func (a *kagentReconciler) reconcileMemoryStatus(ctx context.Context, memory *v1alpha1.Memory, err error) error {
 	var (
 		status  metav1.ConditionStatus
 		message string
@@ -445,30 +371,7 @@ func (a *autogenReconciler) reconcileMemoryStatus(ctx context.Context, memory *v
 	return nil
 }
 
-func (a *autogenReconciler) reconcileTeams(ctx context.Context, teams ...*v1alpha1.Team) error {
-	errs := map[types.NamespacedName]error{}
-	for _, team := range teams {
-		autogenTeam, err := a.autogenTranslator.TranslateGroupChatForTeam(ctx, team)
-		if err != nil {
-			errs[types.NamespacedName{Name: team.Name, Namespace: team.Namespace}] = fmt.Errorf(
-				"failed to translate team %s/%s: %v", team.Namespace, team.Name, err)
-			continue
-		}
-		if err := a.upsertAgent(ctx, autogenTeam); err != nil {
-			errs[types.NamespacedName{Name: team.Name, Namespace: team.Namespace}] = fmt.Errorf(
-				"failed to upsert team %s/%s: %v", team.Namespace, team.Name, err)
-			continue
-		}
-	}
-
-	if len(errs) > 0 {
-		return fmt.Errorf("failed to reconcile teams: %v", errs)
-	}
-
-	return nil
-}
-
-func (a *autogenReconciler) reconcileAgents(ctx context.Context, agents ...*v1alpha1.Agent) error {
+func (a *kagentReconciler) reconcileAgents(ctx context.Context, agents ...*v1alpha1.Agent) error {
 	var multiErr *multierror.Error
 	for _, agent := range agents {
 		reconcileErr := a.reconcileAgent(ctx, agent)
@@ -486,8 +389,8 @@ func (a *autogenReconciler) reconcileAgents(ctx context.Context, agents ...*v1al
 	return multiErr.ErrorOrNil()
 }
 
-func (a *autogenReconciler) reconcileAgent(ctx context.Context, agent *v1alpha1.Agent) error {
-	autogenTeam, err := a.autogenTranslator.TranslateGroupChatForAgent(ctx, agent)
+func (a *kagentReconciler) reconcileAgent(ctx context.Context, agent *v1alpha1.Agent) error {
+	autogenTeam, err := a.adkTranslator.TranslateAgent(ctx, agent)
 	if err != nil {
 		return fmt.Errorf("failed to translate agent %s/%s: %v", agent.Namespace, agent.Name, err)
 	}
@@ -501,8 +404,8 @@ func (a *autogenReconciler) reconcileAgent(ctx context.Context, agent *v1alpha1.
 	return nil
 }
 
-func (a *autogenReconciler) reconcileToolServer(ctx context.Context, server *v1alpha1.ToolServer) error {
-	toolServer, err := a.autogenTranslator.TranslateToolServer(ctx, server)
+func (a *kagentReconciler) reconcileToolServer(ctx context.Context, server *v1alpha1.ToolServer) error {
+	toolServer, err := a.adkTranslator.TranslateToolServer(ctx, server)
 	if err != nil {
 		return fmt.Errorf("failed to translate tool server %s/%s: %v", server.Namespace, server.Name, err)
 	}
@@ -514,23 +417,12 @@ func (a *autogenReconciler) reconcileToolServer(ctx context.Context, server *v1a
 	return nil
 }
 
-func (a *autogenReconciler) upsertAgent(ctx context.Context, agent *database.Agent) error {
+func (a *kagentReconciler) upsertAgent(ctx context.Context, agent *database.Agent) error {
 	// lock to prevent races
 	a.upsertLock.Lock()
 	defer a.upsertLock.Unlock()
-	// validate the team
-	req := autogen_client.ValidationRequest{
-		Component: &agent.Component,
-	}
-	resp, err := a.autogenClient.Validate(ctx, &req)
-	if err != nil {
-		return fmt.Errorf("failed to validate agent %s: %v", agent.Name, err)
-	}
-	if !resp.IsValid {
-		return fmt.Errorf("agent %s is invalid: %v", agent.Name, resp.ErrorMsg())
-	}
 
-	// delete if team exists
+	// delete if agent exists
 	existingAgent, err := a.dbClient.GetAgent(agent.Name)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return fmt.Errorf("failed to get existing agent %s: %v", agent.Name, err)
@@ -539,51 +431,64 @@ func (a *autogenReconciler) upsertAgent(ctx context.Context, agent *database.Age
 		agent.ID = existingAgent.ID
 	}
 
-	return a.dbClient.UpsertAgent(agent)
+	return a.dbClient.StoreAgent(agent)
 }
 
-func (a *autogenReconciler) upsertToolServer(ctx context.Context, toolServer *database.ToolServer) error {
+func (a *kagentReconciler) upsertToolServer(ctx context.Context, toolServer *database.ToolServer) error {
 	// lock to prevent races
 	a.upsertLock.Lock()
 	defer a.upsertLock.Unlock()
 
-	// delete if toolServer exists
-	existingToolServer, err := a.dbClient.GetToolServer(toolServer.Component.Label)
-	if err != nil && !strings.Contains(err.Error(), "not found") {
-		return fmt.Errorf("failed to get existing toolServer %s: %v", toolServer.Component.Label, err)
-	}
-	if existingToolServer != nil {
-		toolServer.ID = existingToolServer.ID
-		err = a.dbClient.UpdateToolServer(toolServer)
-		if err != nil {
-			return fmt.Errorf("failed to delete existing toolServer %s: %v", toolServer.Component.Label, err)
-		}
-	} else {
-		existingToolServer, err = a.dbClient.CreateToolServer(toolServer)
-		if err != nil {
-			return fmt.Errorf("failed to create toolServer %s: %v", toolServer.Component.Label, err)
-		}
-		existingToolServer, err = a.dbClient.GetToolServer(toolServer.Component.Label)
-		if err != nil {
-			return fmt.Errorf("failed to get existing toolServer %s: %v", toolServer.Component.Label, err)
-		}
+	if _, err := a.dbClient.StoreToolServer(toolServer); err != nil {
+		return fmt.Errorf("failed to store toolServer %s: %v", toolServer.Name, err)
 	}
 
-	tools, err := a.autogenClient.FetchTools(ctx, &autogen_client.ToolServerRequest{
-		Server: &existingToolServer.Component,
-	})
+	toolServer, err := a.dbClient.GetToolServer(toolServer.Name)
 	if err != nil {
-		return fmt.Errorf("failed to fetch tools for toolServer %s: %v", toolServer.Component.Label, err)
+		return fmt.Errorf("failed to get toolServer %s: %v", toolServer.Name, err)
 	}
 
-	if err := a.dbClient.RefreshToolsForServer(toolServer.Component.Label, tools.Tools); err != nil {
-		return fmt.Errorf("failed to refresh tools for toolServer %s: %v", toolServer.Component.Label, err)
+	var result *mcp.ListToolsResult
+	switch toolServer.Config.Protocol {
+	case v1alpha1.ToolServerProtocolStreamableHttp:
+		streamableHttpClient, err := transport.NewStreamableHTTP(toolServer.Config.URL)
+		if err != nil {
+			return fmt.Errorf("failed to create streamable http client for toolServer %s: %v", toolServer.Name, err)
+		}
+		client := mcp_client.NewClient(streamableHttpClient)
+		result, err = client.ListTools(ctx, mcp.ListToolsRequest{})
+		if err != nil {
+			return fmt.Errorf("failed to fetch tools for toolServer %s: %v", toolServer.Name, err)
+		}
+
+	case v1alpha1.ToolServerProtocolSse:
+		sseHttpClient, err := transport.NewSSE(toolServer.Config.URL)
+		if err != nil {
+			return fmt.Errorf("failed to create sse client for toolServer %s: %v", toolServer.Name, err)
+		}
+		client := mcp_client.NewClient(sseHttpClient)
+		result, err = client.ListTools(ctx, mcp.ListToolsRequest{})
+		if err != nil {
+			return fmt.Errorf("failed to fetch tools for toolServer %s: %v", toolServer.Name, err)
+		}
+	}
+
+	var tools []*v1alpha1.MCPTool
+	for _, tool := range result.Tools {
+		tools = append(tools, &v1alpha1.MCPTool{
+			Name:        tool.Name,
+			Description: tool.Description,
+		})
+	}
+
+	if err := a.dbClient.RefreshToolsForServer(toolServer.Name, tools...); err != nil {
+		return fmt.Errorf("failed to refresh tools for toolServer %s: %v", toolServer.Name, err)
 	}
 
 	return nil
 }
 
-func (a *autogenReconciler) findAgentsUsingModel(ctx context.Context, req ctrl.Request) ([]*v1alpha1.Agent, error) {
+func (a *kagentReconciler) findAgentsUsingModel(ctx context.Context, req ctrl.Request) ([]*v1alpha1.Agent, error) {
 	var agentsList v1alpha1.AgentList
 	if err := a.kube.List(
 		ctx,
@@ -612,7 +517,7 @@ func (a *autogenReconciler) findAgentsUsingModel(ctx context.Context, req ctrl.R
 	return agents, nil
 }
 
-func (a *autogenReconciler) findAgentsUsingApiKeySecret(ctx context.Context, req ctrl.Request) ([]*v1alpha1.Agent, error) {
+func (a *kagentReconciler) findAgentsUsingApiKeySecret(ctx context.Context, req ctrl.Request) ([]*v1alpha1.Agent, error) {
 	var modelsList v1alpha1.ModelConfigList
 	if err := a.kube.List(
 		ctx,
@@ -665,7 +570,7 @@ func (a *autogenReconciler) findAgentsUsingApiKeySecret(ctx context.Context, req
 	return agents, nil
 }
 
-func (a *autogenReconciler) findAgentsUsingMemory(ctx context.Context, req ctrl.Request) ([]*v1alpha1.Agent, error) {
+func (a *kagentReconciler) findAgentsUsingMemory(ctx context.Context, req ctrl.Request) ([]*v1alpha1.Agent, error) {
 	var agentsList v1alpha1.AgentList
 	if err := a.kube.List(
 		ctx,
@@ -697,129 +602,7 @@ func (a *autogenReconciler) findAgentsUsingMemory(ctx context.Context, req ctrl.
 	return agents, nil
 }
 
-func (a *autogenReconciler) findTeamsUsingAgent(ctx context.Context, req ctrl.Request) ([]*v1alpha1.Team, error) {
-	var teamsList v1alpha1.TeamList
-	if err := a.kube.List(
-		ctx,
-		&teamsList,
-	); err != nil {
-		return nil, fmt.Errorf("failed to list teams: %v", err)
-	}
-
-	var teams []*v1alpha1.Team
-	for i := range teamsList.Items {
-		team := &teamsList.Items[i]
-		for _, participant := range team.Spec.Participants {
-			participantNamespaced, err := common.ParseRefString(participant, team.Namespace)
-
-			if err != nil {
-				reconcileLog.Error(err, "failed to parse Team participant",
-					"errorDetails", err.Error(),
-				)
-				continue
-			}
-
-			if participantNamespaced == req.NamespacedName {
-				teams = append(teams, team)
-				break
-			}
-		}
-	}
-
-	return teams, nil
-}
-
-func (a *autogenReconciler) findTeamsUsingModel(ctx context.Context, req ctrl.Request) ([]*v1alpha1.Team, error) {
-	var teamsList v1alpha1.TeamList
-	if err := a.kube.List(
-		ctx,
-		&teamsList,
-	); err != nil {
-		return nil, fmt.Errorf("failed to list Teams: %v", err)
-	}
-
-	var teams []*v1alpha1.Team
-	for i := range teamsList.Items {
-		team := &teamsList.Items[i]
-		modelNamespaced, err := common.ParseRefString(team.Spec.ModelConfig, team.Namespace)
-
-		if err != nil {
-			reconcileLog.Error(err, "failed to parse Team ModelConfig",
-				"errorDetails", err.Error(),
-			)
-			continue
-		}
-
-		if modelNamespaced == req.NamespacedName {
-			teams = append(teams, team)
-		}
-	}
-
-	return teams, nil
-}
-
-func (a *autogenReconciler) findTeamsUsingApiKeySecret(ctx context.Context, req ctrl.Request) ([]*v1alpha1.Team, error) {
-	var modelsList v1alpha1.ModelConfigList
-	if err := a.kube.List(
-		ctx,
-		&modelsList,
-	); err != nil {
-		return nil, fmt.Errorf("failed to list ModelConfigs: %v", err)
-	}
-
-	var models []string
-	for _, model := range modelsList.Items {
-		secretNamespaced, err := common.ParseRefString(model.Spec.APIKeySecretRef, model.Namespace)
-
-		if err != nil {
-			switch e := err.(type) {
-			case *common.EmptyReferenceError:
-				reconcileLog.V(4).Info("ModelConfig has empty APIKeySecretRef, skipping",
-					"model", model.Name,
-					"namespace", model.Namespace,
-				)
-			default:
-				reconcileLog.Error(err, "failed to parse ModelConfig APIKeySecretRef",
-					"errorDetails", e.Error(),
-					"model", model.Name,
-					"namespace", model.Namespace,
-				)
-			}
-			continue
-		}
-
-		if secretNamespaced == req.NamespacedName {
-			models = append(models, model.Name)
-		}
-	}
-
-	var teams []*v1alpha1.Team
-	uniqueTeams := make(map[string]bool)
-
-	for _, modelName := range models {
-		teamsUsingModel, err := a.findTeamsUsingModel(ctx, ctrl.Request{
-			NamespacedName: types.NamespacedName{
-				Namespace: req.Namespace,
-				Name:      modelName,
-			},
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to find teams for model %s: %v", modelName, err)
-		}
-
-		for _, team := range teamsUsingModel {
-			key := common.GetObjectRef(team)
-			if !uniqueTeams[key] {
-				uniqueTeams[key] = true
-				teams = append(teams, team)
-			}
-		}
-	}
-
-	return teams, nil
-}
-
-func (a *autogenReconciler) findAgentsUsingToolServer(ctx context.Context, req ctrl.Request) ([]*v1alpha1.Agent, error) {
+func (a *kagentReconciler) findAgentsUsingToolServer(ctx context.Context, req ctrl.Request) ([]*v1alpha1.Agent, error) {
 	var agentsList v1alpha1.AgentList
 	if err := a.kube.List(
 		ctx,
@@ -859,67 +642,36 @@ func (a *autogenReconciler) findAgentsUsingToolServer(ctx context.Context, req c
 
 }
 
-func (a *autogenReconciler) getDiscoveredMCPTools(ctx context.Context, serverRef string) ([]*v1alpha1.MCPTool, error) {
-	allTools, err := a.dbClient.ListTools()
+func (a *kagentReconciler) getDiscoveredMCPTools(ctx context.Context, serverRef string) ([]*v1alpha1.MCPTool, error) {
+	allTools, err := a.dbClient.ListToolsForServer(serverRef)
 	if err != nil {
 		return nil, err
 	}
 
 	var discoveredTools []*v1alpha1.MCPTool
 	for _, tool := range allTools {
-		if tool.ServerName == serverRef {
-			mcpTool, err := convertTool(&tool)
-			if err != nil {
-				return nil, fmt.Errorf("failed to convert tool: %v", err)
-			}
-			discoveredTools = append(discoveredTools, mcpTool)
+		mcpTool, err := convertTool(&tool)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert tool: %v", err)
 		}
+		discoveredTools = append(discoveredTools, mcpTool)
 	}
 
 	return discoveredTools, nil
 }
 
-func (a *autogenReconciler) reconcileA2A(
+func (a *kagentReconciler) reconcileA2A(
 	ctx context.Context,
-	team *database.Agent,
+	dbAgent *database.Agent,
 	agent *v1alpha1.Agent,
 ) error {
-	return a.a2aReconciler.ReconcileAutogenAgent(ctx, agent, team)
+	return a.a2aReconciler.ReconcileAutogenAgent(ctx, agent, dbAgent)
 }
 
 func convertTool(tool *database.Tool) (*v1alpha1.MCPTool, error) {
-	if tool.Component.Config == nil {
-		return nil, fmt.Errorf("missing component or config")
-	}
-	config := tool.Component.Config
-	var mcpToolConfig api.MCPToolConfig
-	if err := unmarshalFromMap(config, &mcpToolConfig); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal tool config: %v", err)
-	}
-	component, err := convertComponentToApiType(&tool.Component)
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert component: %v", err)
-	}
-
 	return &v1alpha1.MCPTool{
-		Name:      mcpToolConfig.Tool.Name,
-		Component: component,
-	}, nil
-}
-
-func convertComponentToApiType(component *api.Component) (v1alpha1.Component, error) {
-	anyConfig, err := convertMapToAnytype(component.Config)
-	if err != nil {
-		return v1alpha1.Component{}, err
-	}
-	return v1alpha1.Component{
-		Provider:         component.Provider,
-		ComponentType:    component.ComponentType,
-		Version:          component.Version,
-		ComponentVersion: component.ComponentVersion,
-		Description:      component.Description,
-		Label:            component.Label,
-		Config:           anyConfig,
+		Name:        tool.Name,
+		Description: tool.Description,
 	}, nil
 }
 

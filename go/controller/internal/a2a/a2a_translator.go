@@ -176,7 +176,7 @@ func (t *taskHandler) getOrCreateSession(ctx context.Context, contextID string) 
 				AgentID: &t.team.ID,
 				Name:    contextID,
 			}
-			err := t.dbService.CreateSession(session)
+			err := t.dbService.StoreSession(session)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create session: %w", err)
 			}
@@ -195,12 +195,7 @@ func (t *taskHandler) prepareMessages(ctx context.Context, session *database.Ses
 
 	log.Printf("Retrieved %d messages for session %s", len(messages), session.ID)
 
-	parsedMessages, err := database.ParseMessages(messages)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse messages: %w", err)
-	}
-
-	autogenEvents, err := utils.ConvertMessagesToAutogenEvents(parsedMessages)
+	autogenEvents, err := utils.ConvertMessagesToAutogenEvents(messages)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert messages to autogen events: %w", err)
 	}

@@ -76,14 +76,6 @@ func TestToolServersHandler(t *testing.T) {
 					DiscoveredTools: []*v1alpha1.MCPTool{
 						{
 							Name: "test-tool",
-							Component: v1alpha1.Component{
-								Provider:         "test-provider",
-								ComponentType:    "tool",
-								Version:          1,
-								ComponentVersion: 1,
-								Description:      "Test tool",
-								Label:            "Test Tool",
-							},
 						},
 					},
 				},

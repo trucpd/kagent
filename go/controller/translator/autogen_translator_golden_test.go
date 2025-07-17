@@ -108,8 +108,6 @@ func runGoldenTest(t *testing.T, inputFile, outputsDir, testName string, updateG
 		}
 	}
 
-	translator := translator.NewAutogenApiTranslator(kubeClient, defaultModel)
-
 	// Execute the specified operation
 	var result interface{}
 	switch testInput.Operation {
@@ -121,18 +119,7 @@ func runGoldenTest(t *testing.T, inputFile, outputsDir, testName string, updateG
 		}, agent)
 		require.NoError(t, err)
 
-		result, err = translator.TranslateGroupChatForAgent(ctx, agent)
-		require.NoError(t, err)
-
-	case "translateTeam":
-		team := &v1alpha1.Team{}
-		err := kubeClient.Get(ctx, types.NamespacedName{
-			Name:      testInput.TargetObject,
-			Namespace: testInput.Namespace,
-		}, team)
-		require.NoError(t, err)
-
-		result, err = translator.TranslateGroupChatForTeam(ctx, team)
+		result, err = translator.NewAdkApiTranslator(kubeClient, defaultModel).TranslateAgent(ctx, agent)
 		require.NoError(t, err)
 
 	case "translateToolServer":
@@ -143,7 +130,7 @@ func runGoldenTest(t *testing.T, inputFile, outputsDir, testName string, updateG
 		}, toolServer)
 		require.NoError(t, err)
 
-		result, err = translator.TranslateToolServer(ctx, toolServer)
+		result, err = translator.NewAdkApiTranslator(kubeClient, defaultModel).TranslateToolServer(ctx, toolServer)
 		require.NoError(t, err)
 
 	default:

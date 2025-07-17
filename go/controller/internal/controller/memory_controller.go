@@ -19,7 +19,7 @@ package controller
 import (
 	"context"
 
-	"github.com/kagent-dev/kagent/go/controller/internal/autogen"
+	"github.com/kagent-dev/kagent/go/controller/internal/reconciler"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
@@ -35,7 +35,7 @@ import (
 type AutogenMemoryReconciler struct {
 	client.Client
 	Scheme     *runtime.Scheme
-	Reconciler autogen.AutogenReconciler
+	Reconciler reconciler.KagentReconciler
 }
 
 // +kubebuilder:rbac:groups=kagent.dev,resources=memories,verbs=get;list;watch;create;update;patch;delete
@@ -44,7 +44,7 @@ type AutogenMemoryReconciler struct {
 
 func (r *AutogenMemoryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
-	return ctrl.Result{}, r.Reconciler.ReconcileAutogenMemory(ctx, req)
+	return ctrl.Result{}, r.Reconciler.ReconcileKagentMemory(ctx, req)
 }
 
 // SetupWithManager sets up the controller with the Manager.

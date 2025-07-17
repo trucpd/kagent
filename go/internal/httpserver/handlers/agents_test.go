@@ -80,7 +80,7 @@ func createAutogenTeam(client database.Client, agent *v1alpha1.Agent) {
 		},
 		Name: common.GetObjectRef(agent),
 	}
-	client.CreateAgent(autogenTeam)
+	client.StoreAgent(autogenTeam)
 }
 
 func TestHandleGetAgent(t *testing.T) {

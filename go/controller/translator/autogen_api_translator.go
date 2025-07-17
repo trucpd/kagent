@@ -14,7 +14,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 )
@@ -33,33 +32,11 @@ type AutogenApiTranslator interface {
 		ctx context.Context,
 		agent *v1alpha1.Agent,
 	) (*database.Agent, error)
-
-	TranslateToolServer(ctx context.Context, toolServer *v1alpha1.ToolServer) (*database.ToolServer, error)
 }
 
 type autogenApiTranslator struct {
 	kube               client.Client
 	defaultModelConfig types.NamespacedName
-}
-
-func (a *autogenApiTranslator) TranslateToolServer(ctx context.Context, toolServer *v1alpha1.ToolServer) (*database.ToolServer, error) {
-	// provder = "kagent.tool_servers.StdioMcpToolServer" || "kagent.tool_servers.SseMcpToolServer"
-	provider, toolServerConfig, err := a.translateToolServerConfig(ctx, toolServer.Spec.Config, toolServer.Namespace)
-	if err != nil {
-		return nil, err
-	}
-
-	return &database.ToolServer{
-		Name: common.GetObjectRef(toolServer),
-		Component: api.Component{
-			Provider:      provider,
-			ComponentType: "tool_server",
-			Version:       1,
-			Description:   toolServer.Spec.Description,
-			Label:         common.GetObjectRef(toolServer),
-			Config:        api.MustToConfig(toolServerConfig),
-		},
-	}, nil
 }
 
 // resolveValueSource resolves a value from a ValueSource
@@ -128,121 +105,6 @@ func getSecretValue(ctx context.Context, kube client.Client, source *v1alpha1.Va
 	return string(value), nil
 }
 
-func (a *autogenApiTranslator) translateToolServerConfig(ctx context.Context, config v1alpha1.ToolServerConfig, namespace string) (string, api.ComponentConfig, error) {
-	switch {
-	case config.Stdio != nil:
-		env := make(map[string]string)
-
-		if config.Stdio.Env != nil {
-			for k, v := range config.Stdio.Env {
-				env[k] = v
-			}
-		}
-
-		if len(config.Stdio.EnvFrom) > 0 {
-			for _, envVar := range config.Stdio.EnvFrom {
-				if envVar.ValueFrom != nil {
-					value, err := resolveValueSource(ctx, a.kube, envVar.ValueFrom, namespace)
-
-					if err != nil {
-						return "", nil, fmt.Errorf("failed to resolve environment variable %s: %v", envVar.Name, err)
-					}
-
-					env[envVar.Name] = value
-				} else if envVar.Value != "" {
-					env[envVar.Name] = envVar.Value
-				}
-			}
-		}
-
-		return "kagent.tool_servers.StdioMcpToolServer", &api.StdioMcpServerConfig{
-			Command:            config.Stdio.Command,
-			Args:               config.Stdio.Args,
-			Env:                env,
-			ReadTimeoutSeconds: 30,
-		}, nil
-	case config.Sse != nil:
-		headers, err := convertMapFromAnytype(config.Sse.Headers)
-		if err != nil {
-			return "", nil, err
-		}
-
-		if len(config.Sse.HeadersFrom) > 0 {
-			for _, header := range config.Sse.HeadersFrom {
-				if header.ValueFrom != nil {
-					value, err := resolveValueSource(ctx, a.kube, header.ValueFrom, namespace)
-
-					if err != nil {
-						return "", nil, fmt.Errorf("failed to resolve header %s: %v", header.Name, err)
-					}
-
-					headers[header.Name] = value
-				} else if header.Value != "" {
-					headers[header.Name] = header.Value
-				}
-			}
-		}
-
-		var timeout *float64
-		if config.Sse.Timeout != nil {
-			timeout = ptr.To(config.Sse.Timeout.Duration.Seconds())
-		}
-
-		var sseReadTimeout *float64
-		if config.Sse.SseReadTimeout != nil {
-			sseReadTimeout = ptr.To(config.Sse.SseReadTimeout.Duration.Seconds())
-		}
-
-		return "kagent.tool_servers.SseMcpToolServer", &api.SseMcpServerConfig{
-			URL:            config.Sse.URL,
-			Headers:        headers,
-			Timeout:        timeout,
-			SseReadTimeout: sseReadTimeout,
-		}, nil
-	case config.StreamableHttp != nil:
-
-		headers, err := convertMapFromAnytype(config.StreamableHttp.Headers)
-		if err != nil {
-			return "", nil, err
-		}
-
-		if len(config.StreamableHttp.HeadersFrom) > 0 {
-			for _, header := range config.StreamableHttp.HeadersFrom {
-				if header.ValueFrom != nil {
-					value, err := resolveValueSource(ctx, a.kube, header.ValueFrom, namespace)
-
-					if err != nil {
-						return "", nil, fmt.Errorf("failed to resolve header %s: %v", header.Name, err)
-					}
-
-					headers[header.Name] = value
-				} else if header.Value != "" {
-					headers[header.Name] = header.Value
-				}
-			}
-		}
-
-		var timeout *float64
-		if config.StreamableHttp.Timeout != nil {
-			timeout = ptr.To(config.StreamableHttp.Timeout.Duration.Seconds())
-		}
-		var sseReadTimeout *float64
-		if config.StreamableHttp.SseReadTimeout != nil {
-			sseReadTimeout = ptr.To(config.StreamableHttp.SseReadTimeout.Duration.Seconds())
-		}
-
-		return "kagent.tool_servers.StreamableHttpMcpToolServer", &api.StreamableHttpServerConfig{
-			URL:              config.StreamableHttp.URL,
-			Headers:          headers,
-			Timeout:          timeout,
-			SseReadTimeout:   sseReadTimeout,
-			TerminateOnClose: config.StreamableHttp.TerminateOnClose,
-		}, nil
-	}
-
-	return "", nil, fmt.Errorf("unsupported tool server config")
-}
-
 func NewAutogenApiTranslator(
 	kube client.Client,
 	defaultModelConfig types.NamespacedName,
@@ -288,7 +150,7 @@ type tState struct {
 
 func (s *tState) with(agent *v1alpha1.Agent) *tState {
 	s.depth++
-	s.visitedAgents = append(s.visitedAgents, agent.Name)
+	s.visitedAgents = append(s.visitedAgents, common.GetObjectRef(agent))
 	return s
 }
 
@@ -645,30 +507,14 @@ func (a *autogenApiTranslator) translateToolServerTool(
 		return nil, err
 	}
 
-	// requires the tool to have been discovered
-	for _, discoveredTool := range toolServerObj.Status.DiscoveredTools {
-		if discoveredTool.Name == toolName {
-			return convertComponent(discoveredTool.Component)
-		}
-	}
+	// // requires the tool to have been discovered
+	// for _, discoveredTool := range toolServerObj.Status.DiscoveredTools {
+	// 	if discoveredTool.Name == toolName {
+	// 		return convertComponent(discoveredTool.Component)
+	// 	}
+	// }
 
 	return nil, fmt.Errorf("tool %v not found in discovered tools in ToolServer %v", toolName, toolServerObj.Namespace+"/"+toolServerObj.Name)
-}
-
-func convertComponent(component v1alpha1.Component) (*api.Component, error) {
-	config, err := convertMapFromAnytype(component.Config)
-	if err != nil {
-		return nil, err
-	}
-	return &api.Component{
-		Provider:         component.Provider,
-		ComponentType:    component.ComponentType,
-		Version:          component.Version,
-		ComponentVersion: component.ComponentVersion,
-		Description:      component.Description,
-		Label:            component.Label,
-		Config:           config,
-	}, nil
 }
 
 func convertMapFromAnytype(config map[string]v1alpha1.AnyType) (map[string]interface{}, error) {

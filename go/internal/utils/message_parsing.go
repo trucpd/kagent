@@ -4,13 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/kagent-dev/kagent/go/internal/autogen/client"
 	autogen_client "github.com/kagent-dev/kagent/go/internal/autogen/client"
 	"trpc.group/trpc-go/trpc-a2a-go/protocol"
 )
 
-func ConvertMessagesToAutogenEvents(messages []protocol.Message) ([]autogen_client.Event, error) {
-	result := make([]client.Event, 0, len(messages))
+func ConvertMessagesToAutogenEvents(messages []*protocol.Message) ([]autogen_client.Event, error) {
+	result := make([]autogen_client.Event, 0, len(messages))
 	for _, message := range messages {
 		source := "user"
 		if message.Role == protocol.MessageRoleAgent {
@@ -36,13 +35,13 @@ func ConvertMessagesToAutogenEvents(messages []protocol.Message) ([]autogen_clie
 	return result, nil
 }
 
-func ConvertAutogenEventsToMessages(taskId, contextId *string, events ...client.Event) []*protocol.Message {
+func ConvertAutogenEventsToMessages(taskId, contextId *string, events ...autogen_client.Event) []*protocol.Message {
 	result := make([]*protocol.Message, 0, len(events))
 
 	for _, event := range events {
 		role := protocol.MessageRoleUser
 		switch typed := event.(type) {
-		case *client.TextMessage:
+		case *autogen_client.TextMessage:
 			if typed.Source != "user" {
 				role = protocol.MessageRoleAgent
 			}
@@ -54,7 +53,7 @@ func ConvertAutogenEventsToMessages(taskId, contextId *string, events ...client.
 				typed.Metadata,
 				typed.ModelsUsage,
 			))
-		case *client.ModelClientStreamingChunkEvent:
+		case *autogen_client.ModelClientStreamingChunkEvent:
 			if typed.Source != "user" {
 				role = protocol.MessageRoleAgent
 			}
@@ -66,7 +65,7 @@ func ConvertAutogenEventsToMessages(taskId, contextId *string, events ...client.
 				typed.Metadata,
 				typed.ModelsUsage,
 			))
-		case *client.ToolCallRequestEvent:
+		case *autogen_client.ToolCallRequestEvent:
 			if typed.Source != "user" {
 				role = protocol.MessageRoleAgent
 			}
@@ -78,7 +77,7 @@ func ConvertAutogenEventsToMessages(taskId, contextId *string, events ...client.
 				typed.Metadata,
 				typed.ModelsUsage,
 			))
-		case *client.ToolCallExecutionEvent:
+		case *autogen_client.ToolCallExecutionEvent:
 			if typed.Source != "user" {
 				role = protocol.MessageRoleAgent
 			}
@@ -90,7 +89,7 @@ func ConvertAutogenEventsToMessages(taskId, contextId *string, events ...client.
 				typed.Metadata,
 				typed.ModelsUsage,
 			))
-		case *client.MemoryQueryEvent:
+		case *autogen_client.MemoryQueryEvent:
 			if typed.Source != "user" {
 				role = protocol.MessageRoleAgent
 			}
@@ -102,7 +101,7 @@ func ConvertAutogenEventsToMessages(taskId, contextId *string, events ...client.
 				typed.Metadata,
 				typed.ModelsUsage,
 			))
-		case *client.ToolCallSummaryMessage:
+		case *autogen_client.ToolCallSummaryMessage:
 			if typed.Source != "user" {
 				role = protocol.MessageRoleAgent
 			}
@@ -125,7 +124,7 @@ func newMessage(
 	taskId,
 	contextId *string,
 	metadata map[string]string,
-	modelsUsage *client.ModelsUsage,
+	modelsUsage *autogen_client.ModelsUsage,
 ) *protocol.Message {
 	msg := protocol.NewMessageWithContext(
 		role,
@@ -137,7 +136,7 @@ func newMessage(
 	return &msg
 }
 
-func buildMetadata(metadata map[string]string, modelsUsage *client.ModelsUsage) map[string]interface{} {
+func buildMetadata(metadata map[string]string, modelsUsage *autogen_client.ModelsUsage) map[string]interface{} {
 	result := make(map[string]interface{})
 	for k, v := range metadata {
 		result[k] = v

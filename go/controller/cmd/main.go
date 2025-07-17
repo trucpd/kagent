@@ -33,13 +33,14 @@ import (
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/types"
 
-	autogen "github.com/kagent-dev/kagent/go/controller/internal/autogen"
 	"github.com/kagent-dev/kagent/go/controller/translator"
 	"github.com/kagent-dev/kagent/go/internal/a2a"
+	a2a_manager "github.com/kagent-dev/kagent/go/internal/a2a/manager"
 	autogen_client "github.com/kagent-dev/kagent/go/internal/autogen/client"
 	"github.com/kagent-dev/kagent/go/internal/database"
 
 	a2a_reconciler "github.com/kagent-dev/kagent/go/controller/internal/a2a"
+	"github.com/kagent-dev/kagent/go/controller/internal/reconciler"
 	"github.com/kagent-dev/kagent/go/internal/httpserver"
 	common "github.com/kagent-dev/kagent/go/internal/utils"
 
@@ -299,37 +300,29 @@ func main() {
 
 	kubeClient := mgr.GetClient()
 
-	apiTranslator := translator.NewAutogenApiTranslator(
+	apiTranslator := translator.NewAdkApiTranslator(
 		kubeClient,
 		defaultModelConfig,
 	)
 
-	a2aHandler := a2a.NewA2AHttpMux(httpserver.APIPathA2A, dbClient)
+	a2aStorageImpl := a2a_manager.NewStorage(dbClient)
+	a2aHandler := a2a.NewA2AHttpMux(httpserver.APIPathA2A, a2aStorageImpl)
 
-	a2aReconciler := a2a_reconciler.NewAutogenReconciler(
+	a2aReconciler := a2a_reconciler.NewReconciler(
 		autogenClient,
 		a2aHandler,
 		a2aBaseUrl+httpserver.APIPathA2A,
 		dbClient,
 	)
 
-	autogenReconciler := autogen.NewAutogenReconciler(
+	autogenReconciler := reconciler.NewKagentReconciler(
 		apiTranslator,
 		kubeClient,
-		autogenClient,
 		dbClient,
 		defaultModelConfig,
 		a2aReconciler,
 	)
 
-	if err = (&controller.AutogenTeamReconciler{
-		Client:     kubeClient,
-		Scheme:     mgr.GetScheme(),
-		Reconciler: autogenReconciler,
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "AutogenTeam")
-		os.Exit(1)
-	}
 	if err = (&controller.AutogenAgentReconciler{
 		Client:     kubeClient,
 		Scheme:     mgr.GetScheme(),

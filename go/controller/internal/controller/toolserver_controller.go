@@ -20,7 +20,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/kagent-dev/kagent/go/controller/internal/autogen"
+	"github.com/kagent-dev/kagent/go/controller/internal/reconciler"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
@@ -36,7 +36,7 @@ import (
 type ToolServerReconciler struct {
 	client.Client
 	Scheme     *runtime.Scheme
-	Reconciler autogen.AutogenReconciler
+	Reconciler reconciler.KagentReconciler
 }
 
 // +kubebuilder:rbac:groups=agent.kagent.dev,resources=toolservers,verbs=get;list;watch;create;update;patch;delete
@@ -49,7 +49,7 @@ func (r *ToolServerReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	return ctrl.Result{
 		// loop forever because we need to refresh tools server status
 		RequeueAfter: 60 * time.Second,
-	}, r.Reconciler.ReconcileAutogenToolServer(ctx, req)
+	}, r.Reconciler.ReconcileKagentToolServer(ctx, req)
 }
 
 // SetupWithManager sets up the controller with the Manager.
