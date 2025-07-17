@@ -215,7 +215,7 @@ func (h *SessionsHandler) HandleUpdateSession(w ErrorResponseWriter, r *http.Req
 	// Update fields
 	session.AgentID = &agent.ID
 
-	if err := h.DatabaseService.UpdateSession(session); err != nil {
+	if err := h.DatabaseService.StoreSession(session); err != nil {
 		w.RespondWithError(errors.NewInternalServerError("Failed to update session", err))
 		return
 	}

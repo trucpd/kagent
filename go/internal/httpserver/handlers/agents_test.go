@@ -15,7 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/kagent-dev/kagent/go/controller/api/v1alpha1"
-	autogen_api "github.com/kagent-dev/kagent/go/internal/autogen/api"
+	"github.com/kagent-dev/kagent/go/internal/adk"
 	autogen_fake "github.com/kagent-dev/kagent/go/internal/autogen/client/fake"
 	"github.com/kagent-dev/kagent/go/internal/database"
 	database_fake "github.com/kagent-dev/kagent/go/internal/database/fake"
@@ -75,10 +75,8 @@ func setupTestHandler(objects ...client.Object) (*handlers.AgentsHandler, string
 
 func createAutogenTeam(client database.Client, agent *v1alpha1.Agent) {
 	autogenTeam := &database.Agent{
-		Component: autogen_api.Component{
-			Label: common.GetObjectRef(agent),
-		},
-		Name: common.GetObjectRef(agent),
+		Config: &adk.AgentConfig{},
+		Name:   common.GetObjectRef(agent),
 	}
 	client.StoreAgent(autogenTeam)
 }
