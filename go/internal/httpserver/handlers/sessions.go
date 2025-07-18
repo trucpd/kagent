@@ -3,7 +3,10 @@ package handlers
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 
 	"github.com/google/uuid"
 	"github.com/kagent-dev/kagent/go/internal/a2a/manager"
@@ -12,6 +15,7 @@ import (
 	"github.com/kagent-dev/kagent/go/internal/httpserver/errors"
 	"github.com/kagent-dev/kagent/go/internal/utils"
 	"github.com/kagent-dev/kagent/go/pkg/client/api"
+	"golang.org/x/net/websocket"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 	"trpc.group/trpc-go/trpc-a2a-go/protocol"
 )
@@ -294,13 +298,12 @@ type EventRequest struct {
 
 func (h *SessionsHandler) HandleAddEventToSession(w ErrorResponseWriter, r *http.Request) {
 	log := ctrllog.FromContext(r.Context()).WithName("sessions-handler").WithValues("operation", "add-event")
-
-	sessionName, err := GetPathParam(r, "session_name")
+	sessionID, err := GetPathParam(r, "session_id")
 	if err != nil {
-		w.RespondWithError(errors.NewBadRequestError("Failed to get session name from path", err))
+		w.RespondWithError(errors.NewBadRequestError("Failed to get session ID from path", err))
 		return
 	}
-	log = log.WithValues("session_name", sessionName)
+	log = log.WithValues("session_id", sessionID)
 
 	userID, err := GetUserID(r)
 	if err != nil {
@@ -316,7 +319,7 @@ func (h *SessionsHandler) HandleAddEventToSession(w ErrorResponseWriter, r *http
 	}
 
 	// Get session to verify it exists
-	session, err := h.DatabaseService.GetSession(sessionName, userID)
+	session, err := h.DatabaseService.GetSession(sessionID, userID)
 	if err != nil {
 		w.RespondWithError(errors.NewNotFoundError("Session not found", err))
 		return
@@ -345,7 +348,7 @@ func (h *SessionsHandler) HandleAddEventToSession(w ErrorResponseWriter, r *http
 			"event_type": "session_event",
 		},
 		Parts: []protocol.Part{
-			protocol.DataPart{Data: eventData},
+			protocol.DataPart{Kind: protocol.KindData, Data: eventData},
 		},
 	}); err != nil {
 		w.RespondWithError(errors.NewInternalServerError("Failed to store event", err))
@@ -406,29 +409,58 @@ func (h *SessionsHandler) HandleInvokeSession(w ErrorResponseWriter, r *http.Req
 	var messagesToClient []autogen_client.Event
 	var messageToSave []*protocol.Message
 	if session.Url != "" {
-		b := bytes.NewBuffer(nil)
+		u, err := url.Parse(session.Url)
+		if err != nil {
+			w.RespondWithError(errors.NewInternalServerError("Failed to parse session URL", err))
+			return
+		}
+		u.Scheme = "ws"
 
-		if err := json.NewEncoder(b).Encode(req); err != nil {
+		cfg, err := websocket.NewConfig(u.String(), "")
+		if err != nil {
+			w.RespondWithError(errors.NewInternalServerError("Failed to create websocket config", err))
+			return
+		}
+		conn, err := cfg.DialContext(r.Context()) //.NewRequest("POST", session.Url, b)
+		if err != nil {
+			w.RespondWithError(errors.NewInternalServerError("Failed to invoke session", err))
+			return
+		}
+		defer conn.Close()
+		var b bytes.Buffer
+		if err := json.NewEncoder(&b).Encode(req); err != nil {
 			w.RespondWithError(errors.NewInternalServerError("Failed to encode request", err))
 			return
 		}
+		// write to buffer first to make sure it goes in one websocket msg
+		buf := b.Bytes()
+		n, err := conn.Write(buf)
+		if err != nil || n != len(buf) {
+			w.RespondWithError(errors.NewInternalServerError("Failed to write request to websocket", err))
+			return
+		}
 
-		req, err := http.NewRequest("POST", session.Url, b)
+		//	result, err := http.DefaultClient.Do(req)
+		//	if err != nil {
+		//		w.RespondWithError(errors.NewInternalServerError("Failed to invoke session", err))
+		//		return
+		//	}
+
+		var msg = make([]byte, 512*1024)
+		n, err = conn.Read(msg)
 		if err != nil {
-			w.RespondWithError(errors.NewInternalServerError("Failed to invoke session", err))
+			w.RespondWithError(errors.NewInternalServerError("Failed to read response from websocket", err))
 			return
+
 		}
-		result, err := http.DefaultClient.Do(req)
-		if err != nil {
-			w.RespondWithError(errors.NewInternalServerError("Failed to invoke session", err))
-			return
-		}
-		defer result.Body.Close()
-		if result.StatusCode != http.StatusOK {
-			w.RespondWithError(errors.NewInternalServerError("Failed to invoke session", nil))
-			return
-		}
-		d := json.NewDecoder(result.Body)
+		msg = msg[:n] // trim to actual read size
+
+		// defer result.Body.Close()
+		// if result.StatusCode != http.StatusOK {
+		// 	w.RespondWithError(errors.NewInternalServerError("Failed to invoke session", nil))
+		// 	return
+		// }
+		d := json.NewDecoder(bytes.NewBuffer(msg))
 		if err := d.Decode(&messageToSave); err != nil {
 			w.RespondWithError(errors.NewInternalServerError("Failed to decode response", err))
 			return
@@ -497,43 +529,216 @@ func (h *SessionsHandler) HandleInvokeSessionStream(w ErrorResponseWriter, r *ht
 		return
 	}
 	if session.Url != "" {
-		b := bytes.NewBuffer(nil)
+		//		h.handleInvokeSessionStreamWebSocket(w, r, session, req, parsedMessages)
+		h.handleInvokeSessionStreamPost(w, r, session, req, parsedMessages)
+	} else {
+		h.handleInvokeSessionStreamAutogen(w, r, session, req, parsedMessages)
+	}
+}
 
-		if err := json.NewEncoder(b).Encode(req); err != nil {
-			w.RespondWithError(errors.NewInternalServerError("Failed to encode request", err))
-			return
-		}
+type TextPart struct {
+	// Text is the text content.
+	Text string `json:"text"`
+}
 
-		req, err := http.NewRequest("POST", session.Url, b)
-		if err != nil {
-			w.RespondWithError(errors.NewInternalServerError("Failed to invoke session", err))
-			return
-		}
-		result, err := http.DefaultClient.Do(req)
-		if err != nil {
-			w.RespondWithError(errors.NewInternalServerError("Failed to invoke session", err))
-			return
-		}
-		defer result.Body.Close()
-		if result.StatusCode != http.StatusOK {
-			w.RespondWithError(errors.NewInternalServerError("Failed to invoke session", nil))
-			return
-		}
-		var messageToSave []*protocol.Message
+type Msg struct {
+	Parts []TextPart `json:"parts"`
+}
 
-		d := json.NewDecoder(result.Body)
-		if err := d.Decode(&messageToSave); err != nil {
-			w.RespondWithError(errors.NewInternalServerError("Failed to decode response", err))
-			return
+func convert(req autogen_client.InvokeTaskRequest) Msg {
+	m := Msg{
+		//		MessageID: req.Task,
+		//		ContextID: nil,
+		//		Metadata:  map[string]interface{}{},
+	}
+
+	m.Parts = make([]TextPart, 0, len(req.Messages)+1)
+	m.Parts = append(m.Parts, TextPart{Text: req.Task})
+
+	for _, part := range req.Messages {
+		switch part := part.(type) {
+		case *autogen_client.TextMessage:
+			m.Parts = append(m.Parts, TextPart{Text: part.Content})
 		}
-		log.Info("Saving messages", "count", len(messageToSave))
-		if err := h.DatabaseService.CreateMessages(messageToSave...); err != nil {
+	}
+	return m
+}
+
+func (h *SessionsHandler) handleInvokeSessionStreamPost(w ErrorResponseWriter, r *http.Request, session *database.Session, req autogen_client.InvokeTaskRequest, parsedMessages []protocol.Message) {
+	log := ctrllog.FromContext(r.Context()).WithName("sessions-handler").WithValues("operation", "invoke-session")
+
+	msg := struct {
+		SessionID  string `json:"session_id"`
+		UserID     string `json:"user_id"`
+		AgentID    string `json:"app_name"`
+		NewMessage Msg    `json:"new_message"`
+	}{
+		SessionID:  session.ID,
+		UserID:     session.UserID,
+		AgentID:    "todo", //session.AgentID,
+		NewMessage: convert(req),
+	}
+
+	b := bytes.NewBuffer(nil)
+	if err := json.NewEncoder(b).Encode(msg); err != nil {
+		w.RespondWithError(errors.NewInternalServerError("Failed to encode request", err))
+		return
+	}
+
+	hreq, err := http.NewRequest("POST", session.Url, b)
+	if err != nil {
+		w.RespondWithError(errors.NewInternalServerError("Failed to invoke session", err))
+		return
+	}
+
+	hreq.Header.Set("Content-Type", "application/json")
+	result, err := http.DefaultClient.Do(hreq)
+	if err != nil {
+		w.RespondWithError(errors.NewInternalServerError("Failed to invoke session", err))
+		return
+	}
+	defer result.Body.Close()
+	if result.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(result.Body)
+		strBody := string(body)
+		log.Error(fmt.Errorf("failed to invoke session: %s", strBody), "Failed to invoke session", "status", result.Status)
+		w.RespondWithError(errors.NewInternalServerError("Failed to invoke session", nil))
+		return
+	}
+	var messageToSave []struct {
+		Conent *Msg `json:"content"`
+	}
+
+	var messagesReader io.Reader = result.Body
+	var debugBuf *bytes.Buffer
+	if true {
+		debugBuf = bytes.NewBuffer(nil)
+		messagesReader = io.TeeReader(result.Body, debugBuf)
+	}
+
+	d := json.NewDecoder(messagesReader)
+	if err := d.Decode(&messageToSave); err != nil {
+		if debugBuf != nil {
+			body := debugBuf.String()
+			log.Error(err, "Failed to decode response", "body", body)
+		} else {
+			log.Error(err, "Failed to decode response")
+		}
+		w.RespondWithError(errors.NewInternalServerError("Failed to decode response", err))
+		return
+	}
+	log.Info("Saving messages", "count", len(messageToSave))
+	msgs := make([]*protocol.Message, 0, len(messageToSave))
+	for _, m := range messageToSave {
+		if m.Conent == nil {
+			log.Error(fmt.Errorf("message content is nil"), "Invalid message content")
+			continue
+		}
+		newmsg := &protocol.Message{
+
+			ContextID: &session.ID,
+			MessageID: uuid.New().String(),
+			Metadata: map[string]interface{}{
+				"event_type": "session_event",
+			},
+		}
+		for i := range m.Conent.Parts {
+			part := m.Conent.Parts[i]
+			newmsg.Parts = append(newmsg.Parts, protocol.TextPart{
+				Kind: protocol.KindText,
+				Text: part.Text,
+			})
+		}
+		msgs = append(msgs, newmsg)
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.WriteHeader(http.StatusOK)
+	w.Flush()
+
+	/* TODO: handle task result
+	taskResult := autogen_client.InvokeTaskResult{}
+	for event := range messageToSave {
+		log.Info(event.String())
+		w.Write([]byte(event.String()))
+		w.Flush()
+
+		if event.Event == "task_result" {
+			if err := json.Unmarshal(event.Data, &taskResult); err != nil {
+				log.Error(err, "Failed to unmarshal task result")
+				continue
+			}
+		}
+	}
+	*/
+
+	if err := h.DatabaseService.CreateMessages(msgs...); err != nil {
+		if debugBuf != nil {
+			body := debugBuf.String()
+			log.Error(err, "Failed to create messages", "body", body)
+		} else {
 			log.Error(err, "Failed to create messages")
 		}
+	}
+}
 
-	} else {
+func (h *SessionsHandler) handleInvokeSessionStreamWebSocket(w ErrorResponseWriter, r *http.Request, session *database.Session, req autogen_client.InvokeTaskRequest, parsedMessages []protocol.Message) {
+	log := ctrllog.FromContext(r.Context()).WithName("sessions-handler").WithValues("operation", "invoke-session")
 
-		h.handleInvokeSessionStreamAutogen(w, r, session, req, parsedMessages)
+	u, err := url.Parse(session.Url)
+	if err != nil {
+		w.RespondWithError(errors.NewInternalServerError("Failed to parse session URL", err))
+		return
+	}
+	u.Scheme = "ws"
+	u.RawQuery = url.Values{
+		"app_name":   []string{fmt.Sprintf("todo-%d", session.AgentID)},
+		"user_id":    []string{session.UserID},
+		"session_id": []string{session.ID},
+	}.Encode()
+
+	cfg, err := websocket.NewConfig(u.String(), "http://localhost:8000")
+	if err != nil {
+		w.RespondWithError(errors.NewInternalServerError("Failed to create websocket config", err))
+		return
+	}
+
+	conn, err := cfg.DialContext(r.Context()) //.NewRequest("POST", session.Url, b)
+	if err != nil {
+		w.RespondWithError(errors.NewInternalServerError("Failed to invoke session", err))
+		return
+	}
+	defer conn.Close()
+	var b bytes.Buffer
+	if err := json.NewEncoder(&b).Encode(req); err != nil {
+		w.RespondWithError(errors.NewInternalServerError("Failed to encode request", err))
+		return
+	}
+	// write to buffer first to make sure it goes in one websocket msg
+	buf := b.Bytes()
+	n, err := conn.Write(buf)
+	if err != nil || n != len(buf) {
+		w.RespondWithError(errors.NewInternalServerError("Failed to write request to websocket", err))
+		return
+	}
+
+	var messageToSave []*protocol.Message
+	var msg = make([]byte, 512*1024)
+	n, err = conn.Read(msg)
+	if err != nil {
+		w.RespondWithError(errors.NewInternalServerError("Failed to read response from websocket", err))
+		return
+
+	}
+	msg = msg[:n] // trim to actual read size
+	d := json.NewDecoder(bytes.NewBuffer(msg))
+	if err := d.Decode(&messageToSave); err != nil {
+		w.RespondWithError(errors.NewInternalServerError("Failed to decode response", err))
+		return
+	}
+	log.Info("Saving messages", "count", len(messageToSave))
+	if err := h.DatabaseService.CreateMessages(messageToSave...); err != nil {
+		log.Error(err, "Failed to create messages")
 	}
 }
 

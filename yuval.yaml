@@ -8,7 +8,8 @@ spec:
   modelConfig: default-model-config
   systemMessage: yuval
   hackyYuvalConfig:
-    string: http://localhost:8000/run_live
+#    string: http://localhost:8000/run_live
+    string: http://localhost:8000/run
   tools:
   - mcpServer:
       toolNames:
