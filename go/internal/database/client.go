@@ -80,6 +80,33 @@ func (c *clientImpl) StoreAgent(agent *Agent) error {
 	return create(c.db, agent)
 }
 
+// CreateTask creates a new task record
+func (c *clientImpl) CreateTask(task *protocol.Task) error {
+	data, err := json.Marshal(task)
+	if err != nil {
+		return fmt.Errorf("failed to serialize task: %w", err)
+	}
+
+	return create(c.db, &Task{
+		ID:        task.ID,
+		SessionID: task.ContextID,
+		UserID:    utils.GetGlobalUserID(),
+		Data:      string(data),
+	})
+}
+
+func (c *clientImpl) CreatePushNotification(taskID string, config *protocol.TaskPushNotificationConfig) error {
+	data, err := json.Marshal(config)
+	if err != nil {
+		return fmt.Errorf("failed to serialize push notification config: %w", err)
+	}
+
+	return create(c.db, &PushNotification{
+		TaskID: taskID,
+		Data:   string(data),
+	})
+}
+
 // UpsertAgent upserts an agent record
 func (c *clientImpl) UpsertAgent(agent *Agent) error {
 	return upsert(c.db, agent)
