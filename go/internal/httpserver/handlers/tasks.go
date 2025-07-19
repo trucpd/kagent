@@ -57,7 +57,7 @@ func (h *TasksHandler) HandleCreateTask(w ErrorResponseWriter, r *http.Request) 
 
 	log.Info("Successfully created task")
 	data := api.NewResponse(task, "Successfully created task", false)
-	RespondWithJSON(w, http.StatusOK, data)
+	RespondWithJSON(w, http.StatusCreated, data)
 }
 
 func (h *TasksHandler) HandleDeleteTask(w ErrorResponseWriter, r *http.Request) {
@@ -76,6 +76,5 @@ func (h *TasksHandler) HandleDeleteTask(w ErrorResponseWriter, r *http.Request) 
 	}
 
 	log.Info("Successfully deleted task")
-	data := api.NewResponse(struct{}{}, "Successfully deleted task", false)
-	RespondWithJSON(w, http.StatusOK, data)
+	w.WriteHeader(http.StatusNoContent)
 }

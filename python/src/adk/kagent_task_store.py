@@ -14,7 +14,7 @@ class KAgentTaskStore(TaskStore):
 
     async def get(self, task_id: str) -> Task | None:
         response = await self.client.get(f"/tasks/{task_id}")
-        return Task.model_validate_json(response.json())
+        return Task.model_validate(response.json())
 
     async def delete(self, task_id: str) -> None:
         await self.client.delete(f"/tasks/{task_id}")

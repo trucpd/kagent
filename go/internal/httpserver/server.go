@@ -159,6 +159,7 @@ func (s *HTTPServer) setupRoutes() {
 	s.router.HandleFunc(APIPathSessions+"/{session_id}", adaptHandler(s.handlers.Sessions.HandleUpdateSession)).Methods(http.MethodPut)
 	s.router.HandleFunc(APIPathSessions+"/{session_id}/invoke/stream", adaptHandler(s.handlers.Sessions.HandleInvokeSessionStream)).Methods(http.MethodPost)
 	s.router.HandleFunc(APIPathSessions+"/{session_id}/invoke", adaptHandler(s.handlers.Sessions.HandleInvokeSession)).Methods(http.MethodPost)
+	s.router.HandleFunc(APIPathSessions+"/{session_id}/events", adaptHandler(s.handlers.Sessions.HandleAddEventToSession)).Methods(http.MethodPost)
 
 	// Tasks
 	s.router.HandleFunc(APIPathTasks+"/{task_id}", adaptHandler(s.handlers.Tasks.HandleGetTask)).Methods(http.MethodGet)
