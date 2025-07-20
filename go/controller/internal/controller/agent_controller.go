@@ -19,6 +19,8 @@ package controller
 import (
 	"context"
 
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -53,6 +55,9 @@ func (r *AutogenAgentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			NeedLeaderElection: ptr.To(true),
 		}).
 		For(&agentv1alpha1.Agent{}).
+		Owns(&appsv1.Deployment{}).
+		Owns(&corev1.ConfigMap{}).
+		Owns(&corev1.Service{}).
 		Named("autogenagent").
 		Complete(r)
 }

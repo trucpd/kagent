@@ -483,7 +483,7 @@ func TestSessionsHandler(t *testing.T) {
 			message := protocol.NewMessageWithContext(protocol.MessageRoleUser, []protocol.Part{
 				protocol.NewTextPart("test-message"),
 			}, nil, ptr.To(sessionID))
-			err := dbClient.CreateMessages(&message)
+			err := dbClient.StoreMessages(&message)
 			require.NoError(t, err)
 
 			handler.HandleListSessionMessages(responseRecorder, req)

@@ -88,15 +88,15 @@ func GetToolCmd(cfg *config.Config) {
 }
 
 func printTools(tools []database.Tool) error {
-	headers := []string{"#", "ID", "PROVIDER", "LABEL", "CREATED"}
+	headers := []string{"#", "NAME", "SERVER_NAME", "DESCRIPTION", "CREATED"}
 	rows := make([][]string, len(tools))
 	for i, tool := range tools {
 		rows[i] = []string{
 			strconv.Itoa(i + 1),
-			strconv.Itoa(int(tool.Model.ID)),
-			tool.Component.Provider,
-			tool.Component.Label,
-			tool.Model.CreatedAt.String(),
+			tool.Name,
+			tool.ServerName,
+			tool.Description,
+			tool.CreatedAt.Format(time.RFC3339),
 		}
 	}
 

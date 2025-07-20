@@ -20,6 +20,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/kagent-dev/kagent/go/controller/api/v1alpha2"
 	"github.com/kagent-dev/kagent/go/controller/internal/reconciler"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -28,8 +29,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-
-	agentv1alpha1 "github.com/kagent-dev/kagent/go/controller/api/v1alpha1"
 )
 
 // ToolServerReconciler reconciles a ToolServer object
@@ -58,7 +57,7 @@ func (r *ToolServerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		WithOptions(controller.Options{
 			NeedLeaderElection: ptr.To(true),
 		}).
-		For(&agentv1alpha1.ToolServer{}).
+		For(&v1alpha2.ToolServer{}).
 		Named("toolserver").
 		Complete(r)
 }

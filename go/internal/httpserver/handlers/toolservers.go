@@ -3,7 +3,7 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/kagent-dev/kagent/go/controller/api/v1alpha1"
+	"github.com/kagent-dev/kagent/go/controller/api/v1alpha2"
 	"github.com/kagent-dev/kagent/go/internal/httpserver/errors"
 	common "github.com/kagent-dev/kagent/go/internal/utils"
 	"github.com/kagent-dev/kagent/go/pkg/client/api"
@@ -26,7 +26,7 @@ func (h *ToolServersHandler) HandleListToolServers(w ErrorResponseWriter, r *htt
 	log := ctrllog.FromContext(r.Context()).WithName("toolservers-handler").WithValues("operation", "list")
 	log.Info("Received request to list ToolServers")
 
-	toolServerList := &v1alpha1.ToolServerList{}
+	toolServerList := &v1alpha2.ToolServerList{}
 	if err := h.KubeClient.List(r.Context(), toolServerList); err != nil {
 		w.RespondWithError(errors.NewInternalServerError("Failed to list ToolServers from Kubernetes", err))
 		return
@@ -51,7 +51,7 @@ func (h *ToolServersHandler) HandleCreateToolServer(w ErrorResponseWriter, r *ht
 	log := ctrllog.FromContext(r.Context()).WithName("toolservers-handler").WithValues("operation", "create")
 	log.Info("Received request to create ToolServer")
 
-	var toolServerRequest *v1alpha1.ToolServer
+	var toolServerRequest *v1alpha2.ToolServer
 	if err := DecodeJSONBody(r, &toolServerRequest); err != nil {
 		log.Error(err, "Invalid request body")
 		w.RespondWithError(errors.NewBadRequestError("Invalid request body", err))
@@ -109,7 +109,7 @@ func (h *ToolServersHandler) HandleDeleteToolServer(w ErrorResponseWriter, r *ht
 	)
 
 	log.V(1).Info("Checking if ToolServer exists")
-	toolServer := &v1alpha1.ToolServer{}
+	toolServer := &v1alpha2.ToolServer{}
 	err = common.GetObject(
 		r.Context(),
 		h.KubeClient,

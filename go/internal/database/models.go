@@ -6,7 +6,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/kagent-dev/kagent/go/controller/api/v1alpha1"
+	"github.com/kagent-dev/kagent/go/controller/api/v1alpha2"
 	"github.com/kagent-dev/kagent/go/internal/adk"
 	"gorm.io/gorm"
 	"trpc.group/trpc-go/trpc-a2a-go/protocol"
@@ -164,7 +164,7 @@ type ToolServer struct {
 	Name          string                    `gorm:"primaryKey;not null" json:"name"`
 	Description   string                    `json:"description"`
 	LastConnected *time.Time                `json:"last_connected,omitempty"`
-	Config        v1alpha1.ToolServerConfig `gorm:"type:json" json:"config"`
+	Config        v1alpha2.ToolServerConfig `gorm:"type:json" json:"config"`
 }
 
 // TableName methods to match Python table names

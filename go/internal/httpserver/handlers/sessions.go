@@ -494,7 +494,7 @@ func (h *SessionsHandler) HandleAddEventToSession(w ErrorResponseWriter, r *http
 		},
 	}
 
-	if err := h.DatabaseService.CreateMessages(&protocolMessage); err != nil {
+	if err := h.DatabaseService.StoreMessages(&protocolMessage); err != nil {
 		w.RespondWithError(errors.NewInternalServerError("Failed to store event", err))
 		return
 	}

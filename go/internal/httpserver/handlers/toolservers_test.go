@@ -19,7 +19,7 @@ import (
 	ctrl_client "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
-	"github.com/kagent-dev/kagent/go/controller/api/v1alpha1"
+	"github.com/kagent-dev/kagent/go/controller/api/v1alpha2"
 	"github.com/kagent-dev/kagent/go/internal/httpserver/handlers"
 	common "github.com/kagent-dev/kagent/go/internal/utils"
 	"github.com/kagent-dev/kagent/go/pkg/client/api"
@@ -28,7 +28,7 @@ import (
 func TestToolServersHandler(t *testing.T) {
 	scheme := runtime.NewScheme()
 
-	err := v1alpha1.AddToScheme(scheme)
+	err := v1alpha2.AddToScheme(scheme)
 	require.NoError(t, err)
 	err = corev1.AddToScheme(scheme)
 	require.NoError(t, err)
@@ -49,31 +49,27 @@ func TestToolServersHandler(t *testing.T) {
 			handler, kubeClient, responseRecorder := setupHandler()
 
 			// Create test tool servers
-			toolServer1 := &v1alpha1.ToolServer{
+			toolServer1 := &v1alpha2.ToolServer{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-toolserver-1",
 					Namespace: "default",
 				},
-				Spec: v1alpha1.ToolServerSpec{
+				Spec: v1alpha2.ToolServerSpec{
 					Description: "Test tool server 1",
-					Config: v1alpha1.ToolServerConfig{
-						Stdio: &v1alpha1.StdioMcpServerConfig{
-							Command: "python",
-							Args:    []string{"-m", "test_tool"},
-							Env: map[string]string{
-								"ENV_VAR": "value",
-							},
-							EnvFrom: []v1alpha1.ValueRef{
-								{
-									Name:  "API_KEY",
-									Value: "test-key",
-								},
+					Config: v1alpha2.ToolServerConfig{
+						Protocol: v1alpha2.ToolServerProtocolStreamableHttp,
+						URL:      "https://example.com/streamable",
+						HeadersFrom: []v1alpha2.ValueRef{
+							{
+								Name:  "API_KEY",
+								Value: "test-key",
 							},
 						},
+						Timeout: &metav1.Duration{Duration: 30 * time.Second},
 					},
 				},
-				Status: v1alpha1.ToolServerStatus{
-					DiscoveredTools: []*v1alpha1.MCPTool{
+				Status: v1alpha2.ToolServerStatus{
+					DiscoveredTools: []*v1alpha2.MCPTool{
 						{
 							Name: "test-tool",
 						},
@@ -81,24 +77,28 @@ func TestToolServersHandler(t *testing.T) {
 				},
 			}
 
-			toolServer2 := &v1alpha1.ToolServer{
+			toolServer2 := &v1alpha2.ToolServer{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-toolserver-2",
 					Namespace: "test-ns",
 				},
-				Spec: v1alpha1.ToolServerSpec{
+				Spec: v1alpha2.ToolServerSpec{
 					Description: "Test tool server 2",
-					Config: v1alpha1.ToolServerConfig{
-						Sse: &v1alpha1.SseMcpServerConfig{
-							HttpToolServerConfig: v1alpha1.HttpToolServerConfig{
-								URL: "https://example.com/sse",
-								Headers: map[string]v1alpha1.AnyType{
-									"Authorization": {RawMessage: []byte(`"Bearer token"`)},
+					Config: v1alpha2.ToolServerConfig{
+						Protocol: v1alpha2.ToolServerProtocolSse,
+						URL:      "https://example.com/sse",
+						HeadersFrom: []v1alpha2.ValueRef{
+							{
+								Name: "Authorization",
+								ValueFrom: &v1alpha2.ValueSource{
+									Type:     v1alpha2.SecretValueSource,
+									ValueRef: "auth-secret",
+									Key:      "token",
 								},
-								Timeout:        &metav1.Duration{Duration: 30 * time.Second},
-								SseReadTimeout: &metav1.Duration{Duration: 60 * time.Second},
 							},
 						},
+						Timeout:        &metav1.Duration{Duration: 30 * time.Second},
+						SseReadTimeout: &metav1.Duration{Duration: 60 * time.Second},
 					},
 				},
 			}
@@ -121,17 +121,16 @@ func TestToolServersHandler(t *testing.T) {
 			// Verify first tool server response
 			toolServer := toolServers.Data[0]
 			require.Equal(t, "default/test-toolserver-1", toolServer.Ref)
-			require.NotNil(t, toolServer.Config.Stdio)
-			require.Equal(t, "python", toolServer.Config.Stdio.Command)
-			require.Equal(t, []string{"-m", "test_tool"}, toolServer.Config.Stdio.Args)
+			require.Equal(t, v1alpha2.ToolServerProtocolStreamableHttp, toolServer.Config.Protocol)
+			require.Equal(t, "https://example.com/streamable", toolServer.Config.URL)
 			require.Len(t, toolServer.DiscoveredTools, 1)
 			require.Equal(t, "test-tool", toolServer.DiscoveredTools[0].Name)
 
 			// Verify second tool server response
 			toolServer = toolServers.Data[1]
 			require.Equal(t, "test-ns/test-toolserver-2", toolServer.Ref)
-			require.NotNil(t, toolServer.Config.Sse)
-			require.Equal(t, "https://example.com/sse", toolServer.Config.Sse.URL)
+			require.Equal(t, v1alpha2.ToolServerProtocolSse, toolServer.Config.Protocol)
+			require.Equal(t, "https://example.com/sse", toolServer.Config.URL)
 		})
 
 		t.Run("EmptyList", func(t *testing.T) {
@@ -150,24 +149,27 @@ func TestToolServersHandler(t *testing.T) {
 	})
 
 	t.Run("HandleCreateToolServer", func(t *testing.T) {
-		t.Run("Success_Stdio", func(t *testing.T) {
+		t.Run("Success_StreamableHttp", func(t *testing.T) {
 			handler, _, responseRecorder := setupHandler()
 
-			reqBody := &v1alpha1.ToolServer{
+			reqBody := &v1alpha2.ToolServer{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-toolserver",
 					Namespace: "default",
 				},
-				Spec: v1alpha1.ToolServerSpec{
+				Spec: v1alpha2.ToolServerSpec{
 					Description: "Test tool server",
-					Config: v1alpha1.ToolServerConfig{
-						Stdio: &v1alpha1.StdioMcpServerConfig{
-							Command: "python",
-							Args:    []string{"-m", "test_tool"},
-							Env: map[string]string{
-								"API_KEY": "test-key",
+					Config: v1alpha2.ToolServerConfig{
+						Protocol: v1alpha2.ToolServerProtocolStreamableHttp,
+						URL:      "https://example.com/streamable",
+						HeadersFrom: []v1alpha2.ValueRef{
+							{
+								Name:  "API-Key",
+								Value: "test-key",
 							},
 						},
+						Timeout:          &metav1.Duration{Duration: 30 * time.Second},
+						TerminateOnClose: true,
 					},
 				},
 			}
@@ -180,47 +182,42 @@ func TestToolServersHandler(t *testing.T) {
 
 			require.Equal(t, http.StatusCreated, responseRecorder.Code)
 
-			var toolServer api.StandardResponse[v1alpha1.ToolServer]
+			var toolServer api.StandardResponse[v1alpha2.ToolServer]
 			err := json.Unmarshal(responseRecorder.Body.Bytes(), &toolServer)
 			require.NoError(t, err)
 			assert.Equal(t, "test-toolserver", toolServer.Data.Name)
 			assert.Equal(t, "default", toolServer.Data.Namespace)
 			assert.Equal(t, "Test tool server", toolServer.Data.Spec.Description)
-			assert.NotNil(t, toolServer.Data.Spec.Config.Stdio)
-			assert.Equal(t, "python", toolServer.Data.Spec.Config.Stdio.Command)
+			assert.Equal(t, v1alpha2.ToolServerProtocolStreamableHttp, toolServer.Data.Spec.Config.Protocol)
+			assert.Equal(t, "https://example.com/streamable", toolServer.Data.Spec.Config.URL)
+			assert.True(t, toolServer.Data.Spec.Config.TerminateOnClose)
 		})
 
 		t.Run("Success_Sse", func(t *testing.T) {
 			handler, _, responseRecorder := setupHandler()
 
-			reqBody := &v1alpha1.ToolServer{
+			reqBody := &v1alpha2.ToolServer{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-sse-toolserver",
 					Namespace: "default",
 				},
-				Spec: v1alpha1.ToolServerSpec{
+				Spec: v1alpha2.ToolServerSpec{
 					Description: "Test SSE tool server",
-					Config: v1alpha1.ToolServerConfig{
-						Sse: &v1alpha1.SseMcpServerConfig{
-							HttpToolServerConfig: v1alpha1.HttpToolServerConfig{
-								URL: "https://example.com/sse",
-								Headers: map[string]v1alpha1.AnyType{
-									"Authorization": {RawMessage: []byte(`"Bearer token"`)},
+					Config: v1alpha2.ToolServerConfig{
+						Protocol: v1alpha2.ToolServerProtocolSse,
+						URL:      "https://example.com/sse",
+						HeadersFrom: []v1alpha2.ValueRef{
+							{
+								Name: "X-API-Key",
+								ValueFrom: &v1alpha2.ValueSource{
+									Type:     v1alpha2.SecretValueSource,
+									ValueRef: "api-secret",
+									Key:      "api-key",
 								},
-								HeadersFrom: []v1alpha1.ValueRef{
-									{
-										Name: "X-API-Key",
-										ValueFrom: &v1alpha1.ValueSource{
-											Type:     v1alpha1.SecretValueSource,
-											ValueRef: "api-secret",
-											Key:      "api-key",
-										},
-									},
-								},
-								Timeout:        &metav1.Duration{Duration: 30 * time.Second},
-								SseReadTimeout: &metav1.Duration{Duration: 60 * time.Second},
 							},
 						},
+						Timeout:        &metav1.Duration{Duration: 30 * time.Second},
+						SseReadTimeout: &metav1.Duration{Duration: 60 * time.Second},
 					},
 				},
 			}
@@ -233,29 +230,28 @@ func TestToolServersHandler(t *testing.T) {
 
 			require.Equal(t, http.StatusCreated, responseRecorder.Code)
 
-			var toolServer api.StandardResponse[v1alpha1.ToolServer]
+			var toolServer api.StandardResponse[v1alpha2.ToolServer]
 			err := json.Unmarshal(responseRecorder.Body.Bytes(), &toolServer)
 			require.NoError(t, err)
 			assert.Equal(t, "test-sse-toolserver", toolServer.Data.Name)
 			assert.Equal(t, "default", toolServer.Data.Namespace)
-			assert.NotNil(t, toolServer.Data.Spec.Config.Sse)
-			assert.Equal(t, "https://example.com/sse", toolServer.Data.Spec.Config.Sse.URL)
+			assert.Equal(t, v1alpha2.ToolServerProtocolSse, toolServer.Data.Spec.Config.Protocol)
+			assert.Equal(t, "https://example.com/sse", toolServer.Data.Spec.Config.URL)
 		})
 
 		t.Run("Success_DefaultNamespace", func(t *testing.T) {
 			handler, _, responseRecorder := setupHandler()
 
-			reqBody := &v1alpha1.ToolServer{
+			reqBody := &v1alpha2.ToolServer{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-toolserver",
 					// No namespace specified
 				},
-				Spec: v1alpha1.ToolServerSpec{
+				Spec: v1alpha2.ToolServerSpec{
 					Description: "Test tool server",
-					Config: v1alpha1.ToolServerConfig{
-						Stdio: &v1alpha1.StdioMcpServerConfig{
-							Command: "python",
-						},
+					Config: v1alpha2.ToolServerConfig{
+						Protocol: v1alpha2.ToolServerProtocolStreamableHttp,
+						URL:      "https://example.com/test",
 					},
 				},
 			}
@@ -269,7 +265,7 @@ func TestToolServersHandler(t *testing.T) {
 			require.Equal(t, http.StatusCreated, responseRecorder.Code)
 
 			defaultNamespace := common.GetResourceNamespace()
-			var toolServer api.StandardResponse[v1alpha1.ToolServer]
+			var toolServer api.StandardResponse[v1alpha2.ToolServer]
 			err := json.Unmarshal(responseRecorder.Body.Bytes(), &toolServer)
 			require.NoError(t, err)
 			assert.Equal(t, defaultNamespace, toolServer.Data.Namespace)
@@ -291,34 +287,32 @@ func TestToolServersHandler(t *testing.T) {
 			handler, kubeClient, responseRecorder := setupHandler()
 
 			// Create existing tool server
-			existingToolServer := &v1alpha1.ToolServer{
+			existingToolServer := &v1alpha2.ToolServer{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-toolserver",
 					Namespace: "default",
 				},
-				Spec: v1alpha1.ToolServerSpec{
+				Spec: v1alpha2.ToolServerSpec{
 					Description: "Existing tool server",
-					Config: v1alpha1.ToolServerConfig{
-						Stdio: &v1alpha1.StdioMcpServerConfig{
-							Command: "python",
-						},
+					Config: v1alpha2.ToolServerConfig{
+						Protocol: v1alpha2.ToolServerProtocolStreamableHttp,
+						URL:      "https://example.com/existing",
 					},
 				},
 			}
 			err := kubeClient.Create(context.Background(), existingToolServer)
 			require.NoError(t, err)
 
-			reqBody := &v1alpha1.ToolServer{
+			reqBody := &v1alpha2.ToolServer{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-toolserver",
 					Namespace: "default",
 				},
-				Spec: v1alpha1.ToolServerSpec{
+				Spec: v1alpha2.ToolServerSpec{
 					Description: "New tool server",
-					Config: v1alpha1.ToolServerConfig{
-						Stdio: &v1alpha1.StdioMcpServerConfig{
-							Command: "node",
-						},
+					Config: v1alpha2.ToolServerConfig{
+						Protocol: v1alpha2.ToolServerProtocolSse,
+						URL:      "https://example.com/new",
 					},
 				},
 			}
@@ -339,17 +333,16 @@ func TestToolServersHandler(t *testing.T) {
 			handler, kubeClient, responseRecorder := setupHandler()
 
 			// Create tool server to delete
-			toolServer := &v1alpha1.ToolServer{
+			toolServer := &v1alpha2.ToolServer{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-toolserver",
 					Namespace: "default",
 				},
-				Spec: v1alpha1.ToolServerSpec{
+				Spec: v1alpha2.ToolServerSpec{
 					Description: "Tool server to delete",
-					Config: v1alpha1.ToolServerConfig{
-						Stdio: &v1alpha1.StdioMcpServerConfig{
-							Command: "python",
-						},
+					Config: v1alpha2.ToolServerConfig{
+						Protocol: v1alpha2.ToolServerProtocolStreamableHttp,
+						URL:      "https://example.com/delete",
 					},
 				},
 			}

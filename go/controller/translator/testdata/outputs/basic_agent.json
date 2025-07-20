@@ -1,9 +1,159 @@
 {
-  "agents": null,
-  "description": "A basic test agent",
-  "http_tools": null,
-  "instruction": "You are a helpful assistant.",
-  "model": "gemini-2.0-flash",
-  "name": "test__NS__basic_agent",
-  "stdio_tools": null
+  "config": {
+    "agent_card": {
+      "capabilities": {
+        "pushNotifications": false,
+        "stateTransitionHistory": true,
+        "streaming": true
+      },
+      "defaultInputModes": [
+        "text"
+      ],
+      "defaultOutputModes": [
+        "text"
+      ],
+      "description": "A basic test agent",
+      "name": "basic-agent",
+      "skills": null,
+      "url": "http://basic-agent.test.svc.cluster.local:8080",
+      "version": ""
+    },
+    "agents": null,
+    "description": "A basic test agent",
+    "http_tools": null,
+    "instruction": "You are a helpful assistant.",
+    "model": "gemini-2.0-flash",
+    "name": "test__NS__basic_agent",
+    "sse_tools": null
+  },
+  "configMap": {
+    "data": {
+      "config.yaml": "{\"agent_card\":{\"name\":\"basic-agent\",\"description\":\"A basic test agent\",\"url\":\"http://basic-agent.test.svc.cluster.local:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":null},\"name\":\"test__NS__basic_agent\",\"model\":\"gemini-2.0-flash\",\"description\":\"A basic test agent\",\"instruction\":\"You are a helpful assistant.\",\"http_tools\":null,\"sse_tools\":null,\"agents\":null}"
+    },
+    "metadata": {
+      "creationTimestamp": null,
+      "name": "basic-agent",
+      "namespace": "test",
+      "ownerReferences": [
+        {
+          "apiVersion": "kagent.dev/v1alpha1",
+          "blockOwnerDeletion": true,
+          "controller": true,
+          "kind": "Agent",
+          "name": "basic-agent",
+          "uid": ""
+        }
+      ],
+      "resourceVersion": "999"
+    }
+  },
+  "deployment": {
+    "metadata": {
+      "creationTimestamp": null,
+      "name": "basic-agent",
+      "namespace": "test",
+      "ownerReferences": [
+        {
+          "apiVersion": "kagent.dev/v1alpha1",
+          "blockOwnerDeletion": true,
+          "controller": true,
+          "kind": "Agent",
+          "name": "basic-agent",
+          "uid": ""
+        }
+      ],
+      "resourceVersion": "999"
+    },
+    "spec": {
+      "replicas": 1,
+      "selector": {
+        "matchLabels": {
+          "app": "kagent",
+          "kagent": "basic-agent",
+          "version": "v1alpha1"
+        }
+      },
+      "strategy": {},
+      "template": {
+        "metadata": {
+          "creationTimestamp": null,
+          "generateName": "basic-agent-",
+          "labels": {
+            "app": "kagent",
+            "kagent": "basic-agent",
+            "version": "v1alpha1"
+          }
+        },
+        "spec": {
+          "containers": [
+            {
+              "command": [
+                "uv",
+                "run",
+                "kagent",
+                "start",
+                "--config",
+                "/config/config.yaml"
+              ],
+              "image": "kagent-controller:latest",
+              "imagePullPolicy": "IfNotPresent",
+              "name": "kagent",
+              "resources": {},
+              "volumeMounts": [
+                {
+                  "mountPath": "/config",
+                  "name": "config"
+                }
+              ]
+            }
+          ],
+          "volumes": [
+            {
+              "configMap": {
+                "name": "kagent-config"
+              },
+              "name": "config"
+            }
+          ]
+        }
+      }
+    },
+    "status": {}
+  },
+  "service": {
+    "metadata": {
+      "creationTimestamp": null,
+      "name": "basic-agent",
+      "namespace": "test",
+      "ownerReferences": [
+        {
+          "apiVersion": "kagent.dev/v1alpha1",
+          "blockOwnerDeletion": true,
+          "controller": true,
+          "kind": "Agent",
+          "name": "basic-agent",
+          "uid": ""
+        }
+      ],
+      "resourceVersion": "999"
+    },
+    "spec": {
+      "ports": [
+        {
+          "name": "http",
+          "port": 8080,
+          "targetPort": 8080
+        }
+      ],
+      "selector": {
+        "app": "kagent",
+        "kagent": "basic-agent",
+        "version": "v1alpha1"
+      },
+      "type": "ClusterIP"
+    },
+    "status": {
+      "loadBalancer": {}
+    }
+  }
 }

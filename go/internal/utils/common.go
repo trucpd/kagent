@@ -8,6 +8,7 @@ import (
 	"unicode"
 
 	"github.com/kagent-dev/kagent/go/controller/api/v1alpha1"
+	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -191,6 +192,26 @@ func GetModelConfig(
 		)
 	}
 	return modelConfigObj, nil
+}
+
+func UpsertObject(ctx context.Context, kube client.Client, obj client.Object) error {
+	if err := kube.Get(ctx, types.NamespacedName{
+		Namespace: obj.GetNamespace(),
+		Name:      obj.GetName(),
+	}, obj); err != nil {
+		if !k8s_errors.IsNotFound(err) {
+			return err
+		}
+		if err := kube.Create(ctx, obj); err != nil {
+			return err
+		}
+	} else {
+		if err := kube.Update(ctx, obj); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // GetObject fetches the Kubernetes resource identified by objRef into obj.

@@ -6,7 +6,7 @@ import (
 	"sort"
 	"sync"
 
-	autogen_client "github.com/kagent-dev/kagent/go/internal/autogen/client"
+	"github.com/kagent-dev/kagent/go/controller/api/v1alpha2"
 	"github.com/kagent-dev/kagent/go/internal/database"
 	"gorm.io/gorm"
 	"trpc.group/trpc-go/trpc-a2a-go/protocol"
@@ -60,22 +60,125 @@ func (c *InMemmoryFakeClient) sessionKey(sessionID, userID string) string {
 	return fmt.Sprintf("%s_%s", sessionID, userID)
 }
 
-func (c *InMemmoryFakeClient) CreatePushNotification(taskID string, config *protocol.TaskPushNotificationConfig) error {
+func (c *InMemmoryFakeClient) DeletePushNotification(taskID string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.pushNotifications[taskID] = config
+	delete(c.pushNotifications, taskID)
 	return nil
 }
 
-func (c *InMemmoryFakeClient) GetPushNotification(taskID string) (*protocol.TaskPushNotificationConfig, error) {
+func (c *InMemmoryFakeClient) GetPushNotification(taskID, userID string) (*protocol.TaskPushNotificationConfig, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
 	return c.pushNotifications[taskID], nil
 }
 
-func (c *InMemmoryFakeClient) CreateTask(task *protocol.Task) error {
+func (c *InMemmoryFakeClient) GetMessage(messageID string) (*protocol.Message, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	message, exists := c.messages[messageID]
+	if !exists {
+		return nil, gorm.ErrRecordNotFound
+	}
+	parsedMessage := &protocol.Message{}
+	err := json.Unmarshal([]byte(message.Data), parsedMessage)
+	if err != nil {
+		return nil, err
+	}
+	return parsedMessage, nil
+}
+
+func (c *InMemmoryFakeClient) GetTask(taskID string) (*protocol.Task, error) {
+
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	task, exists := c.tasks[taskID]
+	if !exists {
+		return nil, gorm.ErrRecordNotFound
+	}
+	parsedTask := &protocol.Task{}
+	err := json.Unmarshal([]byte(task.Data), parsedTask)
+	if err != nil {
+		return nil, err
+	}
+	return parsedTask, nil
+}
+
+func (c *InMemmoryFakeClient) DeleteTask(taskID string) error {
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	delete(c.tasks, taskID)
+	return nil
+}
+
+// StoreFeedback creates a new feedback record
+func (c *InMemmoryFakeClient) StoreFeedback(feedback *database.Feedback) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Copy the feedback and assign an ID
+	newFeedback := *feedback
+	newFeedback.ID = uint(c.nextFeedbackID)
+	c.nextFeedbackID++
+
+	key := fmt.Sprintf("%d", newFeedback.ID)
+	c.feedback[key] = &newFeedback
+	return nil
+}
+
+// StoreMessages creates a new message record
+func (c *InMemmoryFakeClient) StoreMessages(messages ...*protocol.Message) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for _, message := range messages {
+		jsn, err := json.Marshal(message)
+		if err != nil {
+			return err
+		}
+		marshaledMessage := &database.Message{
+			ID:   message.MessageID,
+			Data: string(jsn),
+		}
+		c.messages[message.MessageID] = marshaledMessage
+		if message.TaskID != nil {
+			c.messagesByTask[*message.TaskID] = append(c.messagesByTask[*message.TaskID], marshaledMessage)
+		}
+		if message.ContextID != nil {
+			c.messagesBySession[*message.ContextID] = append(c.messagesBySession[*message.ContextID], marshaledMessage)
+		}
+	}
+
+	return nil
+}
+
+// StoreSession creates a new session record
+func (c *InMemmoryFakeClient) StoreSession(session *database.Session) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	key := c.sessionKey(session.ID, session.UserID)
+	c.sessions[key] = session
+	return nil
+}
+
+// StoreAgent creates a new agent record
+func (c *InMemmoryFakeClient) StoreAgent(agent *database.Agent) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.agents[agent.Name] = agent
+	return nil
+}
+
+// StoreTask creates a new task record
+func (c *InMemmoryFakeClient) StoreTask(task *protocol.Task) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -90,109 +193,17 @@ func (c *InMemmoryFakeClient) CreateTask(task *protocol.Task) error {
 	return nil
 }
 
-func (c *InMemmoryFakeClient) GetMessage(messageID string) (*database.Message, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	message, exists := c.messages[messageID]
-	if !exists {
-		return nil, gorm.ErrRecordNotFound
-	}
-	return message, nil
-}
-
-func (c *InMemmoryFakeClient) GetTask(taskID string) (*database.Task, error) {
-
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	task, exists := c.tasks[taskID]
-	if !exists {
-		return nil, gorm.ErrRecordNotFound
-	}
-	return task, nil
-}
-
-func (c *InMemmoryFakeClient) DeleteTask(taskID string) error {
-
+// StorePushNotification creates a new push notification record
+func (c *InMemmoryFakeClient) StorePushNotification(config *protocol.TaskPushNotificationConfig) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	delete(c.tasks, taskID)
+	c.pushNotifications[config.TaskID] = config
 	return nil
 }
 
-// CreateFeedback creates a new feedback record
-func (c *InMemmoryFakeClient) CreateFeedback(feedback *database.Feedback) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	// Copy the feedback and assign an ID
-	newFeedback := *feedback
-	newFeedback.ID = uint(c.nextFeedbackID)
-	c.nextFeedbackID++
-
-	key := fmt.Sprintf("%d", newFeedback.ID)
-	c.feedback[key] = &newFeedback
-	return nil
-}
-
-// CreateMessages creates a new message record
-
-func (c *InMemmoryFakeClient) CreateMessages(messages ...*protocol.Message) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	for _, message := range messages {
-		jsn, err := json.Marshal(message)
-		if err != nil {
-			return err
-		}
-		marshaledMessage := &database.Message{
-			ID:   message.MessageID,
-			Data: string(jsn),
-		}
-		if message.TaskID != nil {
-			c.messagesByTask[*message.TaskID] = append(c.messagesByTask[*message.TaskID], marshaledMessage)
-		}
-		if message.ContextID != nil {
-			c.messagesBySession[*message.ContextID] = append(c.messagesBySession[*message.ContextID], marshaledMessage)
-		}
-	}
-
-	return nil
-}
-
-// CreateSession creates a new session record
-func (c *InMemmoryFakeClient) CreateSession(session *database.Session) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	key := c.sessionKey(session.ID, session.UserID)
-	c.sessions[key] = session
-	return nil
-}
-
-// CreateAgent creates a new agent record
-func (c *InMemmoryFakeClient) CreateAgent(agent *database.Agent) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.agents[agent.Name] = agent
-	return nil
-}
-
-// UpsertAgent upserts an agent record
-func (c *InMemmoryFakeClient) UpsertAgent(agent *database.Agent) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.agents[agent.Name] = agent
-	return nil
-}
-
-// CreateToolServer creates a new tool server record
-func (c *InMemmoryFakeClient) CreateToolServer(toolServer *database.ToolServer) (*database.ToolServer, error) {
+// StoreToolServer creates a new tool server record
+func (c *InMemmoryFakeClient) StoreToolServer(toolServer *database.ToolServer) (*database.ToolServer, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -307,14 +318,35 @@ func (c *InMemmoryFakeClient) ListFeedback(userID string) ([]database.Feedback, 
 }
 
 // ListSessionTasks lists all tasks for a specific session
-func (c *InMemmoryFakeClient) ListSessionTasks(sessionID string, userID string) ([]database.Task, error) {
+func (c *InMemmoryFakeClient) ListSessionTasks(sessionID string, userID string) ([]*protocol.Task, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	var result []database.Task
+	var result []*protocol.Task
 	for _, task := range c.tasks {
 		if task.SessionID == sessionID && task.UserID == userID {
-			result = append(result, *task)
+			parsed, err := task.Parse()
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, &parsed)
+		}
+	}
+	return result, nil
+}
+
+func (c *InMemmoryFakeClient) ListTasks(userID string) ([]*protocol.Task, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	var result []*protocol.Task
+	for _, task := range c.tasks {
+		if task.UserID == userID {
+			parsed, err := task.Parse()
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, &parsed)
 		}
 	}
 	return result, nil
@@ -410,42 +442,79 @@ func (c *InMemmoryFakeClient) ListToolsForServer(serverName string) ([]database.
 }
 
 // ListMessagesForTask retrieves messages for a specific task
-func (c *InMemmoryFakeClient) ListMessagesForTask(taskID, userID string) ([]database.Message, error) {
+func (c *InMemmoryFakeClient) ListMessagesForTask(taskID, userID string) ([]*protocol.Message, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
 	messages, exists := c.messagesByTask[taskID]
 	if !exists {
-		return []database.Message{}, nil
+		return nil, nil
 	}
 
-	// Convert []*Message to []Message
-	result := make([]database.Message, len(messages))
+	result := make([]*protocol.Message, len(messages))
 	for i, msg := range messages {
-		result[i] = *msg
+		parsed, err := msg.Parse()
+		if err != nil {
+			return nil, err
+		}
+		result[i] = &parsed
+	}
+	return result, nil
+}
+
+func (c *InMemmoryFakeClient) ListPushNotifications(taskID string) ([]*protocol.TaskPushNotificationConfig, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	var result []*protocol.TaskPushNotificationConfig
+	config, exists := c.pushNotifications[taskID]
+	if exists {
+		result = append(result, config)
+	}
+	return result, nil
+}
+
+func (c *InMemmoryFakeClient) ListMessages(userID string) ([]*protocol.Message, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	var result []*protocol.Message
+	for _, messages := range c.messagesBySession {
+		for _, msg := range messages {
+			parsed, err := msg.Parse()
+			if err != nil {
+				return nil, err
+			}
+			result = append(result, &parsed)
+		}
 	}
 	return result, nil
 }
 
 // ListMessagesForSession retrieves messages for a specific session
-func (c *InMemmoryFakeClient) ListMessagesForSession(sessionID, userID string) ([]database.Message, error) {
+func (c *InMemmoryFakeClient) ListMessagesForSession(sessionID, userID string) ([]*protocol.Message, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
 	messages, exists := c.messagesBySession[sessionID]
 	if !exists {
-		return []database.Message{}, nil
+		return nil, nil
 	}
 
-	result := make([]database.Message, len(messages))
+	result := make([]*protocol.Message, len(messages))
 	for i, msg := range messages {
-		result[i] = *msg
+		parsed, err := msg.Parse()
+		if err != nil {
+			return nil, err
+		}
+		result[i] = &parsed
 	}
+
 	return result, nil
 }
 
 // RefreshToolsForServer refreshes a tool server
-func (c *InMemmoryFakeClient) RefreshToolsForServer(serverName string, tools []*autogen_client.NamedTool) error {
+func (c *InMemmoryFakeClient) RefreshToolsForServer(serverName string, tools ...*v1alpha2.MCPTool) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -521,4 +590,13 @@ func (c *InMemmoryFakeClient) Clear() {
 	c.messagesBySession = make(map[string][]*database.Message)
 	c.messagesByTask = make(map[string][]*database.Message)
 	c.nextFeedbackID = 1
+}
+
+// UpsertAgent upserts an agent record
+func (c *InMemmoryFakeClient) UpsertAgent(agent *database.Agent) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.agents[agent.Name] = agent
+	return nil
 }

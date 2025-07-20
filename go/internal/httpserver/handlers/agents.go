@@ -215,15 +215,15 @@ func (h *AgentsHandler) HandleCreateAgent(w ErrorResponseWriter, r *http.Request
 	kubeClientWrapper := utils.NewKubeClientWrapper(h.KubeClient)
 	kubeClientWrapper.AddInMemory(&agentReq)
 
-	apiTranslator := translator.NewAutogenApiTranslator(
+	apiTranslator := translator.NewAdkApiTranslator(
 		kubeClientWrapper,
 		h.DefaultModelConfig,
 	)
 
-	log.V(1).Info("Translating Agent to Autogen format")
-	_, err = apiTranslator.TranslateGroupChatForAgent(r.Context(), &agentReq)
+	log.V(1).Info("Translating Agent to ADK format")
+	_, err = apiTranslator.TranslateAgent(r.Context(), &agentReq)
 	if err != nil {
-		w.RespondWithError(errors.NewInternalServerError("Failed to translate Agent to Autogen format", err))
+		w.RespondWithError(errors.NewInternalServerError("Failed to translate Agent to ADK format", err))
 		return
 	}
 

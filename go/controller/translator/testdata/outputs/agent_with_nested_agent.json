@@ -1,19 +1,187 @@
 {
-  "agents": [
-    {
-      "agents": null,
-      "description": "A specialist agent for math problems",
-      "http_tools": null,
-      "instruction": "You are a math specialist. Focus on solving mathematical problems step by step.",
-      "model": "gemini-2.0-flash",
-      "name": "test__NS__specialist_agent",
-      "stdio_tools": null
+  "config": {
+    "agent_card": {
+      "capabilities": {
+        "pushNotifications": false,
+        "stateTransitionHistory": true,
+        "streaming": true
+      },
+      "defaultInputModes": [
+        "text"
+      ],
+      "defaultOutputModes": [
+        "text"
+      ],
+      "description": "A parent agent that can delegate to specialists",
+      "name": "parent-agent",
+      "skills": null,
+      "url": "http://parent-agent.test.svc.cluster.local:8080",
+      "version": ""
+    },
+    "agents": [
+      {
+        "agent_card": {
+          "capabilities": {
+            "pushNotifications": false,
+            "stateTransitionHistory": true,
+            "streaming": true
+          },
+          "defaultInputModes": [
+            "text"
+          ],
+          "defaultOutputModes": [
+            "text"
+          ],
+          "description": "A specialist agent for math problems",
+          "name": "specialist-agent",
+          "skills": null,
+          "url": "http://specialist-agent.test.svc.cluster.local:8080",
+          "version": ""
+        },
+        "agents": null,
+        "description": "A specialist agent for math problems",
+        "http_tools": null,
+        "instruction": "You are a math specialist. Focus on solving mathematical problems step by step.",
+        "model": "gemini-2.0-flash",
+        "name": "test__NS__specialist_agent",
+        "sse_tools": null
+      }
+    ],
+    "description": "A parent agent that can delegate to specialists",
+    "http_tools": null,
+    "instruction": "You are a coordinating agent that can delegate tasks to specialists.",
+    "model": "gemini-2.0-flash",
+    "name": "test__NS__parent_agent",
+    "sse_tools": null
+  },
+  "configMap": {
+    "data": {
+      "config.yaml": "{\"agent_card\":{\"name\":\"parent-agent\",\"description\":\"A parent agent that can delegate to specialists\",\"url\":\"http://parent-agent.test.svc.cluster.local:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":null},\"name\":\"test__NS__parent_agent\",\"model\":\"gemini-2.0-flash\",\"description\":\"A parent agent that can delegate to specialists\",\"instruction\":\"You are a coordinating agent that can delegate tasks to specialists.\",\"http_tools\":null,\"sse_tools\":null,\"agents\":[{\"agent_card\":{\"name\":\"specialist-agent\",\"description\":\"A specialist agent for math problems\",\"url\":\"http://specialist-agent.test.svc.cluster.local:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":null},\"name\":\"test__NS__specialist_agent\",\"model\":\"gemini-2.0-flash\",\"description\":\"A specialist agent for math problems\",\"instruction\":\"You are a math specialist. Focus on solving mathematical problems step by step.\",\"http_tools\":null,\"sse_tools\":null,\"agents\":null}]}"
+    },
+    "metadata": {
+      "creationTimestamp": null,
+      "name": "parent-agent",
+      "namespace": "test",
+      "ownerReferences": [
+        {
+          "apiVersion": "kagent.dev/v1alpha1",
+          "blockOwnerDeletion": true,
+          "controller": true,
+          "kind": "Agent",
+          "name": "parent-agent",
+          "uid": ""
+        }
+      ],
+      "resourceVersion": "999"
     }
-  ],
-  "description": "A parent agent that can delegate to specialists",
-  "http_tools": null,
-  "instruction": "You are a coordinating agent that can delegate tasks to specialists.",
-  "model": "gemini-2.0-flash",
-  "name": "test__NS__parent_agent",
-  "stdio_tools": null
+  },
+  "deployment": {
+    "metadata": {
+      "creationTimestamp": null,
+      "name": "parent-agent",
+      "namespace": "test",
+      "ownerReferences": [
+        {
+          "apiVersion": "kagent.dev/v1alpha1",
+          "blockOwnerDeletion": true,
+          "controller": true,
+          "kind": "Agent",
+          "name": "parent-agent",
+          "uid": ""
+        }
+      ],
+      "resourceVersion": "999"
+    },
+    "spec": {
+      "replicas": 1,
+      "selector": {
+        "matchLabels": {
+          "app": "kagent",
+          "kagent": "parent-agent",
+          "version": "v1alpha1"
+        }
+      },
+      "strategy": {},
+      "template": {
+        "metadata": {
+          "creationTimestamp": null,
+          "generateName": "parent-agent-",
+          "labels": {
+            "app": "kagent",
+            "kagent": "parent-agent",
+            "version": "v1alpha1"
+          }
+        },
+        "spec": {
+          "containers": [
+            {
+              "command": [
+                "uv",
+                "run",
+                "kagent",
+                "start",
+                "--config",
+                "/config/config.yaml"
+              ],
+              "image": "kagent-controller:latest",
+              "imagePullPolicy": "IfNotPresent",
+              "name": "kagent",
+              "resources": {},
+              "volumeMounts": [
+                {
+                  "mountPath": "/config",
+                  "name": "config"
+                }
+              ]
+            }
+          ],
+          "volumes": [
+            {
+              "configMap": {
+                "name": "kagent-config"
+              },
+              "name": "config"
+            }
+          ]
+        }
+      }
+    },
+    "status": {}
+  },
+  "service": {
+    "metadata": {
+      "creationTimestamp": null,
+      "name": "parent-agent",
+      "namespace": "test",
+      "ownerReferences": [
+        {
+          "apiVersion": "kagent.dev/v1alpha1",
+          "blockOwnerDeletion": true,
+          "controller": true,
+          "kind": "Agent",
+          "name": "parent-agent",
+          "uid": ""
+        }
+      ],
+      "resourceVersion": "999"
+    },
+    "spec": {
+      "ports": [
+        {
+          "name": "http",
+          "port": 8080,
+          "targetPort": 8080
+        }
+      ],
+      "selector": {
+        "app": "kagent",
+        "kagent": "parent-agent",
+        "version": "v1alpha1"
+      },
+      "type": "ClusterIP"
+    },
+    "status": {
+      "loadBalancer": {}
+    }
+  }
 }

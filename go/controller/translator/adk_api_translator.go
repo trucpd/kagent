@@ -2,12 +2,15 @@ package translator
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"slices"
 
 	"github.com/kagent-dev/kagent/go/controller/api/v1alpha1"
+	"github.com/kagent-dev/kagent/go/controller/api/v1alpha2"
 	"github.com/kagent-dev/kagent/go/internal/adk"
 	"github.com/kagent-dev/kagent/go/internal/database"
+	"github.com/kagent-dev/kagent/go/internal/utils"
 	common "github.com/kagent-dev/kagent/go/internal/utils"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -18,6 +21,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
+	"trpc.group/trpc-go/trpc-a2a-go/server"
 )
 
 type AgentOutputs struct {
@@ -35,7 +39,7 @@ type AdkApiTranslator interface {
 		ctx context.Context,
 		agent *v1alpha1.Agent,
 	) (*AgentOutputs, error)
-	TranslateToolServer(ctx context.Context, toolServer *v1alpha1.ToolServer) (*database.ToolServer, error)
+	TranslateToolServer(ctx context.Context, toolServer *v1alpha2.ToolServer) (*database.ToolServer, error)
 }
 
 func NewAdkApiTranslator(kube client.Client, defaultModelConfig types.NamespacedName) AdkApiTranslator {
@@ -80,16 +84,18 @@ func (a *adkApiTranslator) TranslateAgent(
 		return nil, err
 	}
 
-	switch agent.Spec.Type {
-	case v1alpha1.AgentType_Declarative:
-		adkAgent, err := a.translateDeclarativeAgent(ctx, agent, &tState{})
-		if err != nil {
-			return nil, err
-		}
-		outputs.Config = adkAgent
-	case v1alpha1.AgentType_Framework:
-		return nil, fmt.Errorf("framework agents are not supported yet")
+	adkAgent, err := a.translateDeclarativeAgent(ctx, agent, &tState{})
+	if err != nil {
+		return nil, err
 	}
+
+	byt, err := json.Marshal(adkAgent)
+	if err != nil {
+		return nil, err
+	}
+
+	outputs.ConfigMap.Data["config.yaml"] = string(byt)
+	outputs.Config = adkAgent
 
 	return outputs, nil
 }
@@ -200,21 +206,34 @@ func defaultDeploymentSpec() *v1alpha1.DeploymentSpec {
 }
 
 func (a *adkApiTranslator) translateDeclarativeAgent(ctx context.Context, agent *v1alpha1.Agent, state *tState) (*adk.AgentConfig, error) {
-	if agent.Spec.Declarative == nil {
-		return nil, fmt.Errorf("declarative agent spec is nil")
-	}
-
-	declarativeAgentSpec := agent.Spec.Declarative
 
 	cfg := &adk.AgentConfig{
 		Name:        common.ConvertToPythonIdentifier(common.GetObjectRef(agent)),
 		Model:       "gemini-2.0-flash",
-		Description: declarativeAgentSpec.Description,
-		Instruction: declarativeAgentSpec.SystemMessage,
+		Description: agent.Spec.Description,
+		Instruction: agent.Spec.SystemMessage,
+		AgentCard: server.AgentCard{
+			Name:        agent.Name,
+			Description: agent.Spec.Description,
+			URL:         fmt.Sprintf("http://%s.%s.svc.cluster.local:8080", agent.Name, agent.Namespace),
+			Capabilities: server.AgentCapabilities{
+				Streaming:              ptr.To(true),
+				PushNotifications:      ptr.To(false),
+				StateTransitionHistory: ptr.To(true),
+			},
+			DefaultInputModes:  []string{"text"},
+			DefaultOutputModes: []string{"text"},
+		},
+	}
+
+	if agent.Spec.A2AConfig != nil {
+		cfg.AgentCard.Skills = slices.Collect(utils.Map[v1alpha1.AgentSkill, server.AgentSkill](slices.Values(agent.Spec.A2AConfig.Skills), func(skill v1alpha1.AgentSkill) server.AgentSkill {
+			return server.AgentSkill(skill)
+		}))
 	}
 
 	toolsByServer := make(map[string][]string)
-	for _, tool := range declarativeAgentSpec.Tools {
+	for _, tool := range agent.Spec.Tools {
 		// Skip tools that are not applicable to the model provider
 		switch {
 		case tool.McpServer != nil:
@@ -257,14 +276,9 @@ func (a *adkApiTranslator) translateDeclarativeAgent(ctx context.Context, agent 
 			}
 
 			var toolAgentCfg *adk.AgentConfig
-			switch toolAgent.Spec.Type {
-			case v1alpha1.AgentType_Declarative:
-				toolAgentCfg, err = a.translateDeclarativeAgent(ctx, toolAgent, state.with(agent))
-				if err != nil {
-					return nil, err
-				}
-			case v1alpha1.AgentType_Framework:
-				return nil, fmt.Errorf("cannot delegate to framework agents yet")
+			toolAgentCfg, err = a.translateDeclarativeAgent(ctx, toolAgent, state.with(agent))
+			if err != nil {
+				return nil, err
 			}
 
 			cfg.Agents = append(cfg.Agents, *toolAgentCfg)
@@ -283,7 +297,7 @@ func (a *adkApiTranslator) translateDeclarativeAgent(ctx context.Context, agent 
 	return cfg, nil
 }
 
-func (a *adkApiTranslator) translateStreamableHttpTool(ctx context.Context, tool *v1alpha1.ToolServerConfig, namespace string) (*adk.StreamableHTTPConnectionParams, error) {
+func (a *adkApiTranslator) translateStreamableHttpTool(ctx context.Context, tool *v1alpha2.ToolServerConfig, namespace string) (*adk.StreamableHTTPConnectionParams, error) {
 	headers := make(map[string]string)
 	for _, header := range tool.HeadersFrom {
 		if header.Value != "" {
@@ -305,7 +319,7 @@ func (a *adkApiTranslator) translateStreamableHttpTool(ctx context.Context, tool
 	}, nil
 }
 
-func (a *adkApiTranslator) translateSseHttpTool(ctx context.Context, tool *v1alpha1.ToolServerConfig, namespace string) (*adk.SseConnectionParams, error) {
+func (a *adkApiTranslator) translateSseHttpTool(ctx context.Context, tool *v1alpha2.ToolServerConfig, namespace string) (*adk.SseConnectionParams, error) {
 	headers := make(map[string]string)
 	for _, header := range tool.HeadersFrom {
 		if header.Value != "" {
@@ -327,7 +341,7 @@ func (a *adkApiTranslator) translateSseHttpTool(ctx context.Context, tool *v1alp
 }
 
 func (a *adkApiTranslator) translateToolServerTool(ctx context.Context, agent *adk.AgentConfig, toolServerRef string, toolNames []string, defaultNamespace string) error {
-	toolServerObj := &v1alpha1.ToolServer{}
+	toolServerObj := &v1alpha2.ToolServer{}
 	err := common.GetObject(
 		ctx,
 		a.kube,
@@ -340,7 +354,7 @@ func (a *adkApiTranslator) translateToolServerTool(ctx context.Context, agent *a
 	}
 
 	switch {
-	case toolServerObj.Spec.Config.Protocol == v1alpha1.ToolServerProtocolSse:
+	case toolServerObj.Spec.Config.Protocol == v1alpha2.ToolServerProtocolSse:
 		tool, err := a.translateSseHttpTool(ctx, &toolServerObj.Spec.Config, defaultNamespace)
 		if err != nil {
 			return err
@@ -349,7 +363,7 @@ func (a *adkApiTranslator) translateToolServerTool(ctx context.Context, agent *a
 			Params: *tool,
 			Tools:  toolNames,
 		})
-	case toolServerObj.Spec.Config.Protocol == v1alpha1.ToolServerProtocolStreamableHttp:
+	case toolServerObj.Spec.Config.Protocol == v1alpha2.ToolServerProtocolStreamableHttp:
 		tool, err := a.translateStreamableHttpTool(ctx, &toolServerObj.Spec.Config, defaultNamespace)
 		if err != nil {
 			return err
@@ -362,7 +376,7 @@ func (a *adkApiTranslator) translateToolServerTool(ctx context.Context, agent *a
 	return nil
 }
 
-func (a *adkApiTranslator) TranslateToolServer(ctx context.Context, toolServer *v1alpha1.ToolServer) (*database.ToolServer, error) {
+func (a *adkApiTranslator) TranslateToolServer(ctx context.Context, toolServer *v1alpha2.ToolServer) (*database.ToolServer, error) {
 	return &database.ToolServer{
 		Name:        common.GetObjectRef(toolServer),
 		Description: toolServer.Spec.Description,
@@ -371,15 +385,15 @@ func (a *adkApiTranslator) TranslateToolServer(ctx context.Context, toolServer *
 }
 
 // resolveValueSource resolves a value from a ValueSource
-func resolveValueSource(ctx context.Context, kube client.Client, source *v1alpha1.ValueSource, namespace string) (string, error) {
+func resolveValueSource(ctx context.Context, kube client.Client, source *v1alpha2.ValueSource, namespace string) (string, error) {
 	if source == nil {
 		return "", fmt.Errorf("source cannot be nil")
 	}
 
 	switch source.Type {
-	case v1alpha1.ConfigMapValueSource:
+	case v1alpha2.ConfigMapValueSource:
 		return getConfigMapValue(ctx, kube, source, namespace)
-	case v1alpha1.SecretValueSource:
+	case v1alpha2.SecretValueSource:
 		return getSecretValue(ctx, kube, source, namespace)
 	default:
 		return "", fmt.Errorf("unknown value source type: %s", source.Type)
@@ -387,7 +401,7 @@ func resolveValueSource(ctx context.Context, kube client.Client, source *v1alpha
 }
 
 // getConfigMapValue fetches a value from a ConfigMap
-func getConfigMapValue(ctx context.Context, kube client.Client, source *v1alpha1.ValueSource, namespace string) (string, error) {
+func getConfigMapValue(ctx context.Context, kube client.Client, source *v1alpha2.ValueSource, namespace string) (string, error) {
 	if source == nil {
 		return "", fmt.Errorf("source cannot be nil")
 	}
@@ -412,7 +426,7 @@ func getConfigMapValue(ctx context.Context, kube client.Client, source *v1alpha1
 }
 
 // getSecretValue fetches a value from a Secret
-func getSecretValue(ctx context.Context, kube client.Client, source *v1alpha1.ValueSource, namespace string) (string, error) {
+func getSecretValue(ctx context.Context, kube client.Client, source *v1alpha2.ValueSource, namespace string) (string, error) {
 	if source == nil {
 		return "", fmt.Errorf("source cannot be nil")
 	}

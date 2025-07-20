@@ -31,41 +31,8 @@ const (
 
 type AgentType string
 
-const (
-	AgentType_Declarative AgentType = "Declarative"
-	AgentType_Framework   AgentType = "Framework"
-)
-
 // AgentSpec defines the desired state of Agent.
-// +kubebuilder:validation:XValidation:message="type.declarative must be nil if the type is not Declarative",rule="!(has(self.declarative) && self.type != 'Declarative')"
-// +kubebuilder:validation:XValidation:message="type.declarative must be specified for Declarative filter.type",rule="!(!has(self.declarative) && self.type == 'Declarative')"
-// +kubebuilder:validation:XValidation:message="type.framework must be nil if the type is not Framework",rule="!(has(self.framework) && self.type != 'Framework')"
-// +kubebuilder:validation:XValidation:message="type.framework must be specified for Framework filter.type",rule="!(!has(self.framework) && self.type == 'Framework')"
 type AgentSpec struct {
-	// +kubebuilder:validation:Enum=Declarative;Framework
-	Type AgentType `json:"type,omitempty"`
-	// +optional
-	Declarative *DeclarativeAgentSpec `json:"declarative,omitempty"`
-	// +optional
-	Framework *FrameworkAgentSpec `json:"framework,omitempty"`
-	// +optional
-	Deployment *DeploymentSpec `json:"deployment,omitempty"`
-}
-
-type DeploymentSpec struct {
-	// inherit from the container spec
-	corev1.Container `json:",inline"`
-	// If not specified, the default value is 1.
-	// +optional
-	// +kubebuilder:validation:Minimum=1
-	Replicas *int32 `json:"replicas,omitempty"`
-	// +optional
-	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
-	// +optional
-	Volumes []corev1.Volume `json:"volumes,omitempty"`
-}
-
-type DeclarativeAgentSpec struct {
 	// +optional
 	Description string `json:"description,omitempty"`
 	// +kubebuilder:validation:MinLength=1
@@ -90,6 +57,24 @@ type DeclarativeAgentSpec struct {
 	// Read more about the A2A protocol here: https://github.com/google/A2A
 	// +optional
 	A2AConfig *A2AConfig `json:"a2aConfig,omitempty"`
+	// +optional
+	Deployment *DeploymentSpec `json:"deployment,omitempty"`
+}
+
+type DeploymentSpec struct {
+	// inherit from the container spec
+	corev1.Container `json:",inline"`
+	// If not specified, the default value is 1.
+	// +optional
+	// +kubebuilder:validation:Minimum=1
+	Replicas *int32 `json:"replicas,omitempty"`
+	// +optional
+	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
+	// +optional
+	Volumes []corev1.Volume `json:"volumes,omitempty"`
+}
+
+type DeclarativeAgentSpec struct {
 }
 
 type FrameWorkSource string

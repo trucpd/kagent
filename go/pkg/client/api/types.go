@@ -2,6 +2,7 @@ package api
 
 import (
 	"github.com/kagent-dev/kagent/go/controller/api/v1alpha1"
+	"github.com/kagent-dev/kagent/go/controller/api/v1alpha2"
 	"github.com/kagent-dev/kagent/go/internal/adk"
 	"github.com/kagent-dev/kagent/go/internal/database"
 )
@@ -128,8 +129,8 @@ type Feedback = database.Feedback
 // ToolServerResponse represents a tool server response
 type ToolServerResponse struct {
 	Ref             string                    `json:"ref"`
-	Config          v1alpha1.ToolServerConfig `json:"config"`
-	DiscoveredTools []*v1alpha1.MCPTool       `json:"discoveredTools"`
+	Config          v1alpha2.ToolServerConfig `json:"config"`
+	DiscoveredTools []*v1alpha2.MCPTool       `json:"discoveredTools"`
 }
 
 // Memory types

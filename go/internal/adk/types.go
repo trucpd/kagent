@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
+
+	"trpc.group/trpc-go/trpc-a2a-go/server"
 )
 
 type StreamableHTTPConnectionParams struct {
@@ -32,6 +34,7 @@ type SseMcpServerConfig struct {
 }
 
 type AgentConfig struct {
+	AgentCard   server.AgentCard      `json:"agent_card"`
 	Name        string                `json:"name"`
 	Model       string                `json:"model"`
 	Description string                `json:"description"`
