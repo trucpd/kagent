@@ -34,6 +34,7 @@ type SseMcpServerConfig struct {
 }
 
 type AgentConfig struct {
+	KagentUrl   string                `json:"kagent_url"`
 	AgentCard   server.AgentCard      `json:"agent_card"`
 	Name        string                `json:"name"`
 	Model       string                `json:"model"`

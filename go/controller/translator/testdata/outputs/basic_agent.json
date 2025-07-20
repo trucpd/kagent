@@ -22,13 +22,15 @@
     "description": "A basic test agent",
     "http_tools": null,
     "instruction": "You are a helpful assistant.",
+    "kagent_url": "http://kagent.kagent.svc.cluster.local:8080",
     "model": "gemini-2.0-flash",
     "name": "test__NS__basic_agent",
     "sse_tools": null
   },
+  "configHash": 4281835037523031600,
   "configMap": {
     "data": {
-      "config.yaml": "{\"agent_card\":{\"name\":\"basic-agent\",\"description\":\"A basic test agent\",\"url\":\"http://basic-agent.test.svc.cluster.local:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":null},\"name\":\"test__NS__basic_agent\",\"model\":\"gemini-2.0-flash\",\"description\":\"A basic test agent\",\"instruction\":\"You are a helpful assistant.\",\"http_tools\":null,\"sse_tools\":null,\"agents\":null}"
+      "config.yaml": "{\"kagent_url\":\"http://kagent.kagent.svc.cluster.local:8080\",\"agent_card\":{\"name\":\"basic-agent\",\"description\":\"A basic test agent\",\"url\":\"http://basic-agent.test.svc.cluster.local:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":null},\"name\":\"test__NS__basic_agent\",\"model\":\"gemini-2.0-flash\",\"description\":\"A basic test agent\",\"instruction\":\"You are a helpful assistant.\",\"http_tools\":null,\"sse_tools\":null,\"agents\":null}"
     },
     "metadata": {
       "creationTimestamp": null,

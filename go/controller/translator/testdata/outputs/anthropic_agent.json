@@ -22,13 +22,15 @@
     "description": "An agent using Anthropic Claude",
     "http_tools": null,
     "instruction": "You are Claude, an AI assistant created by Anthropic.",
+    "kagent_url": "http://kagent.kagent.svc.cluster.local:8080",
     "model": "gemini-2.0-flash",
     "name": "test__NS__anthropic_agent",
     "sse_tools": null
   },
+  "configHash": 9560631500264894000,
   "configMap": {
     "data": {
-      "config.yaml": "{\"agent_card\":{\"name\":\"anthropic-agent\",\"description\":\"An agent using Anthropic Claude\",\"url\":\"http://anthropic-agent.test.svc.cluster.local:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":null},\"name\":\"test__NS__anthropic_agent\",\"model\":\"gemini-2.0-flash\",\"description\":\"An agent using Anthropic Claude\",\"instruction\":\"You are Claude, an AI assistant created by Anthropic.\",\"http_tools\":null,\"sse_tools\":null,\"agents\":null}"
+      "config.yaml": "{\"kagent_url\":\"http://kagent.kagent.svc.cluster.local:8080\",\"agent_card\":{\"name\":\"anthropic-agent\",\"description\":\"An agent using Anthropic Claude\",\"url\":\"http://anthropic-agent.test.svc.cluster.local:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":null},\"name\":\"test__NS__anthropic_agent\",\"model\":\"gemini-2.0-flash\",\"description\":\"An agent using Anthropic Claude\",\"instruction\":\"You are Claude, an AI assistant created by Anthropic.\",\"http_tools\":null,\"sse_tools\":null,\"agents\":null}"
     },
     "metadata": {
       "creationTimestamp": null,

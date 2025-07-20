@@ -42,6 +42,7 @@
         "description": "A specialist agent for math problems",
         "http_tools": null,
         "instruction": "You are a math specialist. Focus on solving mathematical problems step by step.",
+        "kagent_url": "http://kagent.kagent.svc.cluster.local:8080",
         "model": "gemini-2.0-flash",
         "name": "test__NS__specialist_agent",
         "sse_tools": null
@@ -50,13 +51,15 @@
     "description": "A parent agent that can delegate to specialists",
     "http_tools": null,
     "instruction": "You are a coordinating agent that can delegate tasks to specialists.",
+    "kagent_url": "http://kagent.kagent.svc.cluster.local:8080",
     "model": "gemini-2.0-flash",
     "name": "test__NS__parent_agent",
     "sse_tools": null
   },
+  "configHash": 3474608975837879300,
   "configMap": {
     "data": {
-      "config.yaml": "{\"agent_card\":{\"name\":\"parent-agent\",\"description\":\"A parent agent that can delegate to specialists\",\"url\":\"http://parent-agent.test.svc.cluster.local:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":null},\"name\":\"test__NS__parent_agent\",\"model\":\"gemini-2.0-flash\",\"description\":\"A parent agent that can delegate to specialists\",\"instruction\":\"You are a coordinating agent that can delegate tasks to specialists.\",\"http_tools\":null,\"sse_tools\":null,\"agents\":[{\"agent_card\":{\"name\":\"specialist-agent\",\"description\":\"A specialist agent for math problems\",\"url\":\"http://specialist-agent.test.svc.cluster.local:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":null},\"name\":\"test__NS__specialist_agent\",\"model\":\"gemini-2.0-flash\",\"description\":\"A specialist agent for math problems\",\"instruction\":\"You are a math specialist. Focus on solving mathematical problems step by step.\",\"http_tools\":null,\"sse_tools\":null,\"agents\":null}]}"
+      "config.yaml": "{\"kagent_url\":\"http://kagent.kagent.svc.cluster.local:8080\",\"agent_card\":{\"name\":\"parent-agent\",\"description\":\"A parent agent that can delegate to specialists\",\"url\":\"http://parent-agent.test.svc.cluster.local:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":null},\"name\":\"test__NS__parent_agent\",\"model\":\"gemini-2.0-flash\",\"description\":\"A parent agent that can delegate to specialists\",\"instruction\":\"You are a coordinating agent that can delegate tasks to specialists.\",\"http_tools\":null,\"sse_tools\":null,\"agents\":[{\"kagent_url\":\"http://kagent.kagent.svc.cluster.local:8080\",\"agent_card\":{\"name\":\"specialist-agent\",\"description\":\"A specialist agent for math problems\",\"url\":\"http://specialist-agent.test.svc.cluster.local:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":null},\"name\":\"test__NS__specialist_agent\",\"model\":\"gemini-2.0-flash\",\"description\":\"A specialist agent for math problems\",\"instruction\":\"You are a math specialist. Focus on solving mathematical problems step by step.\",\"http_tools\":null,\"sse_tools\":null,\"agents\":null}]}"
     },
     "metadata": {
       "creationTimestamp": null,

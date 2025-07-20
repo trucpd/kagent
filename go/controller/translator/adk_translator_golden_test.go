@@ -76,7 +76,6 @@ func runGoldenTest(t *testing.T, inputFile, outputsDir, testName string, updateG
 	err = v1alpha1.AddToScheme(scheme)
 	require.NoError(t, err)
 	err = v1alpha2.AddToScheme(scheme)
-	require.NoError(t, err)
 
 	// Convert map objects to unstructured and then to typed objects
 	clientBuilder := fake.NewClientBuilder().WithScheme(scheme)

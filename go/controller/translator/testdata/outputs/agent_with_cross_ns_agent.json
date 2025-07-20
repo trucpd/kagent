@@ -42,6 +42,7 @@
         "description": "A provider agent with vector memory",
         "http_tools": null,
         "instruction": "You are a provider assistant with access to memory.",
+        "kagent_url": "http://kagent.kagent.svc.cluster.local:8080",
         "model": "gemini-2.0-flash",
         "name": "test_provider__NS__provider_agent",
         "sse_tools": null
@@ -50,13 +51,15 @@
     "description": "An agent that uses another agent from a different namespace",
     "http_tools": null,
     "instruction": "You are an assistant that can delegate to other agents.",
+    "kagent_url": "http://kagent.kagent.svc.cluster.local:8080",
     "model": "gemini-2.0-flash",
     "name": "test_consumer__NS__agent_with_cross_ns_agent",
     "sse_tools": null
   },
+  "configHash": 4468547709353235000,
   "configMap": {
     "data": {
-      "config.yaml": "{\"agent_card\":{\"name\":\"agent-with-cross-ns-agent\",\"description\":\"An agent that uses another agent from a different namespace\",\"url\":\"http://agent-with-cross-ns-agent.test-consumer.svc.cluster.local:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":null},\"name\":\"test_consumer__NS__agent_with_cross_ns_agent\",\"model\":\"gemini-2.0-flash\",\"description\":\"An agent that uses another agent from a different namespace\",\"instruction\":\"You are an assistant that can delegate to other agents.\",\"http_tools\":null,\"sse_tools\":null,\"agents\":[{\"agent_card\":{\"name\":\"provider-agent\",\"description\":\"A provider agent with vector memory\",\"url\":\"http://provider-agent.test-provider.svc.cluster.local:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":null},\"name\":\"test_provider__NS__provider_agent\",\"model\":\"gemini-2.0-flash\",\"description\":\"A provider agent with vector memory\",\"instruction\":\"You are a provider assistant with access to memory.\",\"http_tools\":null,\"sse_tools\":null,\"agents\":null}]}"
+      "config.yaml": "{\"kagent_url\":\"http://kagent.kagent.svc.cluster.local:8080\",\"agent_card\":{\"name\":\"agent-with-cross-ns-agent\",\"description\":\"An agent that uses another agent from a different namespace\",\"url\":\"http://agent-with-cross-ns-agent.test-consumer.svc.cluster.local:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":null},\"name\":\"test_consumer__NS__agent_with_cross_ns_agent\",\"model\":\"gemini-2.0-flash\",\"description\":\"An agent that uses another agent from a different namespace\",\"instruction\":\"You are an assistant that can delegate to other agents.\",\"http_tools\":null,\"sse_tools\":null,\"agents\":[{\"kagent_url\":\"http://kagent.kagent.svc.cluster.local:8080\",\"agent_card\":{\"name\":\"provider-agent\",\"description\":\"A provider agent with vector memory\",\"url\":\"http://provider-agent.test-provider.svc.cluster.local:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":null},\"name\":\"test_provider__NS__provider_agent\",\"model\":\"gemini-2.0-flash\",\"description\":\"A provider agent with vector memory\",\"instruction\":\"You are a provider assistant with access to memory.\",\"http_tools\":null,\"sse_tools\":null,\"agents\":null}]}"
     },
     "metadata": {
       "creationTimestamp": null,

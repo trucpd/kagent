@@ -22,13 +22,15 @@
     "description": "A toolserver for math problems",
     "http_tools": null,
     "instruction": "You are a math toolserver. Focus on solving mathematical problems step by step.",
+    "kagent_url": "http://kagent.kagent.svc.cluster.local:8080",
     "model": "gemini-2.0-flash",
     "name": "test__NS__agent",
     "sse_tools": null
   },
+  "configHash": 4703835501661331000,
   "configMap": {
     "data": {
-      "config.yaml": "{\"agent_card\":{\"name\":\"agent\",\"description\":\"A toolserver for math problems\",\"url\":\"http://agent.test.svc.cluster.local:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":null},\"name\":\"test__NS__agent\",\"model\":\"gemini-2.0-flash\",\"description\":\"A toolserver for math problems\",\"instruction\":\"You are a math toolserver. Focus on solving mathematical problems step by step.\",\"http_tools\":null,\"sse_tools\":null,\"agents\":null}"
+      "config.yaml": "{\"kagent_url\":\"http://kagent.kagent.svc.cluster.local:8080\",\"agent_card\":{\"name\":\"agent\",\"description\":\"A toolserver for math problems\",\"url\":\"http://agent.test.svc.cluster.local:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":null},\"name\":\"test__NS__agent\",\"model\":\"gemini-2.0-flash\",\"description\":\"A toolserver for math problems\",\"instruction\":\"You are a math toolserver. Focus on solving mathematical problems step by step.\",\"http_tools\":null,\"sse_tools\":null,\"agents\":null}"
     },
     "metadata": {
       "creationTimestamp": null,

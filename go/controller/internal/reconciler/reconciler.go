@@ -11,6 +11,7 @@ import (
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	"github.com/kagent-dev/kagent/go/controller/api/v1alpha1"
 	"github.com/kagent-dev/kagent/go/controller/api/v1alpha2"
@@ -422,14 +423,25 @@ func (a *kagentReconciler) upsertAgent(ctx context.Context, agentOutputs *transl
 	a.upsertLock.Lock()
 	defer a.upsertLock.Unlock()
 
-	if err := utils.UpsertObject(ctx, a.kube, agentOutputs.ConfigMap); err != nil {
-		return fmt.Errorf("failed to upsert agent %s: %v", agentOutputs.Config.Name, err)
+	// TODO: Only patch if the config hash has changed
+
+	if err := a.kube.Patch(ctx, agentOutputs.ConfigMap, client.Apply, &client.PatchOptions{
+		FieldManager: "kagent-controller",
+		Force:        ptr.To(true),
+	}); err != nil {
+		return fmt.Errorf("failed to patch agent %s: %v", agentOutputs.Config.Name, err)
 	}
-	if err := utils.UpsertObject(ctx, a.kube, agentOutputs.Service); err != nil {
-		return fmt.Errorf("failed to upsert agent %s: %v", agentOutputs.Config.Name, err)
+	if err := a.kube.Patch(ctx, agentOutputs.Service, client.Apply, &client.PatchOptions{
+		FieldManager: "kagent-controller",
+		Force:        ptr.To(true),
+	}); err != nil {
+		return fmt.Errorf("failed to patch agent %s: %v", agentOutputs.Config.Name, err)
 	}
-	if err := utils.UpsertObject(ctx, a.kube, agentOutputs.Deployment); err != nil {
-		return fmt.Errorf("failed to upsert agent %s: %v", agentOutputs.Config.Name, err)
+	if err := a.kube.Patch(ctx, agentOutputs.Deployment, client.Apply, &client.PatchOptions{
+		FieldManager: "kagent-controller",
+		Force:        ptr.To(true),
+	}); err != nil {
+		return fmt.Errorf("failed to patch agent %s: %v", agentOutputs.Config.Name, err)
 	}
 
 	dbAgent := &database.Agent{

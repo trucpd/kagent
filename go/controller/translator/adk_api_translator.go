@@ -2,6 +2,8 @@ package translator
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"slices"
@@ -29,7 +31,8 @@ type AgentOutputs struct {
 	Service    *corev1.Service    `json:"service,omitempty"`
 	ConfigMap  *corev1.ConfigMap  `json:"configMap,omitempty"`
 
-	Config *adk.AgentConfig `json:"config,omitempty"`
+	Config     *adk.AgentConfig `json:"config,omitempty"`
+	ConfigHash uint64           `json:"configHash,omitempty"`
 }
 
 var adkLog = ctrllog.Log.WithName("adk")
@@ -93,6 +96,9 @@ func (a *adkApiTranslator) TranslateAgent(
 	if err != nil {
 		return nil, err
 	}
+
+	hash := sha256.Sum256(byt)
+	outputs.ConfigHash = binary.BigEndian.Uint64(hash[:8])
 
 	outputs.ConfigMap.Data["config.yaml"] = string(byt)
 	outputs.Config = adkAgent
@@ -208,6 +214,7 @@ func defaultDeploymentSpec() *v1alpha1.DeploymentSpec {
 func (a *adkApiTranslator) translateDeclarativeAgent(ctx context.Context, agent *v1alpha1.Agent, state *tState) (*adk.AgentConfig, error) {
 
 	cfg := &adk.AgentConfig{
+		KagentUrl:   fmt.Sprintf("http://kagent.%s.svc.cluster.local:8080", common.GetResourceNamespace()),
 		Name:        common.ConvertToPythonIdentifier(common.GetObjectRef(agent)),
 		Model:       "gemini-2.0-flash",
 		Description: agent.Spec.Description,
@@ -221,13 +228,15 @@ func (a *adkApiTranslator) translateDeclarativeAgent(ctx context.Context, agent 
 				PushNotifications:      ptr.To(false),
 				StateTransitionHistory: ptr.To(true),
 			},
+			// Can't be null for Python, so set to empty list
+			Skills:             []server.AgentSkill{},
 			DefaultInputModes:  []string{"text"},
 			DefaultOutputModes: []string{"text"},
 		},
 	}
 
 	if agent.Spec.A2AConfig != nil {
-		cfg.AgentCard.Skills = slices.Collect(utils.Map[v1alpha1.AgentSkill, server.AgentSkill](slices.Values(agent.Spec.A2AConfig.Skills), func(skill v1alpha1.AgentSkill) server.AgentSkill {
+		cfg.AgentCard.Skills = slices.Collect(utils.Map(slices.Values(agent.Spec.A2AConfig.Skills), func(skill v1alpha1.AgentSkill) server.AgentSkill {
 			return server.AgentSkill(skill)
 		}))
 	}

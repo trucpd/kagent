@@ -5,6 +5,13 @@ import json
 import logging
 from typing import Self
 
+from a2a.server.apps import A2AStarletteApplication
+from a2a.server.request_handlers import DefaultRequestHandler
+from a2a.server.tasks import InMemoryTaskStore
+from a2a.types import AgentCard
+from fastapi import FastAPI, Request
+from fastapi.responses import PlainTextResponse
+from google.adk.a2a.executor.a2a_agent_executor import A2aAgentExecutor
 from google.adk.agents import Agent
 from google.adk.agents.llm_agent import ToolUnion
 from google.adk.auth.auth_credential import AuthCredential
@@ -16,6 +23,8 @@ from google.adk.tools.agent_tool import AgentTool
 from google.adk.tools.mcp_tool import MCPToolset, SseConnectionParams, StreamableHTTPConnectionParams
 from google.genai import types
 from pydantic import BaseModel, Field
+
+from kagent import KAgentSessionService, KAgentTaskStore
 
 
 class HttpMcpServerConfig(BaseModel):
@@ -29,6 +38,8 @@ class SseMcpServerConfig(BaseModel):
 
 
 class AgentConfig(BaseModel):
+    kagent_url: str  # The URL of the KAgent server
+    agent_card: AgentCard
     name: str
     model: str
     description: str
@@ -91,80 +102,43 @@ async def setup_session_and_runner(session_id: str, root_agent: Agent):
     return session_service, runner
 
 
-json_config = """
-{
-  "agents": null,
-  "description": "A toolserver for math problems",
-  "http_tools": [
-    {
-      "params": {
-        "headers": {},
-        "read_timeout": 300,
-        "terminate_on_close": false,
-        "timeout": 30,
-        "url": "http://localhost:8084/mcp"
-      },
-      "tools": [
-        "k8s_get_resources"
-      ]
-    }
-  ],
-  "instruction": "You are a kubernetes agent. You can use the k8s_get_resources tool to get resources from the kubernetes cluster.",
-  "model": "gemini-2.0-flash",
-  "name": "test__NS__agent",
-  "sse_tools": null
-}
-"""
+def health_check(request: Request) -> PlainTextResponse:
+    return PlainTextResponse("OK")
 
 
-# --- Function to Interact with the Agent ---
-async def call_agent_async(session_id: str, user_input_topic: str):
-    """
-    Sends a new topic to the agent (overwriting the initial one if needed)
-    and runs the workflow.
-    """
+def build_app(filepath: str = "/config/config.json") -> FastAPI:
+    with open(filepath, "r") as f:
+        config = json.load(f)
+    agent_config = AgentConfig.model_validate(config)
+    root_agent = agent_config.to_agent()
+    session_service = KAgentSessionService("http://kagent.kagent-dev.svc.cluster.local:8083")
+    runner = Runner(
+        agent=root_agent,
+        app_name=APP_NAME,
+        session_service=session_service,
+    )
 
-    agent_config = json.loads(json_config)
-    agent_config = AgentConfig.model_validate(agent_config)
+    agent_executor = A2aAgentExecutor(
+        runner=runner,
+    )
 
-    session_service, runner = await setup_session_and_runner(session_id, agent_config.to_agent())
+    kagent_task_store = KAgentTaskStore("http://kagent.kagent-dev.svc.cluster.local:8083")
 
-    current_session = await session_service.get_session(app_name=APP_NAME, user_id=USER_ID, session_id=session_id)
+    request_handler = DefaultRequestHandler(
+        agent_executor=agent_executor,
+        task_store=kagent_task_store,
+    )
 
-    if not current_session:
-        logger.error("Session not found!")
-        return
+    a2a_app = A2AStarletteApplication(
+        agent_card=agent_config.agent_card,
+        http_handler=request_handler,
+    )
 
-    current_session.state["topic"] = user_input_topic
-    logger.info(f"Updated session state topic to: {user_input_topic}")
+    app = FastAPI()
 
-    content = types.Content(role="user", parts=[types.Part(text=user_input_topic)])
-    events = runner.run_async(user_id=USER_ID, session_id=session_id, new_message=content)
+    # Health check/readiness probe
+    app.add_route("/", methods=["GET"], route=health_check)
 
-    final_response = "No final response captured."
-    async for event in events:
-        logger.info(f"Event: {event}")
-        if event.is_final_response() and event.content and event.content.parts:
-            logger.info(f"Potential final response from [{event.author}]: {event.content.parts[0].text}")
-            final_response = event.content.parts[0].text
+    a2a_app.add_routes_to_app(app)
 
-    print("\n--- Agent Interaction Result ---")
-    print("Agent Final Response: ", final_response)
-
-    final_session = await session_service.get_session(app_name=APP_NAME, user_id=USER_ID, session_id=SESSION_ID)
-    print("Final Session State:")
-
-    print(json.dumps(final_session.state, indent=2))
-    print("-------------------------------\n")
-
-
-# --- Run the Agent ---
-# Note: In Colab, you can directly use 'await' at the top level.
-# If running this code as a standalone Python script, you'll need to use asyncio.run() or manage the event loop.
-
-
-async def main():
-    await call_agent_async(SESSION_ID, "list all pods in the default namespace")
-
-
-asyncio.run(main())
+    return app

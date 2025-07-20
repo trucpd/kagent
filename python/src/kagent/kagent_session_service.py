@@ -14,7 +14,7 @@ from typing_extensions import override
 logger = logging.getLogger("kagent." + __name__)
 
 
-class KagentSessionService(BaseSessionService):
+class KAgentSessionService(BaseSessionService):
     """A session service implementation that uses the Kagent API.
     This service integrates with the Kagent server to manage session state
     and persistence through HTTP API calls.
