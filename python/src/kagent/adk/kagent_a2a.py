@@ -8,7 +8,7 @@ from a2a.server.request_handlers import DefaultRequestHandler
 from a2a.types import AgentCard, AgentCapabilities, AgentSkill
 from a2a.utils.constants import AGENT_CARD_WELL_KNOWN_PATH
 from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse
 from google.adk.a2a.executor.a2a_agent_executor import A2aAgentExecutor
 from google.adk.agents import BaseAgent
 from google.adk.runners import Runner
@@ -36,10 +36,9 @@ async def run_a2a_server(agent: BaseAgent):
 
     # this is the host it can be accessed from outside the container (for the agent card.)
     port = 8080
-    host = os.environ.get("SERVICE_HOST")
+    host = os.environ.get("KAGENT_SERVICE_HOST")
 
-    kagent_host = os.environ.get("KAGENT_HOST")
-    kagent_port = 8080
+    kagent_api_url = os.environ.get("KAGENT_API_URL")
 
     provider = TracerProvider()
     #    provider.add_span_processor(
@@ -54,7 +53,7 @@ async def run_a2a_server(agent: BaseAgent):
     # Run the FastAPI server.
 
     # httpx.AsyncClient(base_url=base_url.rstrip("/"))
-    kagent_services = KagentServices(kagent_url=f"http://{kagent_host}:{kagent_port}")
+    kagent_services = KagentServices(kagent_url=kagent_api_url)
 
     runner = Runner(
             app_name=app_name,
@@ -116,10 +115,16 @@ async def run_a2a_server(agent: BaseAgent):
             f"<html><body><h1>Welcome to Kagent Agent Server</h1> Use A2A with this url: {a2a_rpc_path}</body></html>"
         )
 
+    @app.get("/healthz")
+    async def get():
+        return PlainTextResponse(
+            f"ok"
+        )
+
     config = uvicorn.Config(
         app,
         host="0.0.0.0",
-        port=8000,
+        port=8080,
         #    reload=reload,
     )
 

@@ -347,3 +347,10 @@ report/image-cve: build
 	grype docker:$(CONTROLLER_IMG) -o template -t reports/cve-report.tmpl --file reports/$(SEMVER)/controller-cve.csv
 	grype docker:$(APP_IMG)        -o template -t reports/cve-report.tmpl --file reports/$(SEMVER)/app-cve.csv
 	grype docker:$(UI_IMG)         -o template -t reports/cve-report.tmpl --file reports/$(SEMVER)/ui-cve.csv
+
+
+.PHONY: example-byo-agent
+example-byo-agent:
+	docker build -f examples/byo-adk/Dockerfile -t kagent.dev/byo-adk-agent:latest .
+	kind --name $(KIND_CLUSTER_NAME) load docker-image kagent.dev/byo-adk-agent:latest
+	kubectl apply -f examples/byo-adk/k8s.yaml

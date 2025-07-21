@@ -74,6 +74,26 @@ func TestInvokeAPI(t *testing.T) {
 	})
 }
 
+func TestByoAgent(t *testing.T) {
+	t.Run("when having byo agent", func(t *testing.T) {
+		var a2aBaseURL string
+
+		// Setup
+		a2aBaseURL = os.Getenv("KAGENT_API_URL")
+		if a2aBaseURL == "" {
+			a2aBaseURL = "http://localhost:8083/api"
+		}
+
+		// A2A URL format: <base_url>/<namespace>/<agent_name>
+		agentNamespace := "default"
+
+		agentName := "byo-adk-agent"
+		a2aURL := a2aBaseURL + "/a2a/" + agentNamespace + "/" + agentName
+		t.Fatal("TODO: Implement byo agent CRD first", a2aURL)
+
+	})
+}
+
 // waitForTaskCompletion polls the task until it's completed or times out
 func waitForTaskCompletion(ctx context.Context, a2aClient *client.A2AClient, taskID string, timeout time.Duration) (*protocol.Task, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
