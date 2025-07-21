@@ -91,3 +91,10 @@ For local development, you can use uv to run the agent:
 uv sync
 uv run python main.py
 ```
+
+## Invoke
+
+```bash
+kubectl port-forward -n default byo-adk-agent-884486ff4-4b7hr 8080
+cd go; go run cli/cmd/kagent/main.go invoke -a k8s-agent -t "How many pods in my cluster?" -n kagent --url http://localhost:8080/a2a/hello_world_agent -s "test"
+```****

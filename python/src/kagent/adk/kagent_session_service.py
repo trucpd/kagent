@@ -77,6 +77,8 @@ class KagentSessionService(BaseSessionService):
                 f"/api/sessions/{session_id}?user_id={user_id}",
                 headers={"X-User-ID": user_id},
             )
+            if response.status_code == 404:
+                return None
             response.raise_for_status()
 
             data = response.json()

@@ -68,6 +68,7 @@ func main() {
 	invokeCmd.Flags().StringVarP(&invokeCfg.Task, "task", "t", "", "Task")
 	invokeCmd.Flags().StringVarP(&invokeCfg.Session, "session", "s", "", "Session")
 	invokeCmd.Flags().StringVarP(&invokeCfg.Agent, "agent", "a", "", "Agent")
+	invokeCmd.Flags().StringVarP(&invokeCfg.Url, "url", "u", "", "URL to invoke the agent. if provided agent argument is ignored.")
 	invokeCmd.Flags().BoolVarP(&invokeCfg.Stream, "stream", "S", false, "Stream the response")
 	invokeCmd.Flags().StringVarP(&invokeCfg.File, "file", "f", "", "File to read the task from")
 

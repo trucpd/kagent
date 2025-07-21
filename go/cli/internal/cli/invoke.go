@@ -20,6 +20,7 @@ type InvokeCfg struct {
 	Session string
 	Agent   string
 	Stream  bool
+	Url     string
 }
 
 func InvokeCmd(ctx context.Context, cfg *InvokeCfg) {
@@ -67,13 +68,16 @@ func InvokeCmd(ctx context.Context, cfg *InvokeCfg) {
 	// If session is set invoke within a session.
 	if cfg.Session != "" {
 
-		if cfg.Agent == "" {
+		if cfg.Agent == "" && cfg.Url == "" {
 			fmt.Fprintln(os.Stderr, "Agent is required")
 			return
 		}
 
 		// Setup A2A client
 		a2aURL := fmt.Sprintf("%s/a2a/%s/%s", cfg.Config.APIURL, cfg.Config.Namespace, cfg.Agent)
+		if cfg.Url != "" {
+			a2aURL = cfg.Url
+		}
 		a2aClient, err := a2aclient.NewA2AClient(a2aURL)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating A2A client: %v\n", err)
@@ -87,6 +91,7 @@ func InvokeCmd(ctx context.Context, cfg *InvokeCfg) {
 
 			result, err := a2aClient.StreamMessage(ctx, protocol.SendMessageParams{
 				Message: protocol.Message{
+					Kind:      protocol.KindMessage,
 					Role:      protocol.MessageRoleUser,
 					ContextID: &cfg.Session,
 					Parts:     []protocol.Part{protocol.NewTextPart(task)},
@@ -103,6 +108,7 @@ func InvokeCmd(ctx context.Context, cfg *InvokeCfg) {
 
 			result, err := a2aClient.SendMessage(ctx, protocol.SendMessageParams{
 				Message: protocol.Message{
+					Kind:      protocol.KindMessage,
 					Role:      protocol.MessageRoleUser,
 					ContextID: &cfg.Session,
 					Parts:     []protocol.Part{protocol.NewTextPart(task)},
@@ -124,13 +130,16 @@ func InvokeCmd(ctx context.Context, cfg *InvokeCfg) {
 
 	} else {
 
-		if cfg.Agent == "" {
+		if cfg.Agent == "" && cfg.Url == "" {
 			fmt.Fprintln(os.Stderr, "Agent is required")
 			return
 		}
 
 		// Setup A2A client
 		a2aURL := fmt.Sprintf("%s/a2a/%s/%s", cfg.Config.APIURL, cfg.Config.Namespace, cfg.Agent)
+		if cfg.Url != "" {
+			a2aURL = cfg.Url
+		}
 		a2aClient, err := a2aclient.NewA2AClient(a2aURL)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating A2A client: %v\n", err)
@@ -144,6 +153,7 @@ func InvokeCmd(ctx context.Context, cfg *InvokeCfg) {
 
 			result, err := a2aClient.StreamMessage(ctx, protocol.SendMessageParams{
 				Message: protocol.Message{
+					Kind:      protocol.KindMessage,
 					Role:      protocol.MessageRoleUser,
 					ContextID: nil, // No session
 					Parts:     []protocol.Part{protocol.NewTextPart(task)},
@@ -160,6 +170,7 @@ func InvokeCmd(ctx context.Context, cfg *InvokeCfg) {
 
 			result, err := a2aClient.SendMessage(ctx, protocol.SendMessageParams{
 				Message: protocol.Message{
+					Kind:      protocol.KindMessage,
 					Role:      protocol.MessageRoleUser,
 					ContextID: nil, // No session
 					Parts:     []protocol.Part{protocol.NewTextPart(task)},
