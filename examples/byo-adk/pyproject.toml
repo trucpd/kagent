@@ -1,0 +1,10 @@
+[project]
+name = "byo-adk"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12.11"
+dependencies = ["kagent"]
+
+[tool.uv.sources]
+kagent = { path = "../../python/" }

@@ -20,9 +20,9 @@ class KagentSessionService(BaseSessionService):
     and persistence through HTTP API calls.
     """
 
-    def __init__(self, base_url: str):
+    def __init__(self, client: httpx.AsyncClient):
         super().__init__()
-        self.client = httpx.AsyncClient(base_url=base_url.rstrip("/"))
+        self.client = client
 
     async def _get_user_id(self) -> str:
         """Get the default user ID. Override this method to implement custom user ID logic."""
