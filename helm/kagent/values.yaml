@@ -107,22 +107,6 @@ mcp:
         memory: 512Mi
     env: [] # Additional environment variables for the doc2vec can be added here
 
-app:
-  loglevel: "info"
-  image:
-    registry: cr.kagent.dev
-    repository: kagent-dev/kagent/app
-    tag: "" # Will default to global, then Chart version
-    pullPolicy: IfNotPresent
-  resources:
-    requests:
-      cpu: 100m
-      memory: 256Mi
-    limits:
-      cpu: 1000m
-      memory: 1Gi
-  env: [] # Additional environment variables for the app can be added here
-
 ui:
   image:
     registry: cr.kagent.dev
@@ -144,9 +128,6 @@ service:
     ui:
       port: 80
       targetPort: 8080
-    app:
-      port: 8081
-      targetPort: 8081
     controller:
       port: 8083
       targetPort: 8083
