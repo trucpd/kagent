@@ -34,11 +34,13 @@ import httpx
 
 logger = logging.getLogger("kagent." + __name__)
 
+
 class AgentRunRequest(pydantic.BaseModel):
     app_name: str
     user_id: str
     session_id: str
     new_message: types.Content
+
 
 class KagentSessionService(BaseSessionService):
     """A session service implementation that uses the Kagent API.
@@ -256,8 +258,10 @@ class SessionHandler:
                 task.cancel()
 
     async def forward_events(self):
-        async for event in self.runner.run_live(user_id = self.session.user_id,
-            session_id=self.session.id, live_request_queue=self.live_request_queue
+        async for event in self.runner.run_live(
+            user_id=self.session.user_id,
+            session_id=self.session.id,
+            live_request_queue=self.live_request_queue,
         ):
             await self.websocket.send_text(
                 event.model_dump_json(exclude_none=True, by_alias=True)
@@ -284,10 +288,171 @@ class SessionHandler:
         logger.info("Generated %s events in agent run: %s", len(events), events)
         return events
 
+
 async def run_server(agent: BaseAgent):
     # Run the FastAPI server.
     kagent_agent = KagentAdkAgent(agent)
     app = FastAPI()
+
+    @app.get("/")
+    async def get():
+        return HTMLResponse(
+            "<html><body><h1>Welcome to Kagent Agent Server</h1></body></html>"
+        )
+
+    @app.post("/run", response_model_exclude_none=True)
+    async def agent_run(req: AgentRunRequest) -> list[Event]:
+        session = await kagent_agent.session_service.get_session(
+            session_id=req.session_id, app_name=req.app_name, user_id=req.user_id
+        )
+        h = SessionHandler(None, kagent_agent.agent, kagent_agent.runner, session)
+        return await h.run(req)
+
+    @app.websocket("/run_live")
+    async def agent_live_run(
+        websocket: WebSocket,
+        app_name: str,
+        user_id: str,
+        session_id: str,
+        # modalities: List[Literal["TEXT", "AUDIO"]] = Query(
+        #    default=["TEXT", "AUDIO"]
+        # ),  # Only allows "TEXT" or "AUDIO"
+    ) -> None:
+        await websocket.accept()
+        session = await kagent_agent.session_service.get_session(
+            session_id=session_id, app_name=app_name, user_id=user_id
+        )
+        if session is None:
+            await websocket.close(code=1008, reason="Session not found")
+            return
+
+        h = SessionHandler(websocket, kagent_agent.agent, kagent_agent.runner, session)
+        await h.run_live()
+
+    config = uvicorn.Config(
+        app,
+        host="0.0.0.0",
+        port=8000,
+        #    reload=reload,
+    )
+
+    server = uvicorn.Server(config)
+    await server.serve()
+
+
+async def close_runners(runners: list[Runner]) -> None:
+    cleanup_tasks = [asyncio.create_task(runner.close()) for runner in runners]
+    if cleanup_tasks:
+        # Wait for all cleanup tasks with timeout
+        done, pending = await asyncio.wait(
+            cleanup_tasks,
+            timeout=30.0,  # 30 second timeout for cleanup
+            return_when=asyncio.ALL_COMPLETED,
+        )
+
+        # If any tasks are still pending, log it
+        if pending:
+            logger.warning(
+                "%s runner close tasks didn't complete in time", len(pending)
+            )
+            for task in pending:
+                task.cancel()
+
+
+async def run_a2a_server(agent: BaseAgent):
+    from a2a.server.apps import A2AStarletteApplication
+    from a2a.server.request_handlers import DefaultRequestHandler
+    from a2a.server.tasks import InMemoryTaskStore
+    from a2a.types import AgentCard
+    from a2a.utils.constants import AGENT_CARD_WELL_KNOWN_PATH
+    from google.adk.utils import cleanup
+    from google.adk.a2a.executor.a2a_agent_executor import A2aAgentExecutor
+    from opentelemetry import trace
+    from opentelemetry.sdk.trace import TracerProvider
+    import os
+
+    port = 8080
+    host = os.environ.get("KAGENT_HOST")
+    a2a_task_store = None  # this will be merged soon.
+
+    provider = TracerProvider()
+    #    provider.add_span_processor(
+    #        export.SimpleSpanProcessor(ApiServerSpanExporter(trace_dict))
+    #    )
+    #    memory_exporter = InMemoryExporter(session_trace_dict)
+    #    provider.add_span_processor(export.SimpleSpanProcessor(memory_exporter))
+
+    trace.set_tracer_provider(provider)
+
+    # Run the FastAPI server.
+    kagent_agent = KagentAdkAgent(agent)
+    app = FastAPI()
+
+    _runners_to_clean = set()
+    runner_dict = {}
+
+    kagent_services = KagentSessionServices(kagent_url="http://localhost:8083")
+
+    async def _get_runner_async(app_name: str) -> Runner:
+        """Returns the runner for the given app."""
+        if app_name in _runners_to_clean:
+            _runners_to_clean.remove(app_name)
+            runner = runner_dict.pop(app_name, None)
+            await cleanup.close_runners(list([runner]))
+#        envs.load_dotenv_for_agent(os.path.basename(app_name), agents_dir)
+        if app_name in runner_dict:
+            return runner_dict[app_name]
+        # root_agent = agent_loader.load_agent(app_name)
+        root_agent = agent
+        runner = Runner(
+            app_name=app_name,
+            agent=root_agent,
+            artifact_service=kagent_services.artifact_service,
+            session_service=kagent_services.session_service,
+            memory_service=kagent_services.memory_service,
+            credential_service=kagent_services.credential_service,
+        )
+        runner_dict[app_name] = runner
+        return runner
+
+    def create_a2a_runner_loader(captured_app_name: str):
+        """Factory function to create A2A runner with proper closure."""
+
+        async def _get_a2a_runner_async() -> Runner:
+            return await _get_runner_async(captured_app_name)
+
+        return _get_a2a_runner_async
+
+    app_name = "TODO"
+    logger.info("Setting up A2A agent: %s", app_name)
+
+    a2a_rpc_path = f"http://{host}:{port}/a2a/{app_name}"
+
+    agent_executor = A2aAgentExecutor(
+        runner=create_a2a_runner_loader(app_name),
+    )
+
+    request_handler = DefaultRequestHandler(
+        agent_executor=agent_executor, task_store=a2a_task_store
+    )
+
+    agent_card = AgentCard(name=app_name, description="A2A Agent", version="1.0.0")
+    agent_card.url = a2a_rpc_path
+
+    a2a_app = A2AStarletteApplication(
+        agent_card=agent_card,
+        http_handler=request_handler,
+    )
+
+    routes = a2a_app.routes(
+        rpc_url=f"/a2a/{app_name}",
+        agent_card_url=f"/a2a/{app_name}{AGENT_CARD_WELL_KNOWN_PATH}",
+    )
+
+    for new_route in routes:
+        app.router.routes.append(new_route)
+
+    logger.info("Successfully configured A2A agent: %s", app_name)
 
     @app.get("/")
     async def get():
