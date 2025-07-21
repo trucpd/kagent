@@ -2,7 +2,9 @@ package a2a
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"log/slog"
 
 	"trpc.group/trpc-go/trpc-a2a-go/client"
 	"trpc.group/trpc-go/trpc-a2a-go/protocol"
@@ -20,31 +22,43 @@ func NewPassthroughManager(client *client.A2AClient) taskmanager.TaskManager {
 }
 
 func (m *PassthroughManager) OnSendMessage(ctx context.Context, request protocol.SendMessageParams) (*protocol.MessageResult, error) {
+	byt, _ := json.Marshal(request)
+	if request.Message.MessageID == "" {
+		request.Message.MessageID = protocol.GenerateMessageID()
+	}
+	if request.Message.Kind == "" {
+		request.Message.Kind = protocol.KindMessage
+	}
+	slog.Info("OnSendMessage", "request", string(byt))
 	return m.client.SendMessage(ctx, request)
 }
 
 func (m *PassthroughManager) OnSendMessageStream(ctx context.Context, request protocol.SendMessageParams) (<-chan protocol.StreamingMessageEvent, error) {
+	byt, _ := json.Marshal(request)
+	if request.Message.MessageID == "" {
+		request.Message.MessageID = protocol.GenerateMessageID()
+	}
+	if request.Message.Kind == "" {
+		request.Message.Kind = protocol.KindMessage
+	}
+	slog.Info("OnSendMessageStream", "request", string(byt))
 	return m.client.StreamMessage(ctx, request)
 }
 
 func (m *PassthroughManager) OnGetTask(ctx context.Context, params protocol.TaskQueryParams) (*protocol.Task, error) {
-	// TODO: Implement
-	return nil, nil
+	return m.client.GetTasks(ctx, params)
 }
 
 func (m *PassthroughManager) OnCancelTask(ctx context.Context, params protocol.TaskIDParams) (*protocol.Task, error) {
-	// TODO: Implement
-	return nil, nil
+	return m.client.CancelTasks(ctx, params)
 }
 
 func (m *PassthroughManager) OnPushNotificationSet(ctx context.Context, params protocol.TaskPushNotificationConfig) (*protocol.TaskPushNotificationConfig, error) {
-	// TODO: Implement
-	return nil, nil
+	return m.client.SetPushNotification(ctx, params)
 }
 
 func (m *PassthroughManager) OnPushNotificationGet(ctx context.Context, params protocol.TaskIDParams) (*protocol.TaskPushNotificationConfig, error) {
-	// TODO: Implement
-	return nil, nil
+	return m.client.GetPushNotification(ctx, params)
 }
 
 func (m *PassthroughManager) OnResubscribe(ctx context.Context, params protocol.TaskIDParams) (<-chan protocol.StreamingMessageEvent, error) {

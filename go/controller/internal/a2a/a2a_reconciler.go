@@ -57,7 +57,7 @@ func (a *a2aReconciler) ReconcileAutogenAgent(
 	agentRef := common.GetObjectRef(agent)
 	cardCopy.URL = fmt.Sprintf("%s/%s/", a.a2aBaseUrl, agentRef)
 
-	client, err := a2aclient.NewA2AClient(cardCopy.URL)
+	client, err := a2aclient.NewA2AClient(adkConfig.AgentCard.URL)
 	if err != nil {
 		return err
 	}

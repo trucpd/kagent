@@ -60,10 +60,6 @@ func InvokeCmd(ctx context.Context, cfg *InvokeCfg) {
 		return
 	}
 
-	// Start port forwarding for A2A
-	cancel := startPortForward(ctx)
-	defer cancel()
-
 	// If session is set invoke within a session.
 	if cfg.Session != "" {
 

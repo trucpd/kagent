@@ -5,6 +5,7 @@ import json
 import logging
 from typing import Self
 
+import httpx
 from a2a.server.apps import A2AStarletteApplication
 from a2a.server.request_handlers import DefaultRequestHandler
 from a2a.server.tasks import InMemoryTaskStore
@@ -111,7 +112,8 @@ def build_app(filepath: str = "/config/config.json") -> FastAPI:
         config = json.load(f)
     agent_config = AgentConfig.model_validate(config)
     root_agent = agent_config.to_agent()
-    session_service = KAgentSessionService("http://kagent.kagent-dev.svc.cluster.local:8083")
+    http_client = httpx.AsyncClient(base_url=agent_config.kagent_url)
+    session_service = KAgentSessionService(http_client)
     runner = Runner(
         agent=root_agent,
         app_name=APP_NAME,
@@ -122,7 +124,7 @@ def build_app(filepath: str = "/config/config.json") -> FastAPI:
         runner=runner,
     )
 
-    kagent_task_store = KAgentTaskStore("http://kagent.kagent-dev.svc.cluster.local:8083")
+    kagent_task_store = KAgentTaskStore(http_client)
 
     request_handler = DefaultRequestHandler(
         agent_executor=agent_executor,

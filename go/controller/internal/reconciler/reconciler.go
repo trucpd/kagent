@@ -13,7 +13,6 @@ import (
 	"k8s.io/utils/ptr"
 
 	"github.com/kagent-dev/kagent/go/controller/api/v1alpha1"
-	"github.com/kagent-dev/kagent/go/controller/api/v1alpha2"
 	"github.com/kagent-dev/kagent/go/controller/internal/a2a"
 	"github.com/kagent-dev/kagent/go/controller/translator"
 	"github.com/kagent-dev/kagent/go/internal/adk"
@@ -230,7 +229,7 @@ func (a *kagentReconciler) ReconcileKagentApiKeySecret(ctx context.Context, req 
 
 func (a *kagentReconciler) ReconcileKagentToolServer(ctx context.Context, req ctrl.Request) error {
 	// reconcile the agent team itself
-	toolServer := &v1alpha2.ToolServer{}
+	toolServer := &v1alpha1.ToolServer{}
 	if err := a.kube.Get(ctx, req.NamespacedName, toolServer); err != nil {
 		// if the tool server is not found, we can ignore it
 		if k8s_errors.IsNotFound(err) {
@@ -266,7 +265,7 @@ func (a *kagentReconciler) ReconcileKagentToolServer(ctx context.Context, req ct
 
 func (a *kagentReconciler) reconcileToolServerStatus(
 	ctx context.Context,
-	toolServer *v1alpha2.ToolServer,
+	toolServer *v1alpha1.ToolServer,
 	serverRef string,
 	err error,
 ) error {
@@ -405,7 +404,7 @@ func (a *kagentReconciler) reconcileAgent(ctx context.Context, agent *v1alpha1.A
 	return nil
 }
 
-func (a *kagentReconciler) reconcileToolServer(ctx context.Context, server *v1alpha2.ToolServer) error {
+func (a *kagentReconciler) reconcileToolServer(ctx context.Context, server *v1alpha1.ToolServer) error {
 	toolServer, err := a.adkTranslator.TranslateToolServer(ctx, server)
 	if err != nil {
 		return fmt.Errorf("failed to translate tool server %s/%s: %v", server.Namespace, server.Name, err)
@@ -424,7 +423,6 @@ func (a *kagentReconciler) upsertAgent(ctx context.Context, agentOutputs *transl
 	defer a.upsertLock.Unlock()
 
 	// TODO: Only patch if the config hash has changed
-
 	if err := a.kube.Patch(ctx, agentOutputs.ConfigMap, client.Apply, &client.PatchOptions{
 		FieldManager: "kagent-controller",
 		Force:        ptr.To(true),
@@ -466,10 +464,10 @@ func (a *kagentReconciler) upsertToolServer(ctx context.Context, toolServer *dat
 		return fmt.Errorf("failed to get toolServer %s: %v", toolServer.Name, err)
 	}
 
-	var tools []*v1alpha2.MCPTool
-	switch toolServer.Config.Protocol {
-	case v1alpha2.ToolServerProtocolSse:
-		sseHttpClient, err := transport.NewSSE(toolServer.Config.URL)
+	var tools []*v1alpha1.MCPTool
+	switch {
+	case toolServer.Config.Sse != nil:
+		sseHttpClient, err := transport.NewSSE(toolServer.Config.Sse.URL)
 		if err != nil {
 			return fmt.Errorf("failed to create sse client for toolServer %s: %v", toolServer.Name, err)
 		}
@@ -477,10 +475,8 @@ func (a *kagentReconciler) upsertToolServer(ctx context.Context, toolServer *dat
 		if err != nil {
 			return fmt.Errorf("failed to fetch tools for toolServer %s: %v", toolServer.Name, err)
 		}
-	case v1alpha2.ToolServerProtocolStreamableHttp:
-		fallthrough
-	default:
-		streamableHttpClient, err := transport.NewStreamableHTTP(toolServer.Config.URL)
+	case toolServer.Config.StreamableHttp != nil:
+		streamableHttpClient, err := transport.NewStreamableHTTP(toolServer.Config.StreamableHttp.URL)
 		if err != nil {
 			return fmt.Errorf("failed to create streamable http client for toolServer %s: %v", toolServer.Name, err)
 		}
@@ -488,6 +484,11 @@ func (a *kagentReconciler) upsertToolServer(ctx context.Context, toolServer *dat
 		if err != nil {
 			return fmt.Errorf("failed to fetch tools for toolServer %s: %v", toolServer.Name, err)
 		}
+	case toolServer.Config.Stdio != nil:
+		// Can't list tools for stdio
+		return fmt.Errorf("stdio tool servers are not supported")
+	default:
+		return fmt.Errorf("unsupported tool server type: %v", toolServer.Config.Type)
 	}
 
 	if err := a.dbClient.RefreshToolsForServer(toolServer.Name, tools...); err != nil {
@@ -497,7 +498,7 @@ func (a *kagentReconciler) upsertToolServer(ctx context.Context, toolServer *dat
 	return nil
 }
 
-func (a *kagentReconciler) listTools(ctx context.Context, tsp transport.Interface, toolServer *database.ToolServer) ([]*v1alpha2.MCPTool, error) {
+func (a *kagentReconciler) listTools(ctx context.Context, tsp transport.Interface, toolServer *database.ToolServer) ([]*v1alpha1.MCPTool, error) {
 	client := mcp_client.NewClient(tsp)
 	err := client.Start(ctx)
 	if err != nil {
@@ -522,9 +523,9 @@ func (a *kagentReconciler) listTools(ctx context.Context, tsp transport.Interfac
 		return nil, fmt.Errorf("failed to list tools for toolServer %s: %v", toolServer.Name, err)
 	}
 
-	tools := make([]*v1alpha2.MCPTool, 0, len(result.Tools))
+	tools := make([]*v1alpha1.MCPTool, 0, len(result.Tools))
 	for _, tool := range result.Tools {
-		tools = append(tools, &v1alpha2.MCPTool{
+		tools = append(tools, &v1alpha1.MCPTool{
 			Name:        tool.Name,
 			Description: tool.Description,
 		})
@@ -687,13 +688,13 @@ func (a *kagentReconciler) findAgentsUsingToolServer(ctx context.Context, req ct
 
 }
 
-func (a *kagentReconciler) getDiscoveredMCPTools(ctx context.Context, serverRef string) ([]*v1alpha2.MCPTool, error) {
+func (a *kagentReconciler) getDiscoveredMCPTools(ctx context.Context, serverRef string) ([]*v1alpha1.MCPTool, error) {
 	allTools, err := a.dbClient.ListToolsForServer(serverRef)
 	if err != nil {
 		return nil, err
 	}
 
-	var discoveredTools []*v1alpha2.MCPTool
+	var discoveredTools []*v1alpha1.MCPTool
 	for _, tool := range allTools {
 		mcpTool, err := convertTool(&tool)
 		if err != nil {
@@ -713,8 +714,8 @@ func (a *kagentReconciler) reconcileA2A(
 	return a.a2aReconciler.ReconcileAutogenAgent(ctx, agent, adkConfig)
 }
 
-func convertTool(tool *database.Tool) (*v1alpha2.MCPTool, error) {
-	return &v1alpha2.MCPTool{
+func convertTool(tool *database.Tool) (*v1alpha1.MCPTool, error) {
+	return &v1alpha1.MCPTool{
 		Name:        tool.Name,
 		Description: tool.Description,
 	}, nil

@@ -26,7 +26,19 @@ type ToolServerSpec struct {
 	Config      ToolServerConfig `json:"config"`
 }
 
+type ToolServerType string
+
+const (
+	ToolServerTypeStdio          ToolServerType = "stdio"
+	ToolServerTypeSse            ToolServerType = "sse"
+	ToolServerTypeStreamableHttp ToolServerType = "streamableHttp"
+)
+
+// Only one of stdio, sse, or streamableHttp can be specified.
+// +kubebuilder:validation:XValidation:rule="(has(self.stdio) && !has(self.sse) && !has(self.streamableHttp)) || (!has(self.stdio) && has(self.sse) && !has(self.streamableHttp)) || (!has(self.stdio) && !has(self.sse) && has(self.streamableHttp))",message="Exactly one of stdio, sse, or streamableHttp must be specified"
 type ToolServerConfig struct {
+	// +optional
+	Type           ToolServerType              `json:"type"`
 	Stdio          *StdioMcpServerConfig       `json:"stdio,omitempty"`
 	Sse            *SseMcpServerConfig         `json:"sse,omitempty"`
 	StreamableHttp *StreamableHttpServerConfig `json:"streamableHttp,omitempty"`
@@ -89,7 +101,7 @@ type SseMcpServerConfig struct {
 
 type StreamableHttpServerConfig struct {
 	HttpToolServerConfig `json:",inline"`
-	TerminateOnClose     bool `json:"terminateOnClose,omitempty"`
+	TerminateOnClose     *bool `json:"terminateOnClose,omitempty"`
 }
 
 // ToolServerStatus defines the observed state of ToolServer.
@@ -103,8 +115,9 @@ type ToolServerStatus struct {
 }
 
 type MCPTool struct {
-	Name      string    `json:"name"`
-	Component Component `json:"component"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	Component   Component `json:"component"`
 }
 
 type Component struct {

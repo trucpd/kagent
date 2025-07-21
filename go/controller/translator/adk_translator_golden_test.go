@@ -13,7 +13,6 @@ import (
 	"sigs.k8s.io/yaml"
 
 	"github.com/kagent-dev/kagent/go/controller/api/v1alpha1"
-	"github.com/kagent-dev/kagent/go/controller/api/v1alpha2"
 	"github.com/kagent-dev/kagent/go/controller/translator"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -31,8 +30,8 @@ type TestInput struct {
 	Namespace    string                   `yaml:"namespace"`
 }
 
-// TestGoldenAutogenTranslator runs golden tests for the autogen API translator
-func TestGoldenAutogenTranslator(t *testing.T) {
+// TestGoldenAdkTranslator runs golden tests for the ADK API translator
+func TestGoldenAdkTranslator(t *testing.T) {
 	// Skip if running in CI without update flag
 	updateGolden := os.Getenv("UPDATE_GOLDEN") == "true"
 
@@ -74,8 +73,6 @@ func runGoldenTest(t *testing.T, inputFile, outputsDir, testName string, updateG
 	// Set up fake Kubernetes client
 	scheme := scheme.Scheme
 	err = v1alpha1.AddToScheme(scheme)
-	require.NoError(t, err)
-	err = v1alpha2.AddToScheme(scheme)
 
 	// Convert map objects to unstructured and then to typed objects
 	clientBuilder := fake.NewClientBuilder().WithScheme(scheme)
@@ -125,7 +122,7 @@ func runGoldenTest(t *testing.T, inputFile, outputsDir, testName string, updateG
 		require.NoError(t, err)
 
 	case "translateToolServer":
-		toolServer := &v1alpha2.ToolServer{}
+		toolServer := &v1alpha1.ToolServer{}
 		err := kubeClient.Get(ctx, types.NamespacedName{
 			Name:      testInput.TargetObject,
 			Namespace: testInput.Namespace,

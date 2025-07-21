@@ -6,8 +6,8 @@ from a2a.types import Task
 class KAgentTaskStore(TaskStore):
     client: httpx.AsyncClient
 
-    def __init__(self, base_url: str):
-        self.client = httpx.AsyncClient(base_url=base_url)
+    def __init__(self, client: httpx.AsyncClient):
+        self.client = client
 
     async def save(self, task: Task) -> None:
         await self.client.post("/tasks", json=task.model_dump())

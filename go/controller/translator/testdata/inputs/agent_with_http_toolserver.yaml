@@ -41,7 +41,7 @@ objects:
             toolServer: toolserver
             toolNames:
               - k8s_get_resources
-  - apiVersion: kagent.dev/v1alpha2
+  - apiVersion: kagent.dev/v1alpha1
     kind: ToolServer
     metadata:
       name: toolserver
