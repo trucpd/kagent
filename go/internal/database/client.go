@@ -126,6 +126,11 @@ func (c *clientImpl) StoreTool(tool *Tool) error {
 	return create(c.db, tool)
 }
 
+// DeleteTask deletes a task by ID
+func (c *clientImpl) DeleteTask(taskID string) error {
+	return delete[Task](c.db, Clause{Key: "id", Value: taskID})
+}
+
 // DeleteSession deletes a session by name and user ID
 func (c *clientImpl) DeleteSession(sessionName string, userID string) error {
 	return delete[Session](c.db,
@@ -426,11 +431,6 @@ func (c *clientImpl) TaskExists(taskID string) bool {
 	var count int64
 	c.db.Model(&Task{}).Where("id = ?", taskID).Count(&count)
 	return count > 0
-}
-
-// DeleteTask deletes a task from the database
-func (c *clientImpl) DeleteTask(taskID string) error {
-	return delete[Task](c.db, Clause{Key: "id", Value: taskID})
 }
 
 // StorePushNotification stores a push notification configuration in the database

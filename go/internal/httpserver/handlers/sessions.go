@@ -503,3 +503,61 @@ func (h *SessionsHandler) HandleAddEventToSession(w ErrorResponseWriter, r *http
 	data := api.NewResponse(protocolMessage, "Event added to session successfully", false)
 	RespondWithJSON(w, http.StatusCreated, data)
 }
+
+func (h *SessionsHandler) HandleAddEventToSession(w ErrorResponseWriter, r *http.Request) {
+	log := ctrllog.FromContext(r.Context()).WithName("sessions-handler").WithValues("operation", "add-event")
+	sessionID, err := GetPathParam(r, "session_id")
+	if err != nil {
+		w.RespondWithError(errors.NewBadRequestError("Failed to get session ID from path", err))
+		return
+	}
+	log = log.WithValues("session_id", sessionID)
+
+	userID, err := GetUserID(r)
+	if err != nil {
+		w.RespondWithError(errors.NewBadRequestError("Failed to get user ID", err))
+		return
+	}
+	log = log.WithValues("userID", userID)
+
+	var eventData struct {
+		Type   string         `json:"type"`
+		Data   map[string]any `json:"data"`
+		TaskID string         `json:"task_id"`
+	}
+	if err := DecodeJSONBody(r, &eventData); err != nil {
+		w.RespondWithError(errors.NewBadRequestError("Invalid request body", err))
+		return
+	}
+
+	// Get session to verify it exists
+	session, err := h.DatabaseService.GetSession(sessionID, userID)
+	if err != nil {
+		w.RespondWithError(errors.NewNotFoundError("Session not found", err))
+		return
+	}
+
+	protocolMessage := protocol.Message{
+		ContextID: &session.ID,
+		MessageID: uuid.New().String(),
+		Parts: []protocol.Part{
+			protocol.DataPart{
+				Kind: protocol.KindData,
+				Data: eventData,
+			},
+		},
+		TaskID: &eventData.TaskID,
+		Metadata: map[string]interface{}{
+			"event_type": eventData.Type,
+		},
+	}
+
+	if err := h.DatabaseService.CreateMessages(&protocolMessage); err != nil {
+		w.RespondWithError(errors.NewInternalServerError("Failed to store event", err))
+		return
+	}
+
+	log.Info("Successfully added event to session")
+	data := api.NewResponse(protocolMessage, "Event added to session successfully", false)
+	RespondWithJSON(w, http.StatusCreated, data)
+}
