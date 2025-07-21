@@ -67,17 +67,17 @@ func NewClient(dbManager *Manager) Client {
 
 // CreateFeedback creates a new feedback record
 func (c *clientImpl) StoreFeedback(feedback *Feedback) error {
-	return create(c.db, feedback)
+	return save(c.db, feedback)
 }
 
 // CreateSession creates a new session record
 func (c *clientImpl) StoreSession(session *Session) error {
-	return create(c.db, session)
+	return save(c.db, session)
 }
 
 // CreateAgent creates a new agent record
 func (c *clientImpl) StoreAgent(agent *Agent) error {
-	return create(c.db, agent)
+	return save(c.db, agent)
 }
 
 // CreateTask creates a new task record
@@ -87,7 +87,7 @@ func (c *clientImpl) CreateTask(task *protocol.Task) error {
 		return fmt.Errorf("failed to serialize task: %w", err)
 	}
 
-	return create(c.db, &Task{
+	return save(c.db, &Task{
 		ID:        task.ID,
 		SessionID: task.ContextID,
 		UserID:    utils.GetGlobalUserID(),
@@ -101,7 +101,7 @@ func (c *clientImpl) CreatePushNotification(taskID string, config *protocol.Task
 		return fmt.Errorf("failed to serialize push notification config: %w", err)
 	}
 
-	return create(c.db, &PushNotification{
+	return save(c.db, &PushNotification{
 		TaskID: taskID,
 		Data:   string(data),
 	})
@@ -109,12 +109,12 @@ func (c *clientImpl) CreatePushNotification(taskID string, config *protocol.Task
 
 // UpsertAgent upserts an agent record
 func (c *clientImpl) UpsertAgent(agent *Agent) error {
-	return upsert(c.db, agent)
+	return save(c.db, agent)
 }
 
 // CreateToolServer creates a new tool server record
 func (c *clientImpl) StoreToolServer(toolServer *ToolServer) (*ToolServer, error) {
-	err := create(c.db, toolServer)
+	err := save(c.db, toolServer)
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +123,7 @@ func (c *clientImpl) StoreToolServer(toolServer *ToolServer) (*ToolServer, error
 
 // CreateTool creates a new tool record
 func (c *clientImpl) StoreTool(tool *Tool) error {
-	return create(c.db, tool)
+	return save(c.db, tool)
 }
 
 // DeleteTask deletes a task by ID
@@ -216,7 +216,7 @@ func (c *clientImpl) StoreMessages(messages ...*protocol.Message) error {
 			TaskID:    message.TaskID,
 			UserID:    utils.GetGlobalUserID(),
 		}
-		err = create(c.db, &dbMessage)
+		err = save(c.db, &dbMessage)
 		if err != nil {
 			return fmt.Errorf("failed to create message: %w", err)
 		}
@@ -296,12 +296,12 @@ func (c *clientImpl) RefreshToolsForServer(serverName string, tools ...*v1alpha2
 			existingTool := existingTools[existingToolIndex]
 			existingTool.ServerName = serverName
 			existingTool.Description = tool.Description
-			err = upsert(c.db, &existingTool)
+			err = save(c.db, &existingTool)
 			if err != nil {
 				return err
 			}
 		} else {
-			err = create(c.db, &Tool{
+			err = save(c.db, &Tool{
 				Name:        tool.Name,
 				ServerName:  serverName,
 				Description: tool.Description,
@@ -408,7 +408,7 @@ func (c *clientImpl) StoreTask(task *protocol.Task) error {
 		SessionID: task.ContextID,
 	}
 
-	return upsert(c.db, &dbTask)
+	return save(c.db, &dbTask)
 }
 
 // GetTask retrieves a MemoryCancellableTask from the database
@@ -446,7 +446,7 @@ func (c *clientImpl) StorePushNotification(config *protocol.TaskPushNotification
 		Data:   string(data),
 	}
 
-	return upsert(c.db, &dbPushNotification)
+	return save(c.db, &dbPushNotification)
 }
 
 // GetPushNotification retrieves a push notification configuration from the database

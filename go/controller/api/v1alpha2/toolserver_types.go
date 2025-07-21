@@ -32,14 +32,15 @@ type ToolServerSpec struct {
 type ToolServerProtocol string
 
 const (
-	ToolServerProtocolSse            ToolServerProtocol = "sse"
-	ToolServerProtocolStreamableHttp ToolServerProtocol = "streamableHttp"
+	ToolServerProtocolSse            ToolServerProtocol = "SSE"
+	ToolServerProtocolStreamableHttp ToolServerProtocol = "STREAMABLE_HTTP"
 )
 
 // Only one of sse or streamableHttp must be specified
 type ToolServerConfig struct {
-	// Default protocol is streamableHttp
-	// +kubebuilder:validation:Enum=sse;streamableHttp
+	// Default protocol is STREAMABLE_HTTP
+	// +kubebuilder:validation:Enum=SSE;STREAMABLE_HTTP
+	// +kubebuilder:default:=STREAMABLE_HTTP
 	Protocol ToolServerProtocol `json:"protocol"`
 	// URL of the tool server
 	URL string `json:"url"`
@@ -52,7 +53,7 @@ type ToolServerConfig struct {
 	SseReadTimeout *metav1.Duration `json:"sseReadTimeout,omitempty"`
 	// Only applicable for streamableHttp
 	// +optional
-	TerminateOnClose bool `json:"terminateOnClose,omitempty"`
+	TerminateOnClose *bool `json:"terminateOnClose,omitempty"`
 }
 
 func (t *ToolServerConfig) Scan(value interface{}) error {

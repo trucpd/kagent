@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 
 	"github.com/kagent-dev/kagent/go/controller/api/v1alpha1"
@@ -14,6 +15,7 @@ import (
 	"github.com/kagent-dev/kagent/go/internal/database"
 	"github.com/kagent-dev/kagent/go/internal/utils"
 	common "github.com/kagent-dev/kagent/go/internal/utils"
+	"github.com/kagent-dev/kagent/go/internal/version"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -101,6 +103,9 @@ func (a *adkApiTranslator) TranslateAgent(
 	outputs.ConfigHash = binary.BigEndian.Uint64(hash[:8])
 
 	outputs.ConfigMap.Data["config.yaml"] = string(byt)
+	// Make sure the deployment is redeployed if the config changes
+	outputs.Deployment.Labels["config.kagent.dev/hash"] = fmt.Sprintf("%d", outputs.ConfigHash)
+	outputs.Deployment.Spec.Template.Labels["config.kagent.dev/hash"] = fmt.Sprintf("%d", outputs.ConfigHash)
 	outputs.Config = adkAgent
 
 	return outputs, nil
@@ -108,10 +113,25 @@ func (a *adkApiTranslator) TranslateAgent(
 
 func (a *adkApiTranslator) translateOutputs(ctx context.Context, agent *v1alpha1.Agent) (*AgentOutputs, error) {
 	outputs := &AgentOutputs{}
+
+	newLabels := maps.Clone(agent.Labels)
+	newLabels["app"] = "kagent"
+	newLabels["kagent"] = agent.Name
+	newLabels["version"] = "v1alpha1"
+	objMeta := metav1.ObjectMeta{
+		Name:        agent.Name,
+		Namespace:   agent.Namespace,
+		Annotations: agent.Annotations,
+		Labels:      newLabels,
+	}
 	if agent.Spec.Deployment == nil {
-		spec := defaultDeploymentSpec()
+		spec := defaultDeploymentSpec(objMeta.Name)
 		outputs.Deployment = &appsv1.Deployment{
-			ObjectMeta: agent.ObjectMeta,
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: "apps/v1",
+				Kind:       "Deployment",
+			},
+			ObjectMeta: objMeta,
 			Spec: appsv1.DeploymentSpec{
 				Replicas: spec.Replicas,
 				Selector: &metav1.LabelSelector{
@@ -122,15 +142,7 @@ func (a *adkApiTranslator) translateOutputs(ctx context.Context, agent *v1alpha1
 					},
 				},
 				Template: corev1.PodTemplateSpec{
-					ObjectMeta: metav1.ObjectMeta{
-						GenerateName: agent.Name + "-",
-						Annotations:  agent.Annotations,
-						Labels: map[string]string{
-							"app":     "kagent",
-							"kagent":  agent.Name,
-							"version": "v1alpha1",
-						},
-					},
+					ObjectMeta: objMeta,
 					Spec: corev1.PodSpec{
 						Containers: []corev1.Container{spec.Container},
 						Volumes:    spec.Volumes,
@@ -143,7 +155,11 @@ func (a *adkApiTranslator) translateOutputs(ctx context.Context, agent *v1alpha1
 	}
 
 	outputs.Service = &corev1.Service{
-		ObjectMeta: agent.ObjectMeta,
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "Service",
+		},
+		ObjectMeta: objMeta,
 		Spec: corev1.ServiceSpec{
 			Selector: map[string]string{
 				"app":     "kagent",
@@ -162,7 +178,11 @@ func (a *adkApiTranslator) translateOutputs(ctx context.Context, agent *v1alpha1
 	}
 
 	outputs.ConfigMap = &corev1.ConfigMap{
-		ObjectMeta: agent.ObjectMeta,
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "ConfigMap",
+		},
+		ObjectMeta: objMeta,
 		Data:       map[string]string{},
 	}
 
@@ -181,14 +201,14 @@ func (a *adkApiTranslator) translateOutputs(ctx context.Context, agent *v1alpha1
 	return outputs, nil
 }
 
-func defaultDeploymentSpec() *v1alpha1.DeploymentSpec {
+func defaultDeploymentSpec(name string) *v1alpha1.DeploymentSpec {
 	return &v1alpha1.DeploymentSpec{
 		Replicas: ptr.To(int32(1)),
 		Container: corev1.Container{
 			Name:            "kagent",
-			Image:           "kagent-controller:latest",
+			Image:           fmt.Sprintf("cr.kagent.dev/kagent-dev/kagent/app:%s", version.Get().Version),
 			ImagePullPolicy: corev1.PullIfNotPresent,
-			Command:         []string{"uv", "run", "kagent", "start", "--config", "/config/config.yaml"},
+			Command:         []string{"uv", "run", "kagent", "--host", "0.0.0.0", "--port", "8080", "--filepath", "/config/config.yaml"},
 			VolumeMounts: []corev1.VolumeMount{
 				{
 					Name:      "config",
@@ -202,7 +222,7 @@ func defaultDeploymentSpec() *v1alpha1.DeploymentSpec {
 				VolumeSource: corev1.VolumeSource{
 					ConfigMap: &corev1.ConfigMapVolumeSource{
 						LocalObjectReference: corev1.LocalObjectReference{
-							Name: "kagent-config",
+							Name: name,
 						},
 					},
 				},
@@ -319,13 +339,21 @@ func (a *adkApiTranslator) translateStreamableHttpTool(ctx context.Context, tool
 			headers[header.Name] = value
 		}
 	}
-	return &adk.StreamableHTTPConnectionParams{
-		Url:              tool.URL,
-		Headers:          headers,
-		Timeout:          tool.Timeout.Seconds(),
-		ReadTimeout:      tool.SseReadTimeout.Seconds(),
-		TerminateOnClose: tool.TerminateOnClose,
-	}, nil
+
+	params := &adk.StreamableHTTPConnectionParams{
+		Url:     tool.URL,
+		Headers: headers,
+	}
+	if tool.Timeout != nil {
+		params.Timeout = ptr.To(tool.Timeout.Seconds())
+	}
+	if tool.SseReadTimeout != nil {
+		params.SseReadTimeout = ptr.To(tool.SseReadTimeout.Seconds())
+	}
+	if tool.TerminateOnClose != nil {
+		params.TerminateOnClose = tool.TerminateOnClose
+	}
+	return params, nil
 }
 
 func (a *adkApiTranslator) translateSseHttpTool(ctx context.Context, tool *v1alpha2.ToolServerConfig, namespace string) (*adk.SseConnectionParams, error) {
@@ -341,12 +369,17 @@ func (a *adkApiTranslator) translateSseHttpTool(ctx context.Context, tool *v1alp
 			headers[header.Name] = value
 		}
 	}
-	return &adk.SseConnectionParams{
-		Url:         tool.URL,
-		Headers:     headers,
-		Timeout:     tool.Timeout.Seconds(),
-		ReadTimeout: tool.SseReadTimeout.Seconds(),
-	}, nil
+	params := &adk.SseConnectionParams{
+		Url:     tool.URL,
+		Headers: headers,
+	}
+	if tool.Timeout != nil {
+		params.Timeout = ptr.To(tool.Timeout.Seconds())
+	}
+	if tool.SseReadTimeout != nil {
+		params.SseReadTimeout = ptr.To(tool.SseReadTimeout.Seconds())
+	}
+	return params, nil
 }
 
 func (a *adkApiTranslator) translateToolServerTool(ctx context.Context, agent *adk.AgentConfig, toolServerRef string, toolNames []string, defaultNamespace string) error {
@@ -373,6 +406,9 @@ func (a *adkApiTranslator) translateToolServerTool(ctx context.Context, agent *a
 			Tools:  toolNames,
 		})
 	case toolServerObj.Spec.Config.Protocol == v1alpha2.ToolServerProtocolStreamableHttp:
+		// Default to STREAMABLE_HTTP
+		fallthrough
+	default:
 		tool, err := a.translateStreamableHttpTool(ctx, &toolServerObj.Spec.Config, defaultNamespace)
 		if err != nil {
 			return err

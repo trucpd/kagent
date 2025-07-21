@@ -16,6 +16,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	ctrl_client "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
@@ -169,7 +170,7 @@ func TestToolServersHandler(t *testing.T) {
 							},
 						},
 						Timeout:          &metav1.Duration{Duration: 30 * time.Second},
-						TerminateOnClose: true,
+						TerminateOnClose: ptr.To(true),
 					},
 				},
 			}
@@ -190,7 +191,7 @@ func TestToolServersHandler(t *testing.T) {
 			assert.Equal(t, "Test tool server", toolServer.Data.Spec.Description)
 			assert.Equal(t, v1alpha2.ToolServerProtocolStreamableHttp, toolServer.Data.Spec.Config.Protocol)
 			assert.Equal(t, "https://example.com/streamable", toolServer.Data.Spec.Config.URL)
-			assert.True(t, toolServer.Data.Spec.Config.TerminateOnClose)
+			assert.True(t, *toolServer.Data.Spec.Config.TerminateOnClose)
 		})
 
 		t.Run("Success_Sse", func(t *testing.T) {

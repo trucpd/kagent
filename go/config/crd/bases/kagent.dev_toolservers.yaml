@@ -388,10 +388,11 @@ spec:
                           && has(self.valueFrom))
                     type: array
                   protocol:
-                    description: Default protocol is streamableHttp
+                    default: STREAMABLE_HTTP
+                    description: Default protocol is STREAMABLE_HTTP
                     enum:
-                    - sse
-                    - streamableHttp
+                    - SSE
+                    - STREAMABLE_HTTP
                     type: string
                   sseReadTimeout:
                     type: string

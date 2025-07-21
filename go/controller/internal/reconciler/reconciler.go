@@ -2,7 +2,6 @@ package reconciler
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"sync"
@@ -20,6 +19,7 @@ import (
 	"github.com/kagent-dev/kagent/go/internal/adk"
 	"github.com/kagent-dev/kagent/go/internal/database"
 	"github.com/kagent-dev/kagent/go/internal/utils"
+	"github.com/kagent-dev/kagent/go/internal/version"
 	mcp_client "github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -466,37 +466,28 @@ func (a *kagentReconciler) upsertToolServer(ctx context.Context, toolServer *dat
 		return fmt.Errorf("failed to get toolServer %s: %v", toolServer.Name, err)
 	}
 
-	var result *mcp.ListToolsResult
+	var tools []*v1alpha2.MCPTool
 	switch toolServer.Config.Protocol {
-	case v1alpha2.ToolServerProtocolStreamableHttp:
-		streamableHttpClient, err := transport.NewStreamableHTTP(toolServer.Config.URL)
-		if err != nil {
-			return fmt.Errorf("failed to create streamable http client for toolServer %s: %v", toolServer.Name, err)
-		}
-		client := mcp_client.NewClient(streamableHttpClient)
-		result, err = client.ListTools(ctx, mcp.ListToolsRequest{})
-		if err != nil {
-			return fmt.Errorf("failed to fetch tools for toolServer %s: %v", toolServer.Name, err)
-		}
-
 	case v1alpha2.ToolServerProtocolSse:
 		sseHttpClient, err := transport.NewSSE(toolServer.Config.URL)
 		if err != nil {
 			return fmt.Errorf("failed to create sse client for toolServer %s: %v", toolServer.Name, err)
 		}
-		client := mcp_client.NewClient(sseHttpClient)
-		result, err = client.ListTools(ctx, mcp.ListToolsRequest{})
+		tools, err = a.listTools(ctx, sseHttpClient, toolServer)
 		if err != nil {
 			return fmt.Errorf("failed to fetch tools for toolServer %s: %v", toolServer.Name, err)
 		}
-	}
-
-	var tools []*v1alpha2.MCPTool
-	for _, tool := range result.Tools {
-		tools = append(tools, &v1alpha2.MCPTool{
-			Name:        tool.Name,
-			Description: tool.Description,
-		})
+	case v1alpha2.ToolServerProtocolStreamableHttp:
+		fallthrough
+	default:
+		streamableHttpClient, err := transport.NewStreamableHTTP(toolServer.Config.URL)
+		if err != nil {
+			return fmt.Errorf("failed to create streamable http client for toolServer %s: %v", toolServer.Name, err)
+		}
+		tools, err = a.listTools(ctx, streamableHttpClient, toolServer)
+		if err != nil {
+			return fmt.Errorf("failed to fetch tools for toolServer %s: %v", toolServer.Name, err)
+		}
 	}
 
 	if err := a.dbClient.RefreshToolsForServer(toolServer.Name, tools...); err != nil {
@@ -504,6 +495,42 @@ func (a *kagentReconciler) upsertToolServer(ctx context.Context, toolServer *dat
 	}
 
 	return nil
+}
+
+func (a *kagentReconciler) listTools(ctx context.Context, tsp transport.Interface, toolServer *database.ToolServer) ([]*v1alpha2.MCPTool, error) {
+	client := mcp_client.NewClient(tsp)
+	err := client.Start(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to start client for toolServer %s: %v", toolServer.Name, err)
+	}
+	defer client.Close()
+	_, err = client.Initialize(ctx, mcp.InitializeRequest{
+		Params: mcp.InitializeParams{
+			ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
+			Capabilities:    mcp.ClientCapabilities{},
+			ClientInfo: mcp.Implementation{
+				Name:    "kagent-controller",
+				Version: version.Version,
+			},
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize client for toolServer %s: %v", toolServer.Name, err)
+	}
+	result, err := client.ListTools(ctx, mcp.ListToolsRequest{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list tools for toolServer %s: %v", toolServer.Name, err)
+	}
+
+	tools := make([]*v1alpha2.MCPTool, 0, len(result.Tools))
+	for _, tool := range result.Tools {
+		tools = append(tools, &v1alpha2.MCPTool{
+			Name:        tool.Name,
+			Description: tool.Description,
+		})
+	}
+
+	return tools, nil
 }
 
 func (a *kagentReconciler) findAgentsUsingModel(ctx context.Context, req ctrl.Request) ([]*v1alpha1.Agent, error) {
@@ -691,26 +718,4 @@ func convertTool(tool *database.Tool) (*v1alpha2.MCPTool, error) {
 		Name:        tool.Name,
 		Description: tool.Description,
 	}, nil
-}
-
-func convertMapToAnytype(m map[string]interface{}) (map[string]v1alpha1.AnyType, error) {
-	anyConfig := make(map[string]v1alpha1.AnyType)
-	for k, v := range m {
-		b, err := json.Marshal(v)
-		if err != nil {
-			return nil, err
-		}
-		anyConfig[k] = v1alpha1.AnyType{
-			RawMessage: b,
-		}
-	}
-	return anyConfig, nil
-}
-
-func unmarshalFromMap(m map[string]interface{}, v interface{}) error {
-	b, err := json.Marshal(m)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(b, v)
 }

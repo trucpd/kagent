@@ -45,15 +45,15 @@ func get[T Model](db *gorm.DB, clauses ...Clause) (*T, error) {
 	return &model, nil
 }
 
-func create[T Model](db *gorm.DB, model *T) error {
-	err := db.Create(model).Error
-	if err != nil {
-		return fmt.Errorf("failed to create model: %w", err)
+// TODO: Make this upsert actually idempotent
+func save[T Model](db *gorm.DB, model *T) error {
+	if err := db.First(model).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return db.Create(model).Error
+		}
+		return fmt.Errorf("failed to get model: %w", err)
 	}
-	return nil
-}
 
-func upsert[T Model](db *gorm.DB, model *T) error {
 	err := db.Save(model).Error
 	if err != nil {
 		return fmt.Errorf("failed to update model: %w", err)
