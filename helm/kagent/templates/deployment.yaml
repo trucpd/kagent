@@ -69,11 +69,17 @@ spec:
             - name: http-controller
               containerPort: {{ .Values.service.ports.controller.targetPort }}
               protocol: TCP
-          readinessProbe:
+          startupProbe:
             httpGet:
               path: /health
               port: http-controller
             periodSeconds: 1
+            initialDelaySeconds: 1
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http-controller
+            periodSeconds: 30
           volumeMounts:
             - name: sqlite-volume
               mountPath: /sqlite-volume
@@ -94,11 +100,17 @@ spec:
               protocol: TCP
           resources:
             {{- toYaml .Values.ui.resources | nindent 12 }}
-          readinessProbe:
+          startupProbe:
             httpGet:
               path: /health
               port: http-ui
             periodSeconds: 1
+            initialDelaySeconds: 1
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http-ui
+            periodSeconds: 30
         - name: tools
           command:
             - /tool-server
@@ -138,11 +150,17 @@ spec:
             - name: http-tools
               containerPort: {{ .Values.service.ports.tools.targetPort }}
               protocol: TCP
-          readinessProbe:
+          startupProbe:
             httpGet:
               path: /health
               port: http-tools
             periodSeconds: 1
+            initialDelaySeconds: 1
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http-tools
+            periodSeconds: 30
         - name: querydoc
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
@@ -186,8 +204,14 @@ spec:
             - name: http-querydoc
               containerPort: {{ .Values.service.ports.querydoc.targetPort }}
               protocol: TCP
-          readinessProbe:
+          startupProbe:
             httpGet:
               path: /health
               port: http-querydoc
             periodSeconds: 1
+            initialDelaySeconds: 1
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http-querydoc
+            periodSeconds: 30

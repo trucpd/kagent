@@ -16,7 +16,6 @@ import (
 
 	"github.com/kagent-dev/kagent/go/controller/api/v1alpha1"
 	"github.com/kagent-dev/kagent/go/internal/adk"
-	autogen_fake "github.com/kagent-dev/kagent/go/internal/autogen/client/fake"
 	"github.com/kagent-dev/kagent/go/internal/database"
 	database_fake "github.com/kagent-dev/kagent/go/internal/database/fake"
 	"github.com/kagent-dev/kagent/go/internal/httpserver/handlers"
@@ -57,12 +56,10 @@ func setupTestHandler(objects ...client.Object) (*handlers.AgentsHandler, string
 		Build()
 
 	userID := common.GetGlobalUserID()
-	autogenClient := autogen_fake.NewInMemoryAutogenClient()
 	dbClient := database_fake.NewClient()
 
 	base := &handlers.Base{
-		KubeClient:    kubeClient,
-		AutogenClient: autogenClient,
+		KubeClient: kubeClient,
 		DefaultModelConfig: types.NamespacedName{
 			Name:      "test-model-config",
 			Namespace: "default",

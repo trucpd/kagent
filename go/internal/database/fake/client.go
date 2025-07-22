@@ -317,24 +317,6 @@ func (c *InMemmoryFakeClient) ListFeedback(userID string) ([]database.Feedback, 
 	return result, nil
 }
 
-// ListSessionTasks lists all tasks for a specific session
-func (c *InMemmoryFakeClient) ListSessionTasks(sessionID string) ([]*protocol.Task, error) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	var result []*protocol.Task
-	for _, task := range c.tasks {
-		if task.SessionID == sessionID {
-			parsed, err := task.Parse()
-			if err != nil {
-				return nil, err
-			}
-			result = append(result, &parsed)
-		}
-	}
-	return result, nil
-}
-
 func (c *InMemmoryFakeClient) ListTasksForSession(sessionID string) ([]*protocol.Task, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()

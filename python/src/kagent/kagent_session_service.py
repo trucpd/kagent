@@ -26,7 +26,7 @@ class KAgentSessionService(BaseSessionService):
 
     async def _get_user_id(self) -> str:
         """Get the default user ID. Override this method to implement custom user ID logic."""
-        return "default-user"
+        return "admin@kagent.dev"
 
     @override
     async def create_session(
@@ -43,7 +43,7 @@ class KAgentSessionService(BaseSessionService):
             "agent_ref": app_name,  # Use app_name as agent reference
         }
         if session_id:
-            request_data["name"] = session_id
+            request_data["id"] = session_id
 
         # Make API call to create session
         response = await self.client.post(
@@ -86,12 +86,17 @@ class KAgentSessionService(BaseSessionService):
                 return None
 
             session_data = data["data"]
+            if config:
+                if config.after_timestamp:
+                    pass
+                if config.num_recent_events:
+                    pass
 
             # Convert to ADK Session format
             return Session(
                 id=session_data["id"],
                 user_id=session_data["user_id"],
-                app_name="todo",
+                app_name=app_name,
                 state={},  # TODO: restore State
             )
         except httpx.HTTPStatusError as e:
@@ -102,7 +107,7 @@ class KAgentSessionService(BaseSessionService):
     @override
     async def list_sessions(self, *, app_name: str, user_id: str) -> ListSessionsResponse:
         # Make API call to list sessions
-        response = await self.client.get("/api/sessions", headers={"X-User-ID": user_id})
+        response = await self.client.get(f"/api/sessions?user_id={user_id}", headers={"X-User-ID": user_id})
         response.raise_for_status()
 
         data = response.json()
@@ -123,7 +128,7 @@ class KAgentSessionService(BaseSessionService):
     async def delete_session(self, *, app_name: str, user_id: str, session_id: str) -> None:
         # Make API call to delete session
         response = await self.client.delete(
-            f"/api/sessions/{session_id}",
+            f"/api/sessions/{session_id}?user_id={user_id}",
             headers={"X-User-ID": user_id},
         )
         response.raise_for_status()

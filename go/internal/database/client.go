@@ -40,7 +40,7 @@ type Client interface {
 	// List methods
 	ListTools() ([]Tool, error)
 	ListFeedback(userID string) ([]Feedback, error)
-	ListSessionTasks(sessionID string) ([]*protocol.Task, error)
+	ListTasksForSession(sessionID string) ([]*protocol.Task, error)
 	ListSessions(userID string) ([]Session, error)
 	ListSessionsForAgent(agentID string, userID string) ([]Session, error)
 	ListAgents() ([]Agent, error)
@@ -209,7 +209,7 @@ func (c *clientImpl) StoreMessages(messages ...*protocol.Message) error {
 }
 
 // ListSessionRuns lists all runs for a specific session
-func (c *clientImpl) ListSessionTasks(sessionID string) ([]*protocol.Task, error) {
+func (c *clientImpl) ListTasksForSession(sessionID string) ([]*protocol.Task, error) {
 	tasks, err := list[Task](c.db,
 		Clause{Key: "session_id", Value: sessionID},
 	)

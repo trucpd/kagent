@@ -32,7 +32,6 @@ import (
 
 	"github.com/kagent-dev/kagent/go/controller/translator"
 	"github.com/kagent-dev/kagent/go/internal/a2a"
-	autogen_client "github.com/kagent-dev/kagent/go/internal/autogen/client"
 	"github.com/kagent-dev/kagent/go/internal/database"
 
 	a2a_reconciler "github.com/kagent-dev/kagent/go/controller/internal/a2a"
@@ -284,10 +283,6 @@ func main() {
 
 	dbClient := database.NewClient(dbManager)
 
-	autogenClient := autogen_client.New(
-		autogenStudioBaseURL,
-	)
-
 	kubeClient := mgr.GetClient()
 
 	apiTranslator := translator.NewAdkApiTranslator(
@@ -298,7 +293,6 @@ func main() {
 	a2aHandler := a2a.NewA2AHttpMux(httpserver.APIPathA2A)
 
 	a2aReconciler := a2a_reconciler.NewReconciler(
-		autogenClient,
 		a2aHandler,
 		a2aBaseUrl+httpserver.APIPathA2A,
 	)
@@ -384,7 +378,6 @@ func main() {
 
 	httpServer, err := httpserver.NewHTTPServer(httpserver.ServerConfig{
 		BindAddr:          httpServerAddr,
-		AutogenClient:     autogenClient,
 		KubeClient:        kubeClient,
 		A2AHandler:        a2aHandler,
 		WatchedNamespaces: watchNamespacesList,

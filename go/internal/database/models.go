@@ -83,7 +83,7 @@ func ParseMessages(messages []Message) ([]*protocol.Message, error) {
 
 type Session struct {
 	ID        string         `gorm:"primaryKey;not null" json:"id"`
-	Name      string         `gorm:"index;not null" json:"name"`
+	Name      *string        `gorm:"index" json:"name,omitempty"`
 	UserID    string         `gorm:"primaryKey" json:"user_id"`
 	CreatedAt time.Time      `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt time.Time      `gorm:"autoUpdateTime" json:"updated_at"`

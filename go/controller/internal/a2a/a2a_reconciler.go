@@ -7,7 +7,6 @@ import (
 	"github.com/kagent-dev/kagent/go/controller/api/v1alpha1"
 	"github.com/kagent-dev/kagent/go/internal/a2a"
 	"github.com/kagent-dev/kagent/go/internal/adk"
-	autogen_client "github.com/kagent-dev/kagent/go/internal/autogen/client"
 	common "github.com/kagent-dev/kagent/go/internal/utils"
 	ctrl "sigs.k8s.io/controller-runtime"
 	a2aclient "trpc.group/trpc-go/trpc-a2a-go/client"
@@ -30,20 +29,17 @@ type A2AReconciler interface {
 }
 
 type a2aReconciler struct {
-	autogenClient autogen_client.Client
-	a2aHandler    a2a.A2AHandlerMux
-	a2aBaseUrl    string
+	a2aHandler a2a.A2AHandlerMux
+	a2aBaseUrl string
 }
 
 func NewReconciler(
-	autogenClient autogen_client.Client,
 	a2aHandler a2a.A2AHandlerMux,
 	a2aBaseUrl string,
 ) A2AReconciler {
 	return &a2aReconciler{
-		autogenClient: autogenClient,
-		a2aHandler:    a2aHandler,
-		a2aBaseUrl:    a2aBaseUrl,
+		a2aHandler: a2aHandler,
+		a2aBaseUrl: a2aBaseUrl,
 	}
 }
 
