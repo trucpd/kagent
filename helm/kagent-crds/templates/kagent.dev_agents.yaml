@@ -102,6 +102,10 @@ spec:
                 type: object
               deployment:
                 properties:
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    type: object
                   args:
                     description: |-
                       Arguments to the entrypoint.
@@ -341,6 +345,10 @@ spec:
                       type: object
                       x-kubernetes-map-type: atomic
                     type: array
+                  labels:
+                    additionalProperties:
+                      type: string
+                    type: object
                   lifecycle:
                     description: |-
                       Actions that the management system should take in response to container lifecycle events.

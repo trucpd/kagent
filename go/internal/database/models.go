@@ -40,8 +40,11 @@ func (j JSONMap) Value() (driver.Value, error) {
 
 // Agent represents an agent configuration
 type Agent struct {
-	gorm.Model
-	Name   string           `gorm:"unique;not null" json:"name"`
+	ID        string         `gorm:"primaryKey" json:"id"`
+	CreatedAt time.Time      `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt time.Time      `gorm:"autoUpdateTime" json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"deleted_at"`
+
 	Config *adk.AgentConfig `gorm:"type:json;not null" json:"config"`
 }
 
@@ -86,7 +89,7 @@ type Session struct {
 	UpdatedAt time.Time      `gorm:"autoUpdateTime" json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"deleted_at"`
 
-	AgentID *uint `gorm:"index" json:"agent_id"`
+	AgentID *string `gorm:"index" json:"agent_id"`
 }
 
 type Task struct {
@@ -159,7 +162,9 @@ type Tool struct {
 
 // ToolServer represents a tool server that provides tools
 type ToolServer struct {
-	gorm.Model
+	CreatedAt     time.Time                 `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt     time.Time                 `gorm:"autoUpdateTime" json:"updated_at"`
+	DeletedAt     gorm.DeletedAt            `gorm:"index" json:"deleted_at"`
 	Name          string                    `gorm:"primaryKey;not null" json:"name"`
 	Description   string                    `json:"description"`
 	LastConnected *time.Time                `json:"last_connected,omitempty"`

@@ -77,7 +77,7 @@ type UpdateModelConfigRequest struct {
 // Agent types
 
 type AgentResponse struct {
-	ID             uint                   `json:"id"`
+	ID             string                 `json:"id"`
 	Agent          *v1alpha1.Agent        `json:"agent"`
 	Config         *adk.AgentConfig       `json:"config"`
 	ModelProvider  v1alpha1.ModelProvider `json:"modelProvider"`

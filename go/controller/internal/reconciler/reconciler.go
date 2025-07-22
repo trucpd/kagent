@@ -443,7 +443,7 @@ func (a *kagentReconciler) upsertAgent(ctx context.Context, agentOutputs *transl
 	}
 
 	dbAgent := &database.Agent{
-		Name:   agentOutputs.Config.Name,
+		ID:     agentOutputs.Config.Name,
 		Config: agentOutputs.Config,
 	}
 

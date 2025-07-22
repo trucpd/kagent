@@ -48,20 +48,20 @@ func TestSessionsHandler(t *testing.T) {
 
 	createTestAgent := func(dbClient database.Client, agentRef string) *database.Agent {
 		agent := &database.Agent{
-			Name: agentRef,
+			ID: agentRef,
 		}
 		dbClient.StoreAgent(agent)
 		// The fake client should assign an ID, but we'll use a default for testing
-		agent.ID = 1 // Simulate the ID that would be assigned by GORM
+		agent.ID = "1" // Simulate the ID that would be assigned by GORM
 		return agent
 	}
 
-	createTestSession := func(dbClient database.Client, sessionID, userID string, agentID *uint) *database.Session {
+	createTestSession := func(dbClient database.Client, sessionID, userID string, agentID string) *database.Session {
 		session := &database.Session{
 			ID:      sessionID,
 			Name:    sessionID,
 			UserID:  userID,
-			AgentID: agentID,
+			AgentID: &agentID,
 		}
 		dbClient.StoreSession(session)
 		return session
@@ -73,9 +73,9 @@ func TestSessionsHandler(t *testing.T) {
 			userID := "test-user"
 
 			// Create test sessions
-			agentID := uint(1)
-			session1 := createTestSession(dbClient, "session-1", userID, &agentID)
-			session2 := createTestSession(dbClient, "session-2", userID, &agentID)
+			agentID := "1"
+			session1 := createTestSession(dbClient, "session-1", userID, agentID)
+			session2 := createTestSession(dbClient, "session-2", userID, agentID)
 
 			req := httptest.NewRequest("GET", "/api/sessions?user_id="+userID, nil)
 			handler.HandleListSessions(responseRecorder, req)
@@ -207,8 +207,8 @@ func TestSessionsHandler(t *testing.T) {
 			sessionID := "test-session"
 
 			// Create test session
-			agentID := uint(1)
-			session := createTestSession(dbClient, sessionID, userID, &agentID)
+			agentID := "1"
+			session := createTestSession(dbClient, sessionID, userID, agentID)
 
 			req := httptest.NewRequest("GET", "/api/sessions/"+sessionID+"?user_id="+userID, nil)
 			req = mux.SetURLVars(req, map[string]string{"session_id": sessionID})
@@ -261,7 +261,7 @@ func TestSessionsHandler(t *testing.T) {
 			// Create test agent and session
 			agentRef := "default/test-agent"
 			agent := createTestAgent(dbClient, agentRef)
-			session := createTestSession(dbClient, sessionName, userID, &agent.ID)
+			session := createTestSession(dbClient, sessionName, userID, agent.ID)
 
 			newAgentRef := "default/new-agent"
 			newAgent := createTestAgent(dbClient, newAgentRef)
@@ -284,7 +284,7 @@ func TestSessionsHandler(t *testing.T) {
 			err := json.Unmarshal(responseRecorder.Body.Bytes(), &response)
 			require.NoError(t, err)
 			assert.Equal(t, session.ID, response.Data.ID)
-			assert.Equal(t, newAgent.ID, *response.Data.AgentID)
+			assert.Equal(t, newAgent.ID, response.Data.AgentID)
 		})
 
 		t.Run("MissingSessionName", func(t *testing.T) {
@@ -339,8 +339,8 @@ func TestSessionsHandler(t *testing.T) {
 			sessionID := "test-session"
 
 			// Create test session
-			agentID := uint(1)
-			createTestSession(dbClient, sessionID, userID, &agentID)
+			agentID := "1"
+			createTestSession(dbClient, sessionID, userID, agentID)
 
 			req := httptest.NewRequest("DELETE", "/api/sessions/"+sessionID+"?user_id="+userID, nil)
 			req = mux.SetURLVars(req, map[string]string{"session_id": sessionID})
@@ -379,8 +379,8 @@ func TestSessionsHandler(t *testing.T) {
 
 			// Create test agent and sessions
 			agent := createTestAgent(dbClient, agentRef)
-			session1 := createTestSession(dbClient, "session-1", userID, &agent.ID)
-			session2 := createTestSession(dbClient, "session-2", userID, &agent.ID)
+			session1 := createTestSession(dbClient, "session-1", userID, agent.ID)
+			session2 := createTestSession(dbClient, "session-2", userID, agent.ID)
 
 			req := httptest.NewRequest("GET", "/api/agents/"+namespace+"/"+agentName+"/sessions?user_id="+userID, nil)
 			req = mux.SetURLVars(req, map[string]string{"namespace": namespace, "name": agentName})
@@ -420,8 +420,8 @@ func TestSessionsHandler(t *testing.T) {
 			sessionID := "test-session"
 
 			// Create test session and tasks
-			agentID := uint(1)
-			createTestSession(dbClient, sessionID, userID, &agentID)
+			agentID := "1"
+			createTestSession(dbClient, sessionID, userID, agentID)
 
 			task1 := &database.Task{
 				ID:        "task-1",
@@ -471,8 +471,8 @@ func TestSessionsHandler(t *testing.T) {
 			sessionID := "test-session"
 
 			// Create test session and messages
-			agentID := uint(1)
-			createTestSession(dbClient, sessionID, userID, &agentID)
+			agentID := "1"
+			createTestSession(dbClient, sessionID, userID, agentID)
 
 			// For messages, we'll just test with empty list since the parsing is complex
 			req := httptest.NewRequest("GET", "/api/sessions/"+sessionID+"/messages?user_id="+userID, nil)

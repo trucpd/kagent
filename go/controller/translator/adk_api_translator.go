@@ -88,7 +88,7 @@ func (a *adkApiTranslator) TranslateAgent(
 		return nil, err
 	}
 
-	adkAgent, err := a.translateDeclarativeAgent(ctx, agent, &tState{})
+	adkAgent, envVars, err := a.translateDeclarativeAgent(ctx, agent, &tState{})
 	if err != nil {
 		return nil, err
 	}
@@ -105,6 +105,8 @@ func (a *adkApiTranslator) TranslateAgent(
 	// Make sure the deployment is redeployed if the config changes
 	outputs.Deployment.Labels["config.kagent.dev/hash"] = fmt.Sprintf("%d", outputs.ConfigHash)
 	outputs.Deployment.Spec.Template.Labels["config.kagent.dev/hash"] = fmt.Sprintf("%d", outputs.ConfigHash)
+	// Add the secret env vars to the deployment
+	outputs.Deployment.Spec.Template.Spec.Containers[0].Env = append(outputs.Deployment.Spec.Template.Spec.Containers[0].Env, envVars...)
 	outputs.Config = adkAgent
 
 	return outputs, nil
@@ -207,7 +209,7 @@ func defaultDeploymentSpec(name string) *v1alpha1.DeploymentSpec {
 			Name:            "kagent",
 			Image:           fmt.Sprintf("cr.kagent.dev/kagent-dev/kagent/app:%s", version.Get().Version),
 			ImagePullPolicy: corev1.PullIfNotPresent,
-			Command:         []string{"uv", "run", "kagent", "--host", "0.0.0.0", "--port", "8080", "--filepath", "/config/config.json"},
+			Command:         []string{"uv", "run", "kagent", "static", "--host", "0.0.0.0", "--port", "8080", "--filepath", "/config/config.json"},
 			VolumeMounts: []corev1.VolumeMount{
 				{
 					Name:      "config",
@@ -230,14 +232,19 @@ func defaultDeploymentSpec(name string) *v1alpha1.DeploymentSpec {
 	}
 }
 
-func (a *adkApiTranslator) translateDeclarativeAgent(ctx context.Context, agent *v1alpha1.Agent, state *tState) (*adk.AgentConfig, error) {
+func (a *adkApiTranslator) translateDeclarativeAgent(ctx context.Context, agent *v1alpha1.Agent, state *tState) (*adk.AgentConfig, []corev1.EnvVar, error) {
+
+	model, envVars, err := a.translateModel(ctx, agent.Namespace, agent.Spec.ModelConfig)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	cfg := &adk.AgentConfig{
 		KagentUrl:   fmt.Sprintf("http://kagent.%s.svc.cluster.local:8083", common.GetResourceNamespace()),
 		Name:        common.ConvertToPythonIdentifier(common.GetObjectRef(agent)),
-		Model:       "gemini-2.0-flash",
 		Description: agent.Spec.Description,
 		Instruction: agent.Spec.SystemMessage,
+		Model:       model,
 		AgentCard: server.AgentCard{
 			Name:        agent.Name,
 			Description: agent.Spec.Description,
@@ -271,22 +278,22 @@ func (a *adkApiTranslator) translateDeclarativeAgent(ctx context.Context, agent 
 		case tool.Agent != nil:
 			toolNamespacedName, err := common.ParseRefString(tool.Agent.Ref, agent.Namespace)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 
 			toolRef := toolNamespacedName.String()
 			agentRef := common.GetObjectRef(agent)
 
 			if toolRef == agentRef {
-				return nil, fmt.Errorf("agent tool cannot be used to reference itself, %s", agentRef)
+				return nil, nil, fmt.Errorf("agent tool cannot be used to reference itself, %s", agentRef)
 			}
 
 			if state.isVisited(toolRef) {
-				return nil, fmt.Errorf("cycle detected in agent tool chain: %s -> %s", agentRef, toolRef)
+				return nil, nil, fmt.Errorf("cycle detected in agent tool chain: %s -> %s", agentRef, toolRef)
 			}
 
 			if state.depth > MAX_DEPTH {
-				return nil, fmt.Errorf("recursion limit reached in agent tool chain: %s -> %s", agentRef, toolRef)
+				return nil, nil, fmt.Errorf("recursion limit reached in agent tool chain: %s -> %s", agentRef, toolRef)
 			}
 
 			// Translate a nested tool
@@ -300,29 +307,93 @@ func (a *adkApiTranslator) translateDeclarativeAgent(ctx context.Context, agent 
 				agent.Namespace, // redundant
 			)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 
 			var toolAgentCfg *adk.AgentConfig
-			toolAgentCfg, err = a.translateDeclarativeAgent(ctx, toolAgent, state.with(agent))
+			toolAgentCfg, _, err = a.translateDeclarativeAgent(ctx, toolAgent, state.with(agent))
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 
 			cfg.Agents = append(cfg.Agents, *toolAgentCfg)
 
 		default:
-			return nil, fmt.Errorf("tool must have a provider or tool server")
+			return nil, nil, fmt.Errorf("tool must have a provider or tool server")
 		}
 	}
 	for server, tools := range toolsByServer {
 		err := a.translateToolServerTool(ctx, cfg, server, tools, agent.Namespace)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
-	return cfg, nil
+	return cfg, envVars, nil
+}
+
+func (a *adkApiTranslator) translateModel(ctx context.Context, namespace, modelConfig string) (adk.Model, []corev1.EnvVar, error) {
+	model := &v1alpha1.ModelConfig{}
+	err := a.kube.Get(ctx, types.NamespacedName{Namespace: namespace, Name: modelConfig}, model)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var envVars []corev1.EnvVar
+	switch model.Spec.Provider {
+	case v1alpha1.ModelProviderOpenAI:
+		if model.Spec.APIKeySecretRef != "" {
+			envVars = append(envVars, corev1.EnvVar{
+				Name: "OPENAI_API_KEY",
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: model.Spec.APIKeySecretRef,
+						},
+						Key: model.Spec.APIKeySecretKey,
+					},
+				},
+			})
+		}
+		openai := &adk.OpenAI{
+			Model: model.Spec.Model,
+		}
+		if model.Spec.OpenAI != nil {
+			openai.BaseUrl = model.Spec.OpenAI.BaseURL
+		}
+		return openai, envVars, nil
+	case v1alpha1.ModelProviderAnthropic:
+		if model.Spec.APIKeySecretRef != "" {
+			envVars = append(envVars, corev1.EnvVar{
+				Name: "ANTHROPIC_API_KEY",
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: model.Spec.APIKeySecretRef,
+						},
+						Key: model.Spec.APIKeySecretKey,
+					},
+				},
+			})
+		}
+		anthropic := &adk.Anthropic{
+			Model: model.Spec.Model,
+		}
+		if model.Spec.Anthropic != nil {
+			anthropic.BaseUrl = model.Spec.Anthropic.BaseURL
+		}
+		return anthropic, envVars, nil
+	// case v1alpha1.ModelProviderAzureOpenAI:
+	// 	return a.translateAzureOpenAI(ctx, model)
+	// case v1alpha1.ModelProviderOllama:
+	// 	return a.translateOllama(ctx, model)
+	// case v1alpha1.ModelProviderGeminiVertexAI:
+	// 	return a.translateGeminiVertexAI(ctx, model)
+	// case v1alpha1.ModelProviderAnthropicVertexAI:
+	// 	return a.translateAnthropicVertexAI(ctx, model)
+	default:
+		return nil, nil, fmt.Errorf("unknown model type: %s", model.Spec.Provider)
+	}
 }
 
 func (a *adkApiTranslator) translateStreamableHttpTool(ctx context.Context, tool *v1alpha1.StreamableHttpServerConfig, namespace string) (*adk.StreamableHTTPConnectionParams, error) {

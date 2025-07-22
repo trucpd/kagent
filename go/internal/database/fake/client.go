@@ -173,7 +173,7 @@ func (c *InMemmoryFakeClient) StoreAgent(agent *database.Agent) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.agents[agent.Name] = agent
+	c.agents[agent.ID] = agent
 	return nil
 }
 
@@ -370,7 +370,7 @@ func (c *InMemmoryFakeClient) ListSessions(userID string) ([]database.Session, e
 }
 
 // ListSessionsForAgent lists all sessions for an agent
-func (c *InMemmoryFakeClient) ListSessionsForAgent(agentID uint, userID string) ([]database.Session, error) {
+func (c *InMemmoryFakeClient) ListSessionsForAgent(agentID string, userID string) ([]database.Session, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -547,7 +547,7 @@ func (c *InMemmoryFakeClient) UpdateAgent(agent *database.Agent) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.agents[agent.Name] = agent
+	c.agents[agent.ID] = agent
 	return nil
 }
 
@@ -597,6 +597,6 @@ func (c *InMemmoryFakeClient) UpsertAgent(agent *database.Agent) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.agents[agent.Name] = agent
+	c.agents[agent.ID] = agent
 	return nil
 }

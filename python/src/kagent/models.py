@@ -1,35 +1,17 @@
-#! /usr/bin/env python3
-
-import asyncio
 import json
-import logging
-import os
-from contextlib import asynccontextmanager
-from typing import Self
+from typing import Literal, Self, Union
 
-import httpx
-from a2a.auth.user import User
-from a2a.server.agent_execution import RequestContext, SimpleRequestContextBuilder
-from a2a.server.apps import A2AStarletteApplication
-from a2a.server.context import ServerCallContext
-from a2a.server.request_handlers import DefaultRequestHandler
-from a2a.server.tasks import TaskStore
-from a2a.types import AgentCard, MessageSendParams, Task
-from fastapi import FastAPI, Request
-from fastapi.responses import PlainTextResponse
-from google.adk.a2a.executor.a2a_agent_executor import A2aAgentExecutor
+from a2a.types import AgentCard
 from google.adk.agents import Agent
 from google.adk.agents.llm_agent import ToolUnion
-from google.adk.auth.auth_credential import AuthCredential
-from google.adk.auth.auth_schemes import AuthScheme
+from google.adk.models.google_llm import Gemini as GeminiLLM
 from google.adk.models.lite_llm import LiteLlm
 from google.adk.runners import Runner
+from google.adk.sessions import InMemorySessionService
 from google.adk.tools.agent_tool import AgentTool
 from google.adk.tools.mcp_tool import MCPToolset, SseConnectionParams, StreamableHTTPConnectionParams
-from google.genai import types
+from google.genai import types  # For creating message Content/Parts
 from pydantic import BaseModel, Field
-
-from kagent import KAgentSessionService, KAgentTaskStore
 
 
 class HttpMcpServerConfig(BaseModel):
@@ -42,11 +24,31 @@ class SseMcpServerConfig(BaseModel):
     tools: list[str] = Field(default_factory=list)
 
 
+class OpenAI(BaseModel):
+    model: str
+    base_url: str | None = None
+
+    type: Literal["openai"]
+
+
+class Anthropic(BaseModel):
+    model: str
+    base_url: str | None = None
+
+    type: Literal["anthropic"]
+
+
+class Gemini(BaseModel):
+    model: str
+
+    type: Literal["gemini"]
+
+
 class AgentConfig(BaseModel):
     kagent_url: str  # The URL of the KAgent server
     agent_card: AgentCard
     name: str
-    model: str
+    model: Union[OpenAI, Anthropic, Gemini] = Field(discriminator="type")
     description: str
     instruction: str
     http_tools: list[HttpMcpServerConfig] | None = None  # tools, always MCP
@@ -64,118 +66,62 @@ class AgentConfig(BaseModel):
         if self.agents:
             for agent in self.agents:  # Add sub agents as tools
                 mcp_toolsets.append(AgentTool(agent.to_agent()))
+        if self.model.type == "openai":
+            model = LiteLlm(model=f"openai/{self.model.model}", base_url=self.model.base_url)
+        elif self.model.type == "anthropic":
+            model = LiteLlm(model=f"anthropic/{self.model.model}", base_url=self.model.base_url)
+        elif self.model.type == "gemini":
+            model = GeminiLLM(model=self.model.model)
+        else:
+            raise ValueError(f"Invalid model type: {self.model.type}")
         return Agent(
             name=self.name,
-            model=self.model,
+            model=model,
             description=self.description,
             instruction=self.instruction,
             tools=mcp_toolsets,
         )
 
 
-class TaskConfig(BaseModel):
-    root_agent: str
-    agents: dict[str, AgentConfig]
-
-    def to_agent(self) -> Agent:
-        return self.agents[self.root_agent].to_agent()
-
-
-# --- Constants ---
-APP_NAME = "kagent"
-USER_ID = "admin@kagent.dev"
-
-# --- Configure Logging ---
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-
-class KAgentUser(User):
-    def __init__(self, user_id: str):
-        self.user_id = user_id
-
-    @property
-    def is_authenticated(self) -> bool:
-        return False
-
-    @property
-    def user_name(self) -> str:
-        return self.user_id
-
-
-class KAgentRequestContextBuilder(SimpleRequestContextBuilder):
-    """
-    A request context builder that will be used to hack in the user_id for now.
-    """
-
-    def __init__(self, user_id: str, task_store: TaskStore):
-        super().__init__(task_store=task_store)
-        self.user_id = user_id
-
-    async def build(
-        self,
-        params: MessageSendParams | None = None,
-        task_id: str | None = None,
-        context_id: str | None = None,
-        task: Task | None = None,
-        context: ServerCallContext | None = None,
-    ) -> RequestContext:
-        if not context:
-            context = ServerCallContext(user=KAgentUser(user_id=self.user_id))
-        else:
-            context.user = KAgentUser(user_id=self.user_id)
-        request_context = await super().build(params, task_id, context_id, task, context)
-        return request_context
-
-
-def health_check(request: Request) -> PlainTextResponse:
-    return PlainTextResponse("OK")
-
-
-kagent_url_override = os.getenv("KAGENT_URL")
-
-
-def build_app(filepath: str = "/config/config.json") -> FastAPI:
+async def test_agent(filepath: str, task: str):
     with open(filepath, "r") as f:
         config = json.load(f)
     agent_config = AgentConfig.model_validate(config)
     root_agent = agent_config.to_agent()
-    http_client = httpx.AsyncClient(base_url=kagent_url_override or agent_config.kagent_url)
-    session_service = KAgentSessionService(http_client)
+
+    session_service = InMemorySessionService()
+    SESSION_ID = "12345"
+    USER_ID = "admin"
+    await session_service.create_session(
+        app_name=agent_config.name,
+        session_id=SESSION_ID,
+        user_id=USER_ID,
+    )
+
     runner = Runner(
         agent=root_agent,
-        app_name=APP_NAME,
+        app_name=agent_config.name,
         session_service=session_service,
     )
 
-    agent_executor = A2aAgentExecutor(
-        runner=runner,
-    )
+    print(f"\n>>> User Query: {task}")
 
-    kagent_task_store = KAgentTaskStore(http_client)
+    # Prepare the user's message in ADK format
+    content = types.Content(role="user", parts=[types.Part(text=task)])
+    # Key Concept: run_async executes the agent logic and yields Events.
+    # We iterate through events to find the final answer.
+    async for event in runner.run_async(user_id=USER_ID, session_id=SESSION_ID, new_message=content):
+        # You can uncomment the line below to see *all* events during execution
+        # print(f"  [Event] Author: {event.author}, Type: {type(event).__name__}, Final: {event.is_final_response()}, Content: {event.content}")
 
-    request_context_builder = KAgentRequestContextBuilder(user_id=USER_ID, task_store=kagent_task_store)
-    request_handler = DefaultRequestHandler(
-        agent_executor=agent_executor,
-        task_store=kagent_task_store,
-        request_context_builder=request_context_builder,
-    )
-
-    a2a_app = A2AStarletteApplication(
-        agent_card=agent_config.agent_card,
-        http_handler=request_handler,
-    )
-
-    @asynccontextmanager
-    async def agent_lifespan(app: FastAPI):
-        yield
-        await runner.close()
-
-    app = FastAPI(lifespan=agent_lifespan)
-
-    # Health check/readiness probe
-    app.add_route("/", methods=["GET"], route=health_check)
-
-    a2a_app.add_routes_to_app(app)
-
-    return app
+        # Key Concept: is_final_response() marks the concluding message for the turn.
+        jsn = event.model_dump_json()
+        print(f"  [Event] {jsn}")
+        if event.is_final_response():
+            if event.content and event.content.parts:
+                # Assuming text response in the first part
+                final_response_text = event.content.parts[0].text
+            elif event.actions and event.actions.escalate:  # Handle potential errors/escalations
+                final_response_text = f"Agent escalated: {event.error_message or 'No specific message.'}"
+            # Add more checks here if needed (e.g., specific error codes)
+            break  # Stop processing events once the final response is found

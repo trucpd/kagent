@@ -32,7 +32,7 @@ func createTestModelConfig() *v1alpha1.ModelConfig {
 			Namespace: "default",
 		},
 		Spec: v1alpha1.ModelConfigSpec{
-			Provider: v1alpha1.OpenAI,
+			Provider: v1alpha1.ModelProviderOpenAI,
 			Model:    "gpt-4",
 		},
 	}
@@ -76,7 +76,7 @@ func setupTestHandler(objects ...client.Object) (*handlers.AgentsHandler, string
 func createAutogenTeam(client database.Client, agent *v1alpha1.Agent) {
 	autogenTeam := &database.Agent{
 		Config: &adk.AgentConfig{},
-		Name:   common.GetObjectRef(agent),
+		ID:     common.GetObjectRef(agent),
 	}
 	client.StoreAgent(autogenTeam)
 }
@@ -103,7 +103,7 @@ func TestHandleGetAgent(t *testing.T) {
 		require.Equal(t, "test-team", response.Data.Agent.Name)
 		require.Equal(t, "default/test-model-config", response.Data.ModelConfigRef)
 		require.Equal(t, "gpt-4", response.Data.Model)
-		require.Equal(t, v1alpha1.OpenAI, response.Data.ModelProvider)
+		require.Equal(t, v1alpha1.ModelProviderOpenAI, response.Data.ModelProvider)
 	})
 
 	t.Run("returns 404 for missing agent", func(t *testing.T) {
@@ -141,7 +141,7 @@ func TestHandleListTeams(t *testing.T) {
 		require.Equal(t, "test-team", response.Data[0].Agent.Name)
 		require.Equal(t, "default/test-model-config", response.Data[0].ModelConfigRef)
 		require.Equal(t, "gpt-4", response.Data[0].Model)
-		require.Equal(t, v1alpha1.OpenAI, response.Data[0].ModelProvider)
+		require.Equal(t, v1alpha1.ModelProviderOpenAI, response.Data[0].ModelProvider)
 	})
 }
 

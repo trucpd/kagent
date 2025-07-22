@@ -45,11 +45,11 @@ func NewManager(config *Config) (*Manager, error) {
 	switch config.DatabaseType {
 	case DatabaseTypeSqlite:
 		db, err = gorm.Open(sqlite.Open(config.SqliteConfig.DatabasePath), &gorm.Config{
-			Logger: logger.Default.LogMode(logger.Warn),
+			Logger: logger.Default.LogMode(logger.Info),
 		})
 	case DatabaseTypePostgres:
 		db, err = gorm.Open(postgres.Open(config.PostgresConfig.URL), &gorm.Config{
-			Logger: logger.Default.LogMode(logger.Warn),
+			Logger: logger.Default.LogMode(logger.Info),
 		})
 	default:
 		return nil, fmt.Errorf("invalid database type: %s", config.DatabaseType)

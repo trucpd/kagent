@@ -72,7 +72,7 @@ tools:
   image:
     registry: ghcr.io
     repository: kagent-dev/kagent/tools
-    tag: "0.0.7"
+    tag: "0.0.9"
     pullPolicy: IfNotPresent
   resources:
     requests:
@@ -96,7 +96,7 @@ mcp:
     image:
       registry: ghcr.io
       repository: kagent-dev/doc2vec/mcp
-      tag: 1.1.10
+      tag: 1.1.12
       pullPolicy: IfNotPresent
     resources:
       requests:

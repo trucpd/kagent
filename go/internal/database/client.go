@@ -23,7 +23,7 @@ type Client interface {
 
 	// Delete methods
 	DeleteSession(sessionName string, userID string) error
-	DeleteAgent(agentName string) error
+	DeleteAgent(agentID string) error
 	DeleteToolServer(serverName string) error
 	DeleteTask(taskID string) error
 	DeletePushNotification(taskID string) error
@@ -42,7 +42,7 @@ type Client interface {
 	ListFeedback(userID string) ([]Feedback, error)
 	ListSessionTasks(sessionID string) ([]*protocol.Task, error)
 	ListSessions(userID string) ([]Session, error)
-	ListSessionsForAgent(agentID uint, userID string) ([]Session, error)
+	ListSessionsForAgent(agentID string, userID string) ([]Session, error)
 	ListAgents() ([]Agent, error)
 	ListToolServers() ([]ToolServer, error)
 	ListToolsForServer(serverName string) ([]Tool, error)
@@ -123,8 +123,8 @@ func (c *clientImpl) DeleteSession(sessionName string, userID string) error {
 }
 
 // DeleteAgent deletes an agent by name and user ID
-func (c *clientImpl) DeleteAgent(agentName string) error {
-	return delete[Agent](c.db, Clause{Key: "name", Value: agentName})
+func (c *clientImpl) DeleteAgent(agentID string) error {
+	return delete[Agent](c.db, Clause{Key: "id", Value: agentID})
 }
 
 // DeleteToolServer deletes a tool server by name and user ID
@@ -159,8 +159,8 @@ func (c *clientImpl) GetSession(sessionName string, userID string) (*Session, er
 }
 
 // GetAgent retrieves an agent by name and user ID
-func (c *clientImpl) GetAgent(agentName string) (*Agent, error) {
-	return get[Agent](c.db, Clause{Key: "name", Value: agentName})
+func (c *clientImpl) GetAgent(agentID string) (*Agent, error) {
+	return get[Agent](c.db, Clause{Key: "id", Value: agentID})
 }
 
 // GetTool retrieves a tool by provider (name) and user ID
@@ -220,7 +220,7 @@ func (c *clientImpl) ListSessionTasks(sessionID string) ([]*protocol.Task, error
 	return ParseTasks(tasks)
 }
 
-func (c *clientImpl) ListSessionsForAgent(agentID uint, userID string) ([]Session, error) {
+func (c *clientImpl) ListSessionsForAgent(agentID string, userID string) ([]Session, error) {
 	return list[Session](c.db,
 		Clause{Key: "agent_id", Value: agentID},
 		Clause{Key: "user_id", Value: userID})

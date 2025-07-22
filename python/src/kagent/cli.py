@@ -1,3 +1,5 @@
+import asyncio
+import json
 import logging
 import os
 from typing import Annotated
@@ -12,7 +14,8 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
-from kagent.models import build_app
+from kagent.a2a import build_app
+from kagent.models import AgentConfig, test_agent
 
 app = typer.Typer()
 
@@ -35,13 +38,26 @@ def static(
         HTTPXClientInstrumentor().instrument()
         OpenAIInstrumentor().instrument()
 
+    with open(filepath, "r") as f:
+        config = json.load(f)
+    agent_config = AgentConfig.model_validate(config)
+    root_agent = agent_config.to_agent()
+
     uvicorn.run(
-        build_app(filepath),
+        build_app(root_agent, agent_config.kagent_url, agent_config.name, agent_config.agent_card),
         host=host,
         port=port,
         workers=workers,
         reload=reload,
     )
+
+
+@app.command()
+def test(
+    task: Annotated[str, typer.Option("--task", help="The task to test the agent with")],
+    filepath: Annotated[str, typer.Option("--filepath", help="The path to the agent config file")],
+):
+    asyncio.run(test_agent(filepath, task))
 
 
 def run():

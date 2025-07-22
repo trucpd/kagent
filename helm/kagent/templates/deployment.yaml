@@ -70,10 +70,10 @@ spec:
               containerPort: {{ .Values.service.ports.controller.targetPort }}
               protocol: TCP
           readinessProbe:
-            tcpSocket:
+            httpGet:
+              path: /health
               port: http-controller
-            initialDelaySeconds: 15
-            periodSeconds: 15
+            periodSeconds: 1
           volumeMounts:
             - name: sqlite-volume
               mountPath: /sqlite-volume
@@ -96,10 +96,9 @@ spec:
             {{- toYaml .Values.ui.resources | nindent 12 }}
           readinessProbe:
             httpGet:
-              path: /
+              path: /health
               port: http-ui
-            initialDelaySeconds: 15
-            periodSeconds: 15
+            periodSeconds: 1
         - name: tools
           command:
             - /tool-server
@@ -140,10 +139,10 @@ spec:
               containerPort: {{ .Values.service.ports.tools.targetPort }}
               protocol: TCP
           readinessProbe:
-            tcpSocket:
+            httpGet:
+              path: /health
               port: http-tools
-            initialDelaySeconds: 15
-            periodSeconds: 15
+            periodSeconds: 1
         - name: querydoc
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
@@ -187,3 +186,8 @@ spec:
             - name: http-querydoc
               containerPort: {{ .Values.service.ports.querydoc.targetPort }}
               protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http-querydoc
+            periodSeconds: 1
