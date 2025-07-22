@@ -233,7 +233,7 @@ func defaultDeploymentSpec(name string) *v1alpha1.DeploymentSpec {
 func (a *adkApiTranslator) translateDeclarativeAgent(ctx context.Context, agent *v1alpha1.Agent, state *tState) (*adk.AgentConfig, error) {
 
 	cfg := &adk.AgentConfig{
-		KagentUrl:   fmt.Sprintf("http://kagent.%s.svc.cluster.local:8080", common.GetResourceNamespace()),
+		KagentUrl:   fmt.Sprintf("http://kagent.%s.svc.cluster.local:8083", common.GetResourceNamespace()),
 		Name:        common.ConvertToPythonIdentifier(common.GetObjectRef(agent)),
 		Model:       "gemini-2.0-flash",
 		Description: agent.Spec.Description,
@@ -414,7 +414,7 @@ func (a *adkApiTranslator) translateToolServerTool(ctx context.Context, agent *a
 			Tools:  toolNames,
 		})
 	case toolServerObj.Spec.Config.Stdio != nil:
-		return fmt.Errorf("stdio tool server is not supported with adk")
+		return fmt.Errorf("stdio tool server is deprecated")
 	default:
 		return fmt.Errorf("unknown tool server type: %s", toolServerObj.Spec.Config.Type)
 	}

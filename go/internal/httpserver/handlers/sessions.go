@@ -273,7 +273,7 @@ func (h *SessionsHandler) HandleListSessionTasks(w ErrorResponseWriter, r *http.
 	log = log.WithValues("userID", userID)
 
 	log.V(1).Info("Getting session tasks from database")
-	tasks, err := h.DatabaseService.ListSessionTasks(sessionID, userID)
+	tasks, err := h.DatabaseService.ListSessionTasks(sessionID)
 	if err != nil {
 		w.RespondWithError(errors.NewInternalServerError("Failed to get session runs", err))
 		return

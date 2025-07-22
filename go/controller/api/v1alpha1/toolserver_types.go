@@ -17,6 +17,10 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"database/sql"
+	"database/sql/driver"
+	"encoding/json"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -42,6 +46,22 @@ type ToolServerConfig struct {
 	Stdio          *StdioMcpServerConfig       `json:"stdio,omitempty"`
 	Sse            *SseMcpServerConfig         `json:"sse,omitempty"`
 	StreamableHttp *StreamableHttpServerConfig `json:"streamableHttp,omitempty"`
+}
+
+var _ sql.Scanner = (*ToolServerConfig)(nil)
+
+func (t *ToolServerConfig) Scan(src any) error {
+	switch v := src.(type) {
+	case []uint8:
+		return json.Unmarshal(v, t)
+	}
+	return nil
+}
+
+var _ driver.Valuer = (*ToolServerConfig)(nil)
+
+func (t ToolServerConfig) Value() (driver.Value, error) {
+	return json.Marshal(t)
 }
 
 type ValueSourceType string

@@ -40,9 +40,8 @@ type Client interface {
 	// List methods
 	ListTools() ([]Tool, error)
 	ListFeedback(userID string) ([]Feedback, error)
-	ListSessionTasks(sessionID string, userID string) ([]*protocol.Task, error)
+	ListSessionTasks(sessionID string) ([]*protocol.Task, error)
 	ListSessions(userID string) ([]Session, error)
-	ListTasks(userID string) ([]*protocol.Task, error)
 	ListSessionsForAgent(agentID uint, userID string) ([]Session, error)
 	ListAgents() ([]Agent, error)
 	ListToolServers() ([]ToolServer, error)
@@ -78,21 +77,6 @@ func (c *clientImpl) StoreSession(session *Session) error {
 // CreateAgent creates a new agent record
 func (c *clientImpl) StoreAgent(agent *Agent) error {
 	return save(c.db, agent)
-}
-
-// CreateTask creates a new task record
-func (c *clientImpl) CreateTask(task *protocol.Task) error {
-	data, err := json.Marshal(task)
-	if err != nil {
-		return fmt.Errorf("failed to serialize task: %w", err)
-	}
-
-	return save(c.db, &Task{
-		ID:        task.ID,
-		SessionID: task.ContextID,
-		UserID:    utils.GetGlobalUserID(),
-		Data:      string(data),
-	})
 }
 
 func (c *clientImpl) CreatePushNotification(taskID string, config *protocol.TaskPushNotificationConfig) error {
@@ -224,20 +208,11 @@ func (c *clientImpl) StoreMessages(messages ...*protocol.Message) error {
 	return nil
 }
 
-// ListRuns lists all runs for a user
-func (c *clientImpl) ListTasks(userID string) ([]*protocol.Task, error) {
-	tasks, err := list[Task](c.db, Clause{Key: "user_id", Value: userID})
-	if err != nil {
-		return nil, err
-	}
-	return ParseTasks(tasks)
-}
-
 // ListSessionRuns lists all runs for a specific session
-func (c *clientImpl) ListSessionTasks(sessionID string, userID string) ([]*protocol.Task, error) {
+func (c *clientImpl) ListSessionTasks(sessionID string) ([]*protocol.Task, error) {
 	tasks, err := list[Task](c.db,
 		Clause{Key: "session_id", Value: sessionID},
-		Clause{Key: "user_id", Value: userID})
+	)
 	if err != nil {
 		return nil, err
 	}

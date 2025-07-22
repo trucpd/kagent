@@ -426,13 +426,11 @@ func TestSessionsHandler(t *testing.T) {
 			task1 := &database.Task{
 				ID:        "task-1",
 				SessionID: sessionID,
-				UserID:    userID,
 				Data:      "{}",
 			}
 			task2 := &database.Task{
 				ID:        "task-2",
 				SessionID: sessionID,
-				UserID:    userID,
 				Data:      "{}",
 			}
 			// Use the fake client's AddTask method for testing

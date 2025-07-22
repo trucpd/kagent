@@ -74,25 +74,6 @@ type DeploymentSpec struct {
 	Volumes []corev1.Volume `json:"volumes,omitempty"`
 }
 
-type DeclarativeAgentSpec struct {
-}
-
-type FrameWorkSource string
-
-const (
-	FrameWorkSource_Git FrameWorkSource = "Git"
-	FrameWorkSource_OCI FrameWorkSource = "OCI"
-)
-
-type FrameworkAgentSpec struct {
-	// +kubebuilder:validation:Enum=Git;OCI
-	Source FrameWorkSource `json:"source,omitempty"`
-	// +optional
-	Git *string `json:"git,omitempty"`
-	// +optional
-	OCI *string `json:"oci,omitempty"`
-}
-
 // ToolProviderType represents the tool provider type
 // +kubebuilder:validation:Enum=McpServer;Agent
 type ToolProviderType string
