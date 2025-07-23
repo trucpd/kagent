@@ -93,7 +93,7 @@ func printTools(tools []database.Tool) error {
 	for i, tool := range tools {
 		rows[i] = []string{
 			strconv.Itoa(i + 1),
-			tool.Name,
+			tool.ID,
 			tool.ServerName,
 			tool.Description,
 			tool.CreatedAt.Format(time.RFC3339),

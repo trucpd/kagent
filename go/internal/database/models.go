@@ -48,19 +48,18 @@ type Agent struct {
 	Config *adk.AgentConfig `gorm:"type:json;not null" json:"config"`
 }
 
-type Message struct {
+type Event struct {
 	ID        string         `gorm:"primaryKey;not null" json:"id"`
+	SessionID string         `gorm:"index" json:"session_id"`
 	UserID    string         `gorm:"primaryKey;not null" json:"user_id"`
 	CreatedAt time.Time      `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt time.Time      `gorm:"autoUpdateTime" json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"deleted_at"`
 
-	Data      string  `gorm:"type:text;not null" json:"data"` // JSON serialized protocol.Message
-	SessionID *string `gorm:"index" json:"session_id"`
-	TaskID    *string `gorm:"index" json:"task_id"`
+	Data string `gorm:"type:text;not null" json:"data"` // JSON serialized protocol.Message
 }
 
-func (m *Message) Parse() (protocol.Message, error) {
+func (m *Event) Parse() (protocol.Message, error) {
 	var data protocol.Message
 	err := json.Unmarshal([]byte(m.Data), &data)
 	if err != nil {
@@ -69,7 +68,7 @@ func (m *Message) Parse() (protocol.Message, error) {
 	return data, nil
 }
 
-func ParseMessages(messages []Message) ([]*protocol.Message, error) {
+func ParseMessages(messages []Event) ([]*protocol.Message, error) {
 	result := make([]*protocol.Message, 0, len(messages))
 	for _, message := range messages {
 		parsedMessage, err := message.Parse()
@@ -154,10 +153,12 @@ type Feedback struct {
 
 // Tool represents a single tool that can be used by an agent
 type Tool struct {
-	gorm.Model
-	Name        string `gorm:"index;unique;not null" json:"name"`
-	Description string `json:"description"`
-	ServerName  string `gorm:"not null;index" json:"server_name,omitempty"`
+	ID          string         `gorm:"primaryKey;not null" json:"id"`
+	ServerName  string         `gorm:"primaryKey;not null" json:"server_name"`
+	CreatedAt   time.Time      `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt   time.Time      `gorm:"autoUpdateTime" json:"updated_at"`
+	DeletedAt   gorm.DeletedAt `gorm:"index" json:"deleted_at"`
+	Description string         `json:"description"`
 }
 
 // ToolServer represents a tool server that provides tools
@@ -173,7 +174,7 @@ type ToolServer struct {
 
 // TableName methods to match Python table names
 func (Agent) TableName() string            { return "agent" }
-func (Message) TableName() string          { return "message" }
+func (Event) TableName() string            { return "event" }
 func (Session) TableName() string          { return "session" }
 func (Task) TableName() string             { return "task" }
 func (PushNotification) TableName() string { return "push_notification" }

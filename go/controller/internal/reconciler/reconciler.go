@@ -716,7 +716,7 @@ func (a *kagentReconciler) reconcileA2A(
 
 func convertTool(tool *database.Tool) (*v1alpha1.MCPTool, error) {
 	return &v1alpha1.MCPTool{
-		Name:        tool.Name,
+		Name:        tool.ID,
 		Description: tool.Description,
 	}, nil
 }

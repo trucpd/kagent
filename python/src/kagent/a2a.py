@@ -108,7 +108,7 @@ def build_app(root_agent: BaseAgent, kagent_url: str, app_name: str, agent_card:
     app = FastAPI(lifespan=agent_lifespan)
 
     # Health check/readiness probe
-    app.add_route("/", methods=["GET"], route=health_check)
+    app.add_route("/health", methods=["GET"], route=health_check)
 
     a2a_app.add_routes_to_app(app)
 

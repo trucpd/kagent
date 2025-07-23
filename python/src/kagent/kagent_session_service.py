@@ -72,9 +72,23 @@ class KAgentSessionService(BaseSessionService):
         config: Optional[GetSessionConfig] = None,
     ) -> Optional[Session]:
         try:
+            url = f"/api/sessions/{session_id}?user_id={user_id}"
+            if config:
+                if config.after_timestamp:
+                    # TODO: implement
+                    # url += f"&after={config.after_timestamp}"
+                    pass
+                if config.num_recent_events:
+                    url += f"&limit={config.num_recent_events}"
+                else:
+                    url += "&limit=-1"
+            else:
+                # return all
+                url += "&limit=-1"
+
             # Make API call to get session
-            response = await self.client.get(
-                f"/api/sessions/{session_id}?user_id={user_id}",
+            response: httpx.Response = await self.client.get(
+                url,
                 headers={"X-User-ID": user_id},
             )
             if response.status_code == 404:
@@ -85,17 +99,21 @@ class KAgentSessionService(BaseSessionService):
             if not data.get("data"):
                 return None
 
-            session_data = data["data"]
-            if config:
-                if config.after_timestamp:
-                    pass
-                if config.num_recent_events:
-                    pass
+            if not data.get("data").get("session"):
+                return None
+            session_data = data["data"]["session"]
+
+            events_data = data["data"]["events"]
+
+            events: list[Event] = []
+            for event_data in events_data:
+                events.append(Event.model_validate_json(event_data["data"]))
 
             # Convert to ADK Session format
             return Session(
                 id=session_data["id"],
                 user_id=session_data["user_id"],
+                events=events,
                 app_name=app_name,
                 state={},  # TODO: restore State
             )
@@ -137,9 +155,8 @@ class KAgentSessionService(BaseSessionService):
     async def append_event(self, session: Session, event: Event) -> Event:
         # Convert ADK Event to JSON format
         event_data = {
-            "type": event.__class__.__name__,
-            "data": (event.model_dump() if hasattr(event, "model_dump") else event.__dict__),
-            "task_id": event.invocation_id,
+            "id": event.id,
+            "data": event.model_dump_json(),
         }
 
         # Make API call to append event to session
@@ -149,5 +166,10 @@ class KAgentSessionService(BaseSessionService):
             headers={"X-User-ID": session.user_id},
         )
         response.raise_for_status()
+
+        # TODO: potentiall pull and update the session from the server
+        # Update the in-memory session.
+        session.last_update_time = event.timestamp
+        await super().append_event(session=session, event=event)
 
         return event

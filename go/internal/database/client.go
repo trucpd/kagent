@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/kagent-dev/kagent/go/controller/api/v1alpha1"
-	"github.com/kagent-dev/kagent/go/internal/utils"
 	"gorm.io/gorm"
 	"trpc.group/trpc-go/trpc-a2a-go/protocol"
 )
@@ -19,7 +19,7 @@ type Client interface {
 	StoreTask(task *protocol.Task) error
 	StorePushNotification(config *protocol.TaskPushNotificationConfig) error
 	StoreToolServer(toolServer *ToolServer) (*ToolServer, error)
-	StoreMessages(messages ...*protocol.Message) error
+	StoreEvents(messages ...*Event) error
 
 	// Delete methods
 	DeleteSession(sessionName string, userID string) error
@@ -34,7 +34,6 @@ type Client interface {
 	GetTask(id string) (*protocol.Task, error)
 	GetTool(name string) (*Tool, error)
 	GetToolServer(name string) (*ToolServer, error)
-	GetMessage(messageID string) (*protocol.Message, error)
 	GetPushNotification(taskID string, configID string) (*protocol.TaskPushNotificationConfig, error)
 
 	// List methods
@@ -46,8 +45,7 @@ type Client interface {
 	ListAgents() ([]Agent, error)
 	ListToolServers() ([]ToolServer, error)
 	ListToolsForServer(serverName string) ([]Tool, error)
-	ListMessagesForTask(taskID, userID string) ([]*protocol.Message, error)
-	ListMessagesForSession(sessionID, userID string) ([]*protocol.Message, error)
+	ListEventsForSession(sessionID, userID string, options QueryOptions) ([]*Event, error)
 	ListPushNotifications(taskID string) ([]*protocol.TaskPushNotificationConfig, error)
 
 	// Helper methods
@@ -134,7 +132,7 @@ func (c *clientImpl) DeleteToolServer(serverName string) error {
 
 // GetTaskMessages retrieves messages for a specific task
 func (c *clientImpl) GetTaskMessages(taskID int) ([]*protocol.Message, error) {
-	messages, err := list[Message](c.db, Clause{Key: "task_id", Value: taskID})
+	messages, err := list[Event](c.db, Clause{Key: "task_id", Value: taskID})
 	if err != nil {
 		return nil, err
 	}
@@ -183,26 +181,11 @@ func (c *clientImpl) ListFeedback(userID string) ([]Feedback, error) {
 	return feedback, nil
 }
 
-func (c *clientImpl) StoreMessages(messages ...*protocol.Message) error {
-	for _, message := range messages {
-		if message == nil {
-			continue
-		}
-		data, err := json.Marshal(message)
+func (c *clientImpl) StoreEvents(events ...*Event) error {
+	for _, event := range events {
+		err := save(c.db, event)
 		if err != nil {
-			return fmt.Errorf("failed to serialize message: %w", err)
-		}
-
-		dbMessage := Message{
-			ID:        message.MessageID,
-			Data:      string(data),
-			SessionID: message.ContextID,
-			TaskID:    message.TaskID,
-			UserID:    utils.GetGlobalUserID(),
-		}
-		err = save(c.db, &dbMessage)
-		if err != nil {
-			return fmt.Errorf("failed to create message: %w", err)
+			return fmt.Errorf("failed to create event: %w", err)
 		}
 	}
 	return nil
@@ -265,7 +248,7 @@ func (c *clientImpl) RefreshToolsForServer(serverName string, tools ...*v1alpha1
 	// If it's in the existing tools but not in the new tools, delete it
 	for _, tool := range tools {
 		existingToolIndex := slices.IndexFunc(existingTools, func(t Tool) bool {
-			return t.Name == tool.Name
+			return t.ID == tool.Name
 		})
 		if existingToolIndex != -1 {
 			existingTool := existingTools[existingToolIndex]
@@ -277,7 +260,7 @@ func (c *clientImpl) RefreshToolsForServer(serverName string, tools ...*v1alpha1
 			}
 		} else {
 			err = save(c.db, &Tool{
-				Name:        tool.Name,
+				ID:          tool.Name,
 				ServerName:  serverName,
 				Description: tool.Description,
 			})
@@ -290,11 +273,11 @@ func (c *clientImpl) RefreshToolsForServer(serverName string, tools ...*v1alpha1
 	// Delete any tools that are in the existing tools but not in the new tools
 	for _, existingTool := range existingTools {
 		if !slices.ContainsFunc(tools, func(t *v1alpha1.MCPTool) bool {
-			return t.Name == existingTool.Name
+			return t.Name == existingTool.ID
 		}) {
-			err = delete[Tool](c.db, Clause{Key: "name", Value: existingTool.Name})
+			err = delete[Tool](c.db, Clause{Key: "name", Value: existingTool.ID})
 			if err != nil {
-				return fmt.Errorf("failed to delete tool %s: %v", existingTool.Name, err)
+				return fmt.Errorf("failed to delete tool %s: %v", existingTool.ID, err)
 			}
 		}
 	}
@@ -303,7 +286,7 @@ func (c *clientImpl) RefreshToolsForServer(serverName string, tools ...*v1alpha1
 
 // ListMessagesForRun retrieves messages for a specific run (helper method)
 func (c *clientImpl) ListMessagesForTask(taskID, userID string) ([]*protocol.Message, error) {
-	messages, err := list[Message](c.db,
+	messages, err := list[Event](c.db,
 		Clause{Key: "task_id", Value: taskID},
 		Clause{Key: "user_id", Value: userID})
 	if err != nil {
@@ -313,20 +296,42 @@ func (c *clientImpl) ListMessagesForTask(taskID, userID string) ([]*protocol.Mes
 	return ParseMessages(messages)
 }
 
-func (c *clientImpl) ListMessagesForSession(sessionID, userID string) ([]*protocol.Message, error) {
-	messages, err := list[Message](c.db,
-		Clause{Key: "session_id", Value: sessionID},
-		Clause{Key: "user_id", Value: userID})
+type QueryOptions struct {
+	Limit int
+	After time.Time
+}
+
+func (c *clientImpl) ListEventsForSession(sessionID, userID string, options QueryOptions) ([]*Event, error) {
+	var events []Event
+	query := c.db.
+		Where("session_id = ?", sessionID).
+		Where("user_id = ?", userID).
+		Order("created_at DESC")
+
+	if !options.After.IsZero() {
+		query = query.Where("created_at > ?", options.After)
+	}
+
+	if options.Limit > 1 {
+		query = query.Limit(options.Limit)
+	}
+
+	err := query.Find(&events).Error
 	if err != nil {
 		return nil, err
 	}
 
-	return ParseMessages(messages)
+	protocolEvents := make([]*Event, 0, len(events))
+	for _, event := range events {
+		protocolEvents = append(protocolEvents, &event)
+	}
+
+	return protocolEvents, nil
 }
 
 // GetMessage retrieves a protocol message from the database
 func (c *clientImpl) GetMessage(messageID string) (*protocol.Message, error) {
-	dbMessage, err := get[Message](c.db, Clause{Key: "id", Value: messageID})
+	dbMessage, err := get[Event](c.db, Clause{Key: "id", Value: messageID})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get message: %w", err)
 	}
@@ -341,12 +346,12 @@ func (c *clientImpl) GetMessage(messageID string) (*protocol.Message, error) {
 
 // DeleteMessage deletes a protocol message from the database
 func (c *clientImpl) DeleteMessage(messageID string) error {
-	return delete[Message](c.db, Clause{Key: "id", Value: messageID})
+	return delete[Event](c.db, Clause{Key: "id", Value: messageID})
 }
 
 // ListMessagesByContextID retrieves messages by context ID with optional limit
 func (c *clientImpl) ListMessagesByContextID(contextID string, limit int) ([]protocol.Message, error) {
-	var dbMessages []Message
+	var dbMessages []Event
 	query := c.db.Where("session_id = ?", contextID).Order("created_at DESC")
 
 	if limit > 0 {

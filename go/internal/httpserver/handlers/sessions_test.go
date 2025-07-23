@@ -14,7 +14,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	"trpc.group/trpc-go/trpc-a2a-go/protocol"
 
 	"github.com/kagent-dev/kagent/go/controller/api/v1alpha1"
 	"github.com/kagent-dev/kagent/go/internal/database"
@@ -460,48 +459,4 @@ func TestSessionsHandler(t *testing.T) {
 		})
 	})
 
-	t.Run("HandleListSessionMessages", func(t *testing.T) {
-		t.Run("Success", func(t *testing.T) {
-			handler, dbClient, responseRecorder := setupHandler()
-			userID := "test-user"
-			sessionID := "test-session"
-
-			// Create test session and messages
-			agentID := "1"
-			createTestSession(dbClient, sessionID, userID, agentID)
-
-			// For messages, we'll just test with empty list since the parsing is complex
-			req := httptest.NewRequest("GET", "/api/sessions/"+sessionID+"/messages?user_id="+userID, nil)
-			req = mux.SetURLVars(req, map[string]string{"session_id": sessionID})
-
-			message := protocol.NewMessageWithContext(protocol.MessageRoleUser, []protocol.Part{
-				protocol.NewTextPart("test-message"),
-			}, nil, ptr.To(sessionID))
-			err := dbClient.StoreMessages(&message)
-			require.NoError(t, err)
-
-			handler.HandleListSessionMessages(responseRecorder, req)
-
-			assert.Equal(t, http.StatusOK, responseRecorder.Code)
-
-			// The response should be autogen events, not raw messages
-			var response api.StandardResponse[interface{}]
-			err = json.Unmarshal(responseRecorder.Body.Bytes(), &response)
-			require.NoError(t, err)
-			assert.NotNil(t, response.Data)
-		})
-
-		t.Run("MissingUserID", func(t *testing.T) {
-			handler, _, responseRecorder := setupHandler()
-			sessionID := "test-session"
-
-			req := httptest.NewRequest("GET", "/api/sessions/"+sessionID+"/messages", nil)
-			req = mux.SetURLVars(req, map[string]string{"session_id": sessionID})
-
-			handler.HandleListSessionMessages(responseRecorder, req)
-
-			assert.Equal(t, http.StatusBadRequest, responseRecorder.Code)
-			assert.NotNil(t, responseRecorder.errorReceived)
-		})
-	})
 }

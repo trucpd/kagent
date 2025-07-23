@@ -108,7 +108,7 @@ type RunRequest struct {
 type Task = database.Task
 
 // Message represents a message from the database
-type Message = database.Message
+type Message = database.Event
 
 // Session represents a session from the database
 type Session = database.Session

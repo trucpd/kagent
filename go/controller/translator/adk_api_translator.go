@@ -210,6 +210,33 @@ func defaultDeploymentSpec(name string) *v1alpha1.DeploymentSpec {
 			Image:           fmt.Sprintf("cr.kagent.dev/kagent-dev/kagent/app:%s", version.Get().Version),
 			ImagePullPolicy: corev1.PullIfNotPresent,
 			Command:         []string{"uv", "run", "kagent", "static", "--host", "0.0.0.0", "--port", "8080", "--filepath", "/config/config.json"},
+			Ports: []corev1.ContainerPort{
+				{
+					Name:          "http",
+					ContainerPort: 8080,
+				},
+			},
+			StartupProbe: &corev1.Probe{
+				ProbeHandler: corev1.ProbeHandler{
+					HTTPGet: &corev1.HTTPGetAction{
+						Path: "/health",
+						Port: intstr.FromString("http"),
+					},
+				},
+				InitialDelaySeconds: 15,
+				PeriodSeconds:       3,
+				FailureThreshold:    10,
+			},
+			ReadinessProbe: &corev1.Probe{
+				ProbeHandler: corev1.ProbeHandler{
+					HTTPGet: &corev1.HTTPGetAction{
+						Path: "/health",
+						Port: intstr.FromString("http"),
+					},
+				},
+				InitialDelaySeconds: 60,
+				PeriodSeconds:       10,
+			},
 			VolumeMounts: []corev1.VolumeMount{
 				{
 					Name:      "config",
