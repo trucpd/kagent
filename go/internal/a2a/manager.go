@@ -2,9 +2,7 @@ package a2a
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"log/slog"
 
 	"trpc.group/trpc-go/trpc-a2a-go/client"
 	"trpc.group/trpc-go/trpc-a2a-go/protocol"
@@ -22,26 +20,22 @@ func NewPassthroughManager(client *client.A2AClient) taskmanager.TaskManager {
 }
 
 func (m *PassthroughManager) OnSendMessage(ctx context.Context, request protocol.SendMessageParams) (*protocol.MessageResult, error) {
-	byt, _ := json.Marshal(request)
 	if request.Message.MessageID == "" {
 		request.Message.MessageID = protocol.GenerateMessageID()
 	}
 	if request.Message.Kind == "" {
 		request.Message.Kind = protocol.KindMessage
 	}
-	slog.Info("OnSendMessage", "request", string(byt))
 	return m.client.SendMessage(ctx, request)
 }
 
 func (m *PassthroughManager) OnSendMessageStream(ctx context.Context, request protocol.SendMessageParams) (<-chan protocol.StreamingMessageEvent, error) {
-	byt, _ := json.Marshal(request)
 	if request.Message.MessageID == "" {
 		request.Message.MessageID = protocol.GenerateMessageID()
 	}
 	if request.Message.Kind == "" {
 		request.Message.Kind = protocol.KindMessage
 	}
-	slog.Info("OnSendMessageStream", "request", string(byt))
 	return m.client.StreamMessage(ctx, request)
 }
 
