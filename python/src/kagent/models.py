@@ -1,6 +1,8 @@
 import json
+import logging
 from typing import Literal, Self, Union
 
+import aiofiles
 from a2a.types import AgentCard
 from google.adk.agents import Agent
 from google.adk.agents.llm_agent import ToolUnion
@@ -12,6 +14,8 @@ from google.adk.tools.agent_tool import AgentTool
 from google.adk.tools.mcp_tool import MCPToolset, SseConnectionParams, StreamableHTTPConnectionParams
 from google.genai import types  # For creating message Content/Parts
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 
 class HttpMcpServerConfig(BaseModel):
@@ -84,8 +88,9 @@ class AgentConfig(BaseModel):
 
 
 async def test_agent(filepath: str, task: str):
-    with open(filepath, "r") as f:
-        config = json.load(f)
+    async with aiofiles.open(filepath, "r") as f:
+        content = await f.read()
+        config = json.loads(content)
     agent_config = AgentConfig.model_validate(config)
     root_agent = agent_config.to_agent()
 
@@ -104,7 +109,7 @@ async def test_agent(filepath: str, task: str):
         session_service=session_service,
     )
 
-    print(f"\n>>> User Query: {task}")
+    logger.info(f"\n>>> User Query: {task}")
 
     # Prepare the user's message in ADK format
     content = types.Content(role="user", parts=[types.Part(text=task)])
@@ -116,12 +121,4 @@ async def test_agent(filepath: str, task: str):
 
         # Key Concept: is_final_response() marks the concluding message for the turn.
         jsn = event.model_dump_json()
-        print(f"  [Event] {jsn}")
-        if event.is_final_response():
-            if event.content and event.content.parts:
-                # Assuming text response in the first part
-                final_response_text = event.content.parts[0].text
-            elif event.actions and event.actions.escalate:  # Handle potential errors/escalations
-                final_response_text = f"Agent escalated: {event.error_message or 'No specific message.'}"
-            # Add more checks here if needed (e.g., specific error codes)
-            break  # Stop processing events once the final response is found
+        logger.info(f"  [Event] {jsn}")
