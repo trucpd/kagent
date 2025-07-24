@@ -46,17 +46,15 @@ func get[T Model](db *gorm.DB, clauses ...Clause) (*T, error) {
 }
 
 // TODO: Make this upsert actually idempotent
+// args:
+// - db: the database connection
+// - model: the model to save
 func save[T Model](db *gorm.DB, model *T) error {
-	if err := db.First(model).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return db.Create(model).Error
+	if err := db.Create(model).Error; err != nil {
+		if err == gorm.ErrDuplicatedKey {
+			return db.Save(model).Error
 		}
-		return fmt.Errorf("failed to get model: %w", err)
-	}
-
-	err := db.Save(model).Error
-	if err != nil {
-		return fmt.Errorf("failed to update model: %w", err)
+		return fmt.Errorf("failed to create model: %w", err)
 	}
 	return nil
 }

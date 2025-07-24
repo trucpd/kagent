@@ -83,15 +83,12 @@ func (c *clientImpl) CreatePushNotification(taskID string, config *protocol.Task
 		return fmt.Errorf("failed to serialize push notification config: %w", err)
 	}
 
-	return save(c.db, &PushNotification{
+	dbPushNotification := PushNotification{
 		TaskID: taskID,
 		Data:   string(data),
-	})
-}
+	}
 
-// UpsertAgent upserts an agent record
-func (c *clientImpl) UpsertAgent(agent *Agent) error {
-	return save(c.db, agent)
+	return save(c.db, &dbPushNotification)
 }
 
 // CreateToolServer creates a new tool server record

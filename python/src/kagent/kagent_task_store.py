@@ -13,6 +13,7 @@ class KAgentTaskStore(TaskStore):
 
     @override
     async def save(self, task: Task) -> None:
+        x = task.model_dump()
         response = await self.client.post("/api/tasks", json=task.model_dump())
         response.raise_for_status()
 
