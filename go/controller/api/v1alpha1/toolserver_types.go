@@ -135,9 +135,9 @@ type ToolServerStatus struct {
 }
 
 type MCPTool struct {
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	Component   Component `json:"component"`
+	Name        string     `json:"name"`
+	Description string     `json:"description"`
+	Component   *Component `json:"component,omitempty"`
 }
 
 type Component struct {

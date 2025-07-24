@@ -309,7 +309,6 @@ spec:
                     name:
                       type: string
                   required:
-                  - component
                   - description
                   - name
                   type: object

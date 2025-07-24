@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"os"
 	"slices"
+	"strings"
 
 	"github.com/kagent-dev/kagent/go/controller/api/v1alpha1"
 	"github.com/kagent-dev/kagent/go/internal/adk"
@@ -203,6 +205,32 @@ func (a *adkApiTranslator) translateOutputs(ctx context.Context, agent *v1alpha1
 }
 
 func defaultDeploymentSpec(name string) *v1alpha1.DeploymentSpec {
+	// TODO: Come up with a better way to do tracing config for the agents
+	envVars := slices.Collect(utils.Map(
+		utils.Filter(
+			slices.Values(os.Environ()),
+			func(envVar string) bool {
+				return strings.HasPrefix(envVar, "OTEL_")
+			},
+		),
+		func(envVar string) corev1.EnvVar {
+			parts := strings.SplitN(envVar, "=", 2)
+			return corev1.EnvVar{
+				Name:  parts[0],
+				Value: parts[1],
+			}
+		},
+	))
+
+	envVars = append(envVars, corev1.EnvVar{
+		Name: "KAGENT_NAMESPACE",
+		ValueFrom: &corev1.EnvVarSource{
+			FieldRef: &corev1.ObjectFieldSelector{
+				FieldPath: "metadata.namespace",
+			},
+		},
+	})
+
 	return &v1alpha1.DeploymentSpec{
 		Replicas: ptr.To(int32(1)),
 		Container: corev1.Container{
@@ -216,7 +244,8 @@ func defaultDeploymentSpec(name string) *v1alpha1.DeploymentSpec {
 					ContainerPort: 8080,
 				},
 			},
-			StartupProbe: &corev1.Probe{
+			Env: envVars,
+			ReadinessProbe: &corev1.Probe{
 				ProbeHandler: corev1.ProbeHandler{
 					HTTPGet: &corev1.HTTPGetAction{
 						Path: "/health",
@@ -225,17 +254,6 @@ func defaultDeploymentSpec(name string) *v1alpha1.DeploymentSpec {
 				},
 				InitialDelaySeconds: 15,
 				PeriodSeconds:       3,
-				FailureThreshold:    10,
-			},
-			ReadinessProbe: &corev1.Probe{
-				ProbeHandler: corev1.ProbeHandler{
-					HTTPGet: &corev1.HTTPGetAction{
-						Path: "/health",
-						Port: intstr.FromString("http"),
-					},
-				},
-				InitialDelaySeconds: 60,
-				PeriodSeconds:       10,
 			},
 			VolumeMounts: []corev1.VolumeMount{
 				{
