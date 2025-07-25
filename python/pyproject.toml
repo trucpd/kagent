@@ -35,7 +35,7 @@ dependencies = [
   "pydantic>=2.5.0",
   "typing-extensions>=4.8.0",
   "jsonref>=1.1.0",
-  "a2a-sdk>=0.2.12",
+  "a2a-sdk>=0.2.16",
   "aiofiles>=24.1.0",
 ]
 

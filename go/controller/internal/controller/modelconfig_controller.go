@@ -31,8 +31,8 @@ import (
 	agentv1alpha1 "github.com/kagent-dev/kagent/go/controller/api/v1alpha1"
 )
 
-// AutogenModelConfigReconciler reconciles a AutogenModelConfig object
-type AutogenModelConfigReconciler struct {
+// ModelConfigReconciler reconciles a ModelConfig object
+type ModelConfigReconciler struct {
 	client.Client
 	Scheme     *runtime.Scheme
 	Reconciler reconciler.KagentReconciler
@@ -42,18 +42,18 @@ type AutogenModelConfigReconciler struct {
 // +kubebuilder:rbac:groups=kagent.dev,resources=modelconfigs/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=kagent.dev,resources=modelconfigs/finalizers,verbs=update
 
-func (r *AutogenModelConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *ModelConfigReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
 	return ctrl.Result{}, r.Reconciler.ReconcileKagentModelConfig(ctx, req)
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *AutogenModelConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *ModelConfigReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		WithOptions(controller.Options{
 			NeedLeaderElection: ptr.To(true),
 		}).
 		For(&agentv1alpha1.ModelConfig{}).
-		Named("autogenmodelconfig").
+		Named("modelconfig").
 		Complete(r)
 }

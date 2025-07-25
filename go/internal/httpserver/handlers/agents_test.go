@@ -70,12 +70,12 @@ func setupTestHandler(objects ...client.Object) (*handlers.AgentsHandler, string
 	return handlers.NewAgentsHandler(base), userID
 }
 
-func createAutogenTeam(client database.Client, agent *v1alpha1.Agent) {
-	autogenTeam := &database.Agent{
+func createAgent(client database.Client, agent *v1alpha1.Agent) {
+	dbAgent := &database.Agent{
 		Config: &adk.AgentConfig{},
 		ID:     common.GetObjectRef(agent),
 	}
-	client.StoreAgent(autogenTeam)
+	client.StoreAgent(dbAgent)
 }
 
 func TestHandleGetAgent(t *testing.T) {
@@ -84,7 +84,7 @@ func TestHandleGetAgent(t *testing.T) {
 		team := createTestAgent("test-team", modelConfig)
 
 		handler, _ := setupTestHandler(team, modelConfig)
-		createAutogenTeam(handler.Base.DatabaseService, team)
+		createAgent(handler.Base.DatabaseService, team)
 
 		req := httptest.NewRequest("GET", "/api/agents/default/test-team", nil)
 		req = mux.SetURLVars(req, map[string]string{"namespace": "default", "name": "test-team"})
@@ -122,7 +122,7 @@ func TestHandleListTeams(t *testing.T) {
 		team := createTestAgent("test-team", modelConfig)
 
 		handler, _ := setupTestHandler(team, modelConfig)
-		createAutogenTeam(handler.Base.DatabaseService, team)
+		createAgent(handler.Base.DatabaseService, team)
 
 		req := httptest.NewRequest("GET", "/api/agents", nil)
 		w := httptest.NewRecorder()
@@ -243,7 +243,7 @@ func TestHandleDeleteTeam(t *testing.T) {
 		}
 
 		handler, _ := setupTestHandler(team)
-		createAutogenTeam(handler.Base.DatabaseService, team)
+		createAgent(handler.Base.DatabaseService, team)
 
 		req := httptest.NewRequest("DELETE", "/api/agents/default/test-team", nil)
 		req = mux.SetURLVars(req, map[string]string{"namespace": "default", "name": "test-team"})

@@ -94,7 +94,6 @@ func main() {
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
-	var autogenStudioBaseURL string
 	var defaultModelConfig types.NamespacedName
 	var tlsOpts []func(*tls.Config)
 	var httpServerAddr string
@@ -121,8 +120,6 @@ func main() {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
-
-	flag.StringVar(&autogenStudioBaseURL, "autogen-base-url", "http://127.0.0.1:8081/api", "The base url of the Autogen Studio server.")
 
 	flag.StringVar(&defaultModelConfig.Name, "default-model-config-name", "default-model-config", "The name of the default model config.")
 	flag.StringVar(&defaultModelConfig.Namespace, "default-model-config-namespace", kagentNamespace, "The namespace of the default model config.")
@@ -306,7 +303,7 @@ func main() {
 		a2aBaseUrl+httpserver.APIPathA2A,
 	)
 
-	autogenReconciler := reconciler.NewKagentReconciler(
+	rcnclr := reconciler.NewKagentReconciler(
 		apiTranslator,
 		kubeClient,
 		dbClient,
@@ -314,42 +311,42 @@ func main() {
 		a2aReconciler,
 	)
 
-	if err = (&controller.AutogenAgentReconciler{
+	if err = (&controller.AgentReconciler{
 		Client:     kubeClient,
 		Scheme:     mgr.GetScheme(),
-		Reconciler: autogenReconciler,
+		Reconciler: rcnclr,
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "AutogenAgent")
+		setupLog.Error(err, "unable to create controller", "controller", "Agent")
 		os.Exit(1)
 	}
-	if err = (&controller.AutogenModelConfigReconciler{
+	if err = (&controller.ModelConfigReconciler{
 		Client:     kubeClient,
 		Scheme:     mgr.GetScheme(),
-		Reconciler: autogenReconciler,
+		Reconciler: rcnclr,
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "AutogenModelConfig")
+		setupLog.Error(err, "unable to create controller", "controller", "ModelConfig")
 		os.Exit(1)
 	}
-	if err = (&controller.AutogenSecretReconciler{
+	if err = (&controller.SecretReconciler{
 		Client:     kubeClient,
 		Scheme:     mgr.GetScheme(),
-		Reconciler: autogenReconciler,
+		Reconciler: rcnclr,
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "AutogenSecret")
+		setupLog.Error(err, "unable to create controller", "controller", "Secret")
 		os.Exit(1)
 	}
 	if err = (&controller.ToolServerReconciler{
 		Client:     mgr.GetClient(),
 		Scheme:     mgr.GetScheme(),
-		Reconciler: autogenReconciler,
+		Reconciler: rcnclr,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ToolServer")
 		os.Exit(1)
 	}
-	if err = (&controller.AutogenMemoryReconciler{
+	if err = (&controller.MemoryReconciler{
 		Client:     kubeClient,
 		Scheme:     mgr.GetScheme(),
-		Reconciler: autogenReconciler,
+		Reconciler: rcnclr,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Memory")
 		os.Exit(1)

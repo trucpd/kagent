@@ -30,8 +30,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-// AutogenModelConfigReconciler reconciles a Secret object which contains a model config
-type AutogenSecretReconciler struct {
+// SecretReconciler reconciles a Secret object which contains a model config
+type SecretReconciler struct {
 	client.Client
 	Scheme     *runtime.Scheme
 	Reconciler reconciler.KagentReconciler
@@ -41,18 +41,18 @@ type AutogenSecretReconciler struct {
 // +kubebuilder:rbac:groups=kagent.dev,resources=modelconfigs/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=kagent.dev,resources=modelconfigs/finalizers,verbs=update
 
-func (r *AutogenSecretReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *SecretReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
 	return ctrl.Result{}, r.Reconciler.ReconcileKagentApiKeySecret(ctx, req)
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *AutogenSecretReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *SecretReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		WithOptions(controller.Options{
 			NeedLeaderElection: ptr.To(true),
 		}).
 		For(&v1.Secret{}).
-		Named("autogenapikeysecret").
+		Named("secret").
 		Complete(r)
 }

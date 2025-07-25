@@ -39,7 +39,7 @@ type Model interface {
 }
 
 type BaseModel struct {
-	_type string `json:"type"`
+	Type  string `json:"type"`
 	Model string `json:"model"`
 }
 
@@ -144,7 +144,7 @@ func ParseModel(bytes []byte) (Model, error) {
 	if err := json.Unmarshal(bytes, &model); err != nil {
 		return nil, err
 	}
-	switch model._type {
+	switch model.Type {
 	case "openai":
 		var openai OpenAI
 		if err := json.Unmarshal(bytes, &openai); err != nil {
@@ -176,7 +176,7 @@ func ParseModel(bytes []byte) (Model, error) {
 		}
 		return &ollama, nil
 	}
-	return nil, fmt.Errorf("unknown model type: %s", model._type)
+	return nil, fmt.Errorf("unknown model type: %s", model.Type)
 }
 
 type AgentConfig struct {

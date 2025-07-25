@@ -44,8 +44,7 @@ type kagentReconciler struct {
 	adkTranslator translator.AdkApiTranslator
 	a2aReconciler a2a.A2AReconciler
 
-	kube client.Client
-	// autogenClient autogen_client.Client
+	kube     client.Client
 	dbClient database.Client
 
 	defaultModelConfig types.NamespacedName
@@ -100,7 +99,7 @@ func (a *kagentReconciler) handleAgentDeletion(req ctrl.Request) error {
 	// }
 
 	// remove a2a handler if it exists
-	a.a2aReconciler.ReconcileAutogenAgentDeletion(req.NamespacedName.String())
+	a.a2aReconciler.ReconcileAgentDeletion(req.NamespacedName.String())
 
 	if err := a.dbClient.DeleteAgent(req.NamespacedName.String()); err != nil {
 		return fmt.Errorf("failed to delete agent %s: %w",
@@ -112,21 +111,11 @@ func (a *kagentReconciler) handleAgentDeletion(req ctrl.Request) error {
 }
 
 func (a *kagentReconciler) handleExistingAgent(ctx context.Context, agent *v1alpha1.Agent, req ctrl.Request) error {
-	isNewAgent := agent.Status.ObservedGeneration == 0
-	isUpdatedAgent := agent.Generation > agent.Status.ObservedGeneration
-
-	if isNewAgent {
-		reconcileLog.Info("New agent was created",
-			"namespace", req.Namespace,
-			"name", req.Name,
-			"generation", agent.Generation)
-	} else if isUpdatedAgent {
-		reconcileLog.Info("Agent was updated",
-			"namespace", req.Namespace,
-			"name", req.Name,
-			"oldGeneration", agent.Status.ObservedGeneration,
-			"newGeneration", agent.Generation)
-	}
+	reconcileLog.Info("Agent Event",
+		"namespace", req.Namespace,
+		"name", req.Name,
+		"oldGeneration", agent.Status.ObservedGeneration,
+		"newGeneration", agent.Generation)
 
 	return a.reconcileAgents(ctx, agent)
 }
@@ -750,7 +739,7 @@ func (a *kagentReconciler) reconcileA2A(
 	agent *v1alpha1.Agent,
 	adkConfig *adk.AgentConfig,
 ) error {
-	return a.a2aReconciler.ReconcileAutogenAgent(ctx, agent, adkConfig)
+	return a.a2aReconciler.ReconcileAgent(ctx, agent, adkConfig)
 }
 
 func convertTool(tool *database.Tool) (*v1alpha1.MCPTool, error) {

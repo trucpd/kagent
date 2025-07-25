@@ -85,36 +85,42 @@ func (a *adkApiTranslator) TranslateAgent(
 	ctx context.Context,
 	agent *v1alpha1.Agent,
 ) (*AgentOutputs, error) {
-	outputs, err := a.translateOutputs(ctx, agent)
-	if err != nil {
-		return nil, err
-	}
 
 	adkAgent, envVars, err := a.translateDeclarativeAgent(ctx, agent, &tState{})
 	if err != nil {
 		return nil, err
 	}
 
-	byt, err := json.Marshal(adkAgent)
+	agentJson, err := json.Marshal(adkAgent)
 	if err != nil {
 		return nil, err
 	}
 
-	hash := sha256.Sum256(byt)
-	outputs.ConfigHash = binary.BigEndian.Uint64(hash[:8])
+	byt, err := json.Marshal(struct {
+		EnvVars    []corev1.EnvVar
+		Deployment *v1alpha1.DeploymentSpec
+	}{
+		EnvVars:    envVars,
+		Deployment: agent.Spec.Deployment,
+	})
+	if err != nil {
+		return nil, err
+	}
 
-	outputs.ConfigMap.Data["config.json"] = string(byt)
-	// Make sure the deployment is redeployed if the config changes
-	outputs.Deployment.Labels["config.kagent.dev/hash"] = fmt.Sprintf("%d", outputs.ConfigHash)
-	outputs.Deployment.Spec.Template.Labels["config.kagent.dev/hash"] = fmt.Sprintf("%d", outputs.ConfigHash)
-	// Add the secret env vars to the deployment
-	outputs.Deployment.Spec.Template.Spec.Containers[0].Env = append(outputs.Deployment.Spec.Template.Spec.Containers[0].Env, envVars...)
+	hash := sha256.Sum256(append(byt, agentJson...))
+	configHash := binary.BigEndian.Uint64(hash[:8])
+
+	outputs, err := a.translateOutputs(ctx, agent, configHash, agentJson, envVars...)
+	if err != nil {
+		return nil, err
+	}
 	outputs.Config = adkAgent
+	outputs.ConfigHash = configHash
 
 	return outputs, nil
 }
 
-func (a *adkApiTranslator) translateOutputs(_ context.Context, agent *v1alpha1.Agent) (*AgentOutputs, error) {
+func (a *adkApiTranslator) translateOutputs(_ context.Context, agent *v1alpha1.Agent, configHash uint64, configJson []byte, envVars ...corev1.EnvVar) (*AgentOutputs, error) {
 	outputs := &AgentOutputs{}
 
 	newLabels := maps.Clone(agent.Labels)
@@ -123,41 +129,24 @@ func (a *adkApiTranslator) translateOutputs(_ context.Context, agent *v1alpha1.A
 	}
 	newLabels["app"] = "kagent"
 	newLabels["kagent"] = agent.Name
-	newLabels["version"] = "v1alpha1" // TODO: make this dynamic
+	newLabels["config.kagent.dev/hash"] = fmt.Sprintf("%d", configHash)
 	objMeta := metav1.ObjectMeta{
 		Name:        agent.Name,
 		Namespace:   agent.Namespace,
 		Annotations: agent.Annotations,
 		Labels:      newLabels,
 	}
-	if agent.Spec.Deployment == nil {
-		spec := defaultDeploymentSpec(objMeta.Name)
-		outputs.Deployment = &appsv1.Deployment{
-			TypeMeta: metav1.TypeMeta{
-				APIVersion: "apps/v1",
-				Kind:       "Deployment",
-			},
-			ObjectMeta: objMeta,
-			Spec: appsv1.DeploymentSpec{
-				Replicas: spec.Replicas,
-				Selector: &metav1.LabelSelector{
-					MatchLabels: map[string]string{
-						"app":     "kagent",
-						"kagent":  agent.Name,
-						"version": "v1alpha1",
-					},
-				},
-				Template: corev1.PodTemplateSpec{
-					ObjectMeta: objMeta,
-					Spec: corev1.PodSpec{
-						Containers: []corev1.Container{spec.Container},
-						Volumes:    spec.Volumes,
-					},
-				},
-			},
-		}
-	} else {
-		return nil, fmt.Errorf("We need to figure out merging the deployment spec")
+	if agent.Spec.Deployment != nil {
+		envVars = append(envVars, agent.Spec.Deployment.Env...)
+	}
+	spec := defaultDeploymentSpec(objMeta.Name, newLabels, envVars...)
+	outputs.Deployment = &appsv1.Deployment{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "apps/v1",
+			Kind:       "Deployment",
+		},
+		ObjectMeta: objMeta,
+		Spec:       spec,
 	}
 
 	outputs.Service = &corev1.Service{
@@ -189,7 +178,9 @@ func (a *adkApiTranslator) translateOutputs(_ context.Context, agent *v1alpha1.A
 			Kind:       "ConfigMap",
 		},
 		ObjectMeta: objMeta,
-		Data:       map[string]string{},
+		Data: map[string]string{
+			"config.json": string(configJson),
+		},
 	}
 
 	if err := controllerutil.SetControllerReference(agent, outputs.Deployment, a.kube.Scheme()); err != nil {
@@ -207,9 +198,9 @@ func (a *adkApiTranslator) translateOutputs(_ context.Context, agent *v1alpha1.A
 	return outputs, nil
 }
 
-func defaultDeploymentSpec(name string) *v1alpha1.DeploymentSpec {
+func defaultDeploymentSpec(name string, labels map[string]string, envVars ...corev1.EnvVar) appsv1.DeploymentSpec {
 	// TODO: Come up with a better way to do tracing config for the agents
-	envVars := slices.Collect(utils.Map(
+	envVars = append(envVars, slices.Collect(utils.Map(
 		utils.Filter(
 			slices.Values(os.Environ()),
 			func(envVar string) bool {
@@ -223,7 +214,7 @@ func defaultDeploymentSpec(name string) *v1alpha1.DeploymentSpec {
 				Value: parts[1],
 			}
 		},
-	))
+	))...)
 
 	envVars = append(envVars, corev1.EnvVar{
 		Name: "KAGENT_NAMESPACE",
@@ -234,44 +225,56 @@ func defaultDeploymentSpec(name string) *v1alpha1.DeploymentSpec {
 		},
 	})
 
-	return &v1alpha1.DeploymentSpec{
+	return appsv1.DeploymentSpec{
 		Replicas: ptr.To(int32(1)),
-		Container: corev1.Container{
-			Name:            "kagent",
-			Image:           fmt.Sprintf("cr.kagent.dev/kagent-dev/kagent/app:%s", version.Get().Version),
-			ImagePullPolicy: corev1.PullIfNotPresent,
-			Command:         []string{"uv", "run", "kagent", "static", "--host", "0.0.0.0", "--port", "8080", "--filepath", "/config/config.json"},
-			Ports: []corev1.ContainerPort{
-				{
-					Name:          "http",
-					ContainerPort: 8080,
-				},
+		Selector: &metav1.LabelSelector{
+			MatchLabels: labels,
+		},
+		Template: corev1.PodTemplateSpec{
+			ObjectMeta: metav1.ObjectMeta{
+				Labels: labels,
 			},
-			Env: envVars,
-			ReadinessProbe: &corev1.Probe{
-				ProbeHandler: corev1.ProbeHandler{
-					HTTPGet: &corev1.HTTPGetAction{
-						Path: "/health",
-						Port: intstr.FromString("http"),
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Name:            "kagent",
+						Image:           fmt.Sprintf("cr.kagent.dev/kagent-dev/kagent/app:%s", version.Get().Version),
+						ImagePullPolicy: corev1.PullIfNotPresent,
+						Command:         []string{"uv", "run", "kagent", "static", "--host", "0.0.0.0", "--port", "8080", "--filepath", "/config/config.json"},
+						Ports: []corev1.ContainerPort{
+							{
+								Name:          "http",
+								ContainerPort: 8080,
+							},
+						},
+						Env: envVars,
+						ReadinessProbe: &corev1.Probe{
+							ProbeHandler: corev1.ProbeHandler{
+								HTTPGet: &corev1.HTTPGetAction{
+									Path: "/health",
+									Port: intstr.FromString("http"),
+								},
+							},
+							InitialDelaySeconds: 15,
+							PeriodSeconds:       3,
+						},
+						VolumeMounts: []corev1.VolumeMount{
+							{
+								Name:      "config",
+								MountPath: "/config",
+							},
+						},
 					},
 				},
-				InitialDelaySeconds: 15,
-				PeriodSeconds:       3,
-			},
-			VolumeMounts: []corev1.VolumeMount{
-				{
-					Name:      "config",
-					MountPath: "/config",
-				},
-			},
-		},
-		Volumes: []corev1.Volume{
-			{
-				Name: "config",
-				VolumeSource: corev1.VolumeSource{
-					ConfigMap: &corev1.ConfigMapVolumeSource{
-						LocalObjectReference: corev1.LocalObjectReference{
-							Name: name,
+				Volumes: []corev1.Volume{
+					{
+						Name: "config",
+						VolumeSource: corev1.VolumeSource{
+							ConfigMap: &corev1.ConfigMapVolumeSource{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: name,
+								},
+							},
 						},
 					},
 				},
@@ -288,7 +291,7 @@ func (a *adkApiTranslator) translateDeclarativeAgent(ctx context.Context, agent 
 	}
 
 	cfg := &adk.AgentConfig{
-		KagentUrl:   fmt.Sprintf("http://kagent.%s.svc.cluster.local:8083", common.GetResourceNamespace()),
+		KagentUrl:   fmt.Sprintf("http://kagent.%s.svc:8083", common.GetResourceNamespace()),
 		Name:        common.ConvertToPythonIdentifier(common.GetObjectRef(agent)),
 		Description: agent.Spec.Description,
 		Instruction: agent.Spec.SystemMessage,
@@ -296,7 +299,7 @@ func (a *adkApiTranslator) translateDeclarativeAgent(ctx context.Context, agent 
 		AgentCard: server.AgentCard{
 			Name:        agent.Name,
 			Description: agent.Spec.Description,
-			URL:         fmt.Sprintf("http://%s.%s.svc.cluster.local:8080", agent.Name, agent.Namespace),
+			URL:         fmt.Sprintf("http://%s.%s.svc:8080", agent.Name, agent.Namespace),
 			Capabilities: server.AgentCapabilities{
 				Streaming:              ptr.To(true),
 				PushNotifications:      ptr.To(false),

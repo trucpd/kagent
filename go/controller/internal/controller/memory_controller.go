@@ -31,8 +31,8 @@ import (
 	agentv1alpha1 "github.com/kagent-dev/kagent/go/controller/api/v1alpha1"
 )
 
-// AutogenMemoryReconciler reconciles a AutogenMemory object
-type AutogenMemoryReconciler struct {
+// MemoryReconciler reconciles a Memory object
+type MemoryReconciler struct {
 	client.Client
 	Scheme     *runtime.Scheme
 	Reconciler reconciler.KagentReconciler
@@ -42,13 +42,13 @@ type AutogenMemoryReconciler struct {
 // +kubebuilder:rbac:groups=kagent.dev,resources=memories/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=kagent.dev,resources=memories/finalizers,verbs=update
 
-func (r *AutogenMemoryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *MemoryReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
 	return ctrl.Result{}, r.Reconciler.ReconcileKagentMemory(ctx, req)
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *AutogenMemoryReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *MemoryReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		WithOptions(controller.Options{
 			NeedLeaderElection: ptr.To(true),

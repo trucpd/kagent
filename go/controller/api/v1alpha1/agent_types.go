@@ -58,8 +58,6 @@ type AgentSpec struct {
 }
 
 type DeploymentSpec struct {
-	// inherit from the container spec
-	corev1.Container `json:",inline"`
 	// If not specified, the default value is 1.
 	// +optional
 	// +kubebuilder:validation:Minimum=1
@@ -72,6 +70,8 @@ type DeploymentSpec struct {
 	Labels map[string]string `json:"labels,omitempty"`
 	// +optional
 	Annotations map[string]string `json:"annotations,omitempty"`
+	// +optional
+	Env []corev1.EnvVar `json:"env,omitempty"`
 }
 
 // ToolProviderType represents the tool provider type

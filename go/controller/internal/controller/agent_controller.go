@@ -32,8 +32,8 @@ import (
 	"github.com/kagent-dev/kagent/go/controller/internal/reconciler"
 )
 
-// AutogenAgentReconciler reconciles a AutogenAgent object
-type AutogenAgentReconciler struct {
+// AgentReconciler reconciles a Agent object
+type AgentReconciler struct {
 	client.Client
 	Scheme     *runtime.Scheme
 	Reconciler reconciler.KagentReconciler
@@ -43,13 +43,13 @@ type AutogenAgentReconciler struct {
 // +kubebuilder:rbac:groups=kagent.dev,resources=agents/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=kagent.dev,resources=agents/finalizers,verbs=update
 
-func (r *AutogenAgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *AgentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = log.FromContext(ctx)
 	return ctrl.Result{}, r.Reconciler.ReconcileKagentAgent(ctx, req)
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *AutogenAgentReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *AgentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		WithOptions(controller.Options{
 			NeedLeaderElection: ptr.To(true),
@@ -58,6 +58,6 @@ func (r *AutogenAgentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&appsv1.Deployment{}).
 		Owns(&corev1.ConfigMap{}).
 		Owns(&corev1.Service{}).
-		Named("autogenagent").
+		Named("agent").
 		Complete(r)
 }

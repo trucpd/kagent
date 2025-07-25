@@ -17,13 +17,13 @@ var (
 )
 
 type A2AReconciler interface {
-	ReconcileAutogenAgent(
+	ReconcileAgent(
 		ctx context.Context,
 		agent *v1alpha1.Agent,
 		adkConfig *adk.AgentConfig,
 	) error
 
-	ReconcileAutogenAgentDeletion(
+	ReconcileAgentDeletion(
 		agentRef string,
 	)
 }
@@ -43,7 +43,7 @@ func NewReconciler(
 	}
 }
 
-func (a *a2aReconciler) ReconcileAutogenAgent(
+func (a *a2aReconciler) ReconcileAgent(
 	ctx context.Context,
 	agent *v1alpha1.Agent,
 	adkConfig *adk.AgentConfig,
@@ -65,7 +65,7 @@ func (a *a2aReconciler) ReconcileAutogenAgent(
 	)
 }
 
-func (a *a2aReconciler) ReconcileAutogenAgentDeletion(
+func (a *a2aReconciler) ReconcileAgentDeletion(
 	agentRef string,
 ) {
 	a.a2aHandler.RemoveAgentHandler(agentRef)
