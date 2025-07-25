@@ -60,6 +60,21 @@ func (o *OpenAI) GetType() string {
 	return "openai"
 }
 
+type AzureOpenAI struct {
+	BaseModel
+}
+
+func (a *AzureOpenAI) GetType() string {
+	return "azure_openai"
+}
+
+func (a *AzureOpenAI) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]interface{}{
+		"type":  "azure_openai",
+		"model": a.Model,
+	})
+}
+
 type Anthropic struct {
 	BaseModel
 	BaseUrl string `json:"base_url"`

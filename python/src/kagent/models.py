@@ -39,6 +39,10 @@ class OpenAI(BaseLLM):
     type: Literal["openai"]
 
 
+class AzureOpenAI(BaseLLM):
+    type: Literal["azure_openai"]
+
+
 class Anthropic(BaseLLM):
     base_url: str | None = None
 
@@ -61,7 +65,7 @@ class AgentConfig(BaseModel):
     kagent_url: str  # The URL of the KAgent server
     agent_card: AgentCard
     name: str
-    model: Union[OpenAI, Anthropic, GeminiVertexAI, GeminiAnthropic, Ollama] = Field(discriminator="type")
+    model: Union[OpenAI, Anthropic, GeminiVertexAI, GeminiAnthropic, Ollama, AzureOpenAI] = Field(discriminator="type")
     description: str
     instruction: str
     http_tools: list[HttpMcpServerConfig] | None = None  # tools, always MCP
@@ -89,6 +93,8 @@ class AgentConfig(BaseModel):
             model = ClaudeLLM(model=self.model.model)
         elif self.model.type == "ollama":
             model = LiteLlm(model=f"ollama_chat/{self.model.model}")
+        elif self.model.type == "azure_openai":
+            model = LiteLlm(model=f"azure/{self.model.model}")
         else:
             raise ValueError(f"Invalid model type: {self.model.type}")
         return Agent(

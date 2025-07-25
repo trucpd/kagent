@@ -114,7 +114,7 @@ func (a *adkApiTranslator) TranslateAgent(
 	return outputs, nil
 }
 
-func (a *adkApiTranslator) translateOutputs(ctx context.Context, agent *v1alpha1.Agent) (*AgentOutputs, error) {
+func (a *adkApiTranslator) translateOutputs(_ context.Context, agent *v1alpha1.Agent) (*AgentOutputs, error) {
 	outputs := &AgentOutputs{}
 
 	newLabels := maps.Clone(agent.Labels)
@@ -410,6 +410,12 @@ func (a *adkApiTranslator) translateModel(ctx context.Context, namespace, modelC
 		}
 		if model.Spec.OpenAI != nil {
 			openai.BaseUrl = model.Spec.OpenAI.BaseURL
+			if model.Spec.OpenAI.Organization != "" {
+				envVars = append(envVars, corev1.EnvVar{
+					Name:  "OPENAI_ORGANIZATION",
+					Value: model.Spec.OpenAI.Organization,
+				})
+			}
 		}
 		return openai, envVars, nil
 	case v1alpha1.ModelProviderAnthropic:
@@ -435,8 +441,44 @@ func (a *adkApiTranslator) translateModel(ctx context.Context, namespace, modelC
 			anthropic.BaseUrl = model.Spec.Anthropic.BaseURL
 		}
 		return anthropic, envVars, nil
-	// case v1alpha1.ModelProviderAzureOpenAI:
-	// 	return a.translateAzureOpenAI(ctx, model)
+	case v1alpha1.ModelProviderAzureOpenAI:
+		if model.Spec.AzureOpenAI == nil {
+			return nil, nil, fmt.Errorf("AzureOpenAI model config is required")
+		}
+		envVars = append(envVars, corev1.EnvVar{
+			Name: "AZURE_API_KEY",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: model.Spec.APIKeySecretRef,
+					},
+				},
+			},
+		})
+		if model.Spec.AzureOpenAI.AzureADToken != "" {
+			envVars = append(envVars, corev1.EnvVar{
+				Name:  "AZURE_AD_TOKEN",
+				Value: model.Spec.AzureOpenAI.AzureADToken,
+			})
+		}
+		if model.Spec.AzureOpenAI.APIVersion != "" {
+			envVars = append(envVars, corev1.EnvVar{
+				Name:  "AZURE_API_VERSION",
+				Value: model.Spec.AzureOpenAI.APIVersion,
+			})
+		}
+		if model.Spec.AzureOpenAI.Endpoint != "" {
+			envVars = append(envVars, corev1.EnvVar{
+				Name:  "AZURE_API_BASE",
+				Value: model.Spec.AzureOpenAI.Endpoint,
+			})
+		}
+		azureOpenAI := &adk.AzureOpenAI{
+			BaseModel: adk.BaseModel{
+				Model: model.Spec.AzureOpenAI.DeploymentName,
+			},
+		}
+		return azureOpenAI, envVars, nil
 	case v1alpha1.ModelProviderGeminiVertexAI:
 		if model.Spec.GeminiVertexAI == nil {
 			return nil, nil, fmt.Errorf("GeminiVertexAI model config is required")
@@ -513,9 +555,8 @@ func (a *adkApiTranslator) translateModel(ctx context.Context, namespace, modelC
 			},
 		}
 		return ollama, envVars, nil
-	default:
-		return nil, nil, fmt.Errorf("unknown model type: %s", model.Spec.Provider)
 	}
+	return nil, nil, fmt.Errorf("unknown model provider: %s", model.Spec.Provider)
 }
 
 func (a *adkApiTranslator) translateStreamableHttpTool(ctx context.Context, tool *v1alpha1.StreamableHttpServerConfig, namespace string) (*adk.StreamableHTTPConnectionParams, error) {
