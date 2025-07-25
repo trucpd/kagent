@@ -7,6 +7,7 @@ from a2a.types import AgentCard
 from google.adk.agents import Agent
 from google.adk.agents.llm_agent import ToolUnion
 from google.adk.models.google_llm import Gemini as GeminiLLM
+from google.adk.models.anthropic_llm import Claude as ClaudeLLM
 from google.adk.models.lite_llm import LiteLlm
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
@@ -28,31 +29,39 @@ class SseMcpServerConfig(BaseModel):
     tools: list[str] = Field(default_factory=list)
 
 
-class OpenAI(BaseModel):
+class BaseLLM(BaseModel):
     model: str
+
+
+class OpenAI(BaseLLM):
     base_url: str | None = None
 
     type: Literal["openai"]
 
 
-class Anthropic(BaseModel):
-    model: str
+class Anthropic(BaseLLM):
     base_url: str | None = None
 
     type: Literal["anthropic"]
 
 
-class Gemini(BaseModel):
-    model: str
+class GeminiVertexAI(BaseLLM):
+    type: Literal["gemini_vertex_ai"]
 
-    type: Literal["gemini"]
+
+class GeminiAnthropic(BaseLLM):
+    type: Literal["gemini_anthropic"]
+
+
+class Ollama(BaseLLM):
+    type: Literal["ollama"]
 
 
 class AgentConfig(BaseModel):
     kagent_url: str  # The URL of the KAgent server
     agent_card: AgentCard
     name: str
-    model: Union[OpenAI, Anthropic, Gemini] = Field(discriminator="type")
+    model: Union[OpenAI, Anthropic, GeminiVertexAI, GeminiAnthropic, Ollama] = Field(discriminator="type")
     description: str
     instruction: str
     http_tools: list[HttpMcpServerConfig] | None = None  # tools, always MCP
@@ -74,8 +83,12 @@ class AgentConfig(BaseModel):
             model = LiteLlm(model=f"openai/{self.model.model}", base_url=self.model.base_url)
         elif self.model.type == "anthropic":
             model = LiteLlm(model=f"anthropic/{self.model.model}", base_url=self.model.base_url)
-        elif self.model.type == "gemini":
+        elif self.model.type == "gemini_vertex_ai":
             model = GeminiLLM(model=self.model.model)
+        elif self.model.type == "gemini_anthropic":
+            model = ClaudeLLM(model=self.model.model)
+        elif self.model.type == "ollama":
+            model = LiteLlm(model=f"ollama_chat/{self.model.model}")
         else:
             raise ValueError(f"Invalid model type: {self.model.type}")
         return Agent(

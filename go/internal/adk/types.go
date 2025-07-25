@@ -39,12 +39,12 @@ type Model interface {
 }
 
 type BaseModel struct {
-	Type string `json:"type"`
+	_type string `json:"type"`
+	Model string `json:"model"`
 }
 
 type OpenAI struct {
 	BaseModel
-	Model   string `json:"model"`
 	BaseUrl string `json:"base_url"`
 }
 
@@ -62,7 +62,6 @@ func (o *OpenAI) GetType() string {
 
 type Anthropic struct {
 	BaseModel
-	Model   string `json:"model"`
 	BaseUrl string `json:"base_url"`
 }
 
@@ -78,12 +77,59 @@ func (a *Anthropic) GetType() string {
 	return "anthropic"
 }
 
+type GeminiVertexAI struct {
+	BaseModel
+}
+
+func (g *GeminiVertexAI) MarshalJSON() ([]byte, error) {
+
+	return json.Marshal(map[string]interface{}{
+		"type":  "gemini_vertex_ai",
+		"model": g.Model,
+	})
+}
+
+func (g *GeminiVertexAI) GetType() string {
+	return "gemini_vertex_ai"
+}
+
+type GeminiAnthropic struct {
+	BaseModel
+}
+
+func (g *GeminiAnthropic) MarshalJSON() ([]byte, error) {
+
+	return json.Marshal(map[string]interface{}{
+		"type":  "gemini_anthropic",
+		"model": g.Model,
+	})
+}
+
+func (g *GeminiAnthropic) GetType() string {
+	return "gemini_anthropic"
+}
+
+type Ollama struct {
+	BaseModel
+}
+
+func (o *Ollama) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]interface{}{
+		"type":  "ollama",
+		"model": o.Model,
+	})
+}
+
+func (o *Ollama) GetType() string {
+	return "ollama"
+}
+
 func ParseModel(bytes []byte) (Model, error) {
 	var model BaseModel
 	if err := json.Unmarshal(bytes, &model); err != nil {
 		return nil, err
 	}
-	switch model.Type {
+	switch model._type {
 	case "openai":
 		var openai OpenAI
 		if err := json.Unmarshal(bytes, &openai); err != nil {
@@ -96,8 +142,26 @@ func ParseModel(bytes []byte) (Model, error) {
 			return nil, err
 		}
 		return &anthropic, nil
+	case "gemini_vertex_ai":
+		var geminiVertexAI GeminiVertexAI
+		if err := json.Unmarshal(bytes, &geminiVertexAI); err != nil {
+			return nil, err
+		}
+		return &geminiVertexAI, nil
+	case "gemini_anthropic":
+		var geminiAnthropic GeminiAnthropic
+		if err := json.Unmarshal(bytes, &geminiAnthropic); err != nil {
+			return nil, err
+		}
+		return &geminiAnthropic, nil
+	case "ollama":
+		var ollama Ollama
+		if err := json.Unmarshal(bytes, &ollama); err != nil {
+			return nil, err
+		}
+		return &ollama, nil
 	}
-	return nil, fmt.Errorf("unknown model type: %s", model.Type)
+	return nil, fmt.Errorf("unknown model type: %s", model._type)
 }
 
 type AgentConfig struct {

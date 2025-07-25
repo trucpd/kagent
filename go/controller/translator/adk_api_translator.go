@@ -401,7 +401,9 @@ func (a *adkApiTranslator) translateModel(ctx context.Context, namespace, modelC
 			})
 		}
 		openai := &adk.OpenAI{
-			Model: model.Spec.Model,
+			BaseModel: adk.BaseModel{
+				Model: model.Spec.Model,
+			},
 		}
 		if model.Spec.OpenAI != nil {
 			openai.BaseUrl = model.Spec.OpenAI.BaseURL
@@ -422,7 +424,9 @@ func (a *adkApiTranslator) translateModel(ctx context.Context, namespace, modelC
 			})
 		}
 		anthropic := &adk.Anthropic{
-			Model: model.Spec.Model,
+			BaseModel: adk.BaseModel{
+				Model: model.Spec.Model,
+			},
 		}
 		if model.Spec.Anthropic != nil {
 			anthropic.BaseUrl = model.Spec.Anthropic.BaseURL
@@ -430,12 +434,82 @@ func (a *adkApiTranslator) translateModel(ctx context.Context, namespace, modelC
 		return anthropic, envVars, nil
 	// case v1alpha1.ModelProviderAzureOpenAI:
 	// 	return a.translateAzureOpenAI(ctx, model)
-	// case v1alpha1.ModelProviderOllama:
-	// 	return a.translateOllama(ctx, model)
-	// case v1alpha1.ModelProviderGeminiVertexAI:
-	// 	return a.translateGeminiVertexAI(ctx, model)
-	// case v1alpha1.ModelProviderAnthropicVertexAI:
-	// 	return a.translateAnthropicVertexAI(ctx, model)
+	case v1alpha1.ModelProviderGeminiVertexAI:
+		if model.Spec.GeminiVertexAI == nil {
+			return nil, nil, fmt.Errorf("GeminiVertexAI model config is required")
+		}
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  "GOOGLE_CLOUD_PROJECT",
+			Value: model.Spec.GeminiVertexAI.ProjectID,
+		})
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  "GOOGLE_CLOUD_LOCATION",
+			Value: model.Spec.GeminiVertexAI.Location,
+		})
+		if model.Spec.APIKeySecretRef != "" {
+			envVars = append(envVars, corev1.EnvVar{
+				Name: "GOOGLE_APPLICATION_CREDENTIALS",
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: model.Spec.APIKeySecretRef,
+						},
+						Key: model.Spec.APIKeySecretKey,
+					},
+				},
+			})
+		}
+		gemini := &adk.GeminiVertexAI{
+			BaseModel: adk.BaseModel{
+				Model: model.Spec.Model,
+			},
+		}
+		return gemini, envVars, nil
+	case v1alpha1.ModelProviderAnthropicVertexAI:
+		if model.Spec.AnthropicVertexAI == nil {
+			return nil, nil, fmt.Errorf("AnthropicVertexAI model config is required")
+		}
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  "GOOGLE_CLOUD_PROJECT",
+			Value: model.Spec.AnthropicVertexAI.ProjectID,
+		})
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  "GOOGLE_CLOUD_LOCATION",
+			Value: model.Spec.AnthropicVertexAI.Location,
+		})
+		if model.Spec.APIKeySecretRef != "" {
+			envVars = append(envVars, corev1.EnvVar{
+				Name: "GOOGLE_APPLICATION_CREDENTIALS",
+				ValueFrom: &corev1.EnvVarSource{
+					SecretKeyRef: &corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: model.Spec.APIKeySecretRef,
+						},
+						Key: model.Spec.APIKeySecretKey,
+					},
+				},
+			})
+		}
+		anthropic := &adk.GeminiAnthropic{
+			BaseModel: adk.BaseModel{
+				Model: model.Spec.Model,
+			},
+		}
+		return anthropic, envVars, nil
+	case v1alpha1.ModelProviderOllama:
+		if model.Spec.Ollama == nil {
+			return nil, nil, fmt.Errorf("Ollama model config is required")
+		}
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  "OLLAMA_API_BASE",
+			Value: model.Spec.Ollama.Host,
+		})
+		ollama := &adk.Ollama{
+			BaseModel: adk.BaseModel{
+				Model: model.Spec.Model,
+			},
+		}
+		return ollama, envVars, nil
 	default:
 		return nil, nil, fmt.Errorf("unknown model type: %s", model.Spec.Provider)
 	}
