@@ -167,7 +167,7 @@ class KAgentSessionService(BaseSessionService):
         )
         response.raise_for_status()
 
-        # TODO: potentiall pull and update the session from the server
+        # TODO: potentially pull and update the session from the server
         # Update the in-memory session.
         session.last_update_time = event.timestamp
         await super().append_event(session=session, event=event)
