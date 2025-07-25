@@ -20,20 +20,44 @@
     },
     "agents": null,
     "description": "A toolserver for math problems",
-    "http_tools": null,
+    "http_tools": [
+      {
+        "params": {
+          "headers": {},
+          "sse_read_timeout": 300,
+          "timeout": 30,
+          "url": "http://localhost:8084/mcp"
+        },
+        "tools": [
+          "k8s_get_resources"
+        ]
+      }
+    ],
     "instruction": "You are a math toolserver. Focus on solving mathematical problems step by step.",
-    "kagent_url": "http://kagent.kagent.svc.cluster.local:8080",
-    "model": "gemini-2.0-flash",
+    "kagent_url": "http://kagent.kagent.svc.cluster.local:8083",
+    "model": {
+      "base_url": "",
+      "model": "gpt-4o",
+      "type": "openai"
+    },
     "name": "test__NS__agent",
     "sse_tools": null
   },
-  "configHash": 4703835501661331000,
+  "configHash": 2047300726879699000,
   "configMap": {
+    "apiVersion": "v1",
     "data": {
-      "config.yaml": "{\"kagent_url\":\"http://kagent.kagent.svc.cluster.local:8080\",\"agent_card\":{\"name\":\"agent\",\"description\":\"A toolserver for math problems\",\"url\":\"http://agent.test.svc.cluster.local:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":null},\"name\":\"test__NS__agent\",\"model\":\"gemini-2.0-flash\",\"description\":\"A toolserver for math problems\",\"instruction\":\"You are a math toolserver. Focus on solving mathematical problems step by step.\",\"http_tools\":null,\"sse_tools\":null,\"agents\":null}"
+      "config.json": "{\"kagent_url\":\"http://kagent.kagent.svc.cluster.local:8083\",\"agent_card\":{\"name\":\"agent\",\"description\":\"A toolserver for math problems\",\"url\":\"http://agent.test.svc.cluster.local:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":[]},\"name\":\"test__NS__agent\",\"model\":{\"base_url\":\"\",\"model\":\"gpt-4o\",\"type\":\"openai\"},\"description\":\"A toolserver for math problems\",\"instruction\":\"You are a math toolserver. Focus on solving mathematical problems step by step.\",\"http_tools\":[{\"params\":{\"url\":\"http://localhost:8084/mcp\",\"headers\":{},\"timeout\":30,\"sse_read_timeout\":300},\"tools\":[\"k8s_get_resources\"]}],\"sse_tools\":null,\"agents\":null}"
     },
+    "kind": "ConfigMap",
     "metadata": {
       "creationTimestamp": null,
+      "labels": {
+        "app": "kagent",
+        "config.kagent.dev/hash": "2047300726879699057",
+        "kagent": "agent",
+        "version": "v1alpha1"
+      },
       "name": "agent",
       "namespace": "test",
       "ownerReferences": [
@@ -45,13 +69,20 @@
           "name": "agent",
           "uid": ""
         }
-      ],
-      "resourceVersion": "999"
+      ]
     }
   },
   "deployment": {
+    "apiVersion": "apps/v1",
+    "kind": "Deployment",
     "metadata": {
       "creationTimestamp": null,
+      "labels": {
+        "app": "kagent",
+        "config.kagent.dev/hash": "2047300726879699057",
+        "kagent": "agent",
+        "version": "v1alpha1"
+      },
       "name": "agent",
       "namespace": "test",
       "ownerReferences": [
@@ -63,8 +94,7 @@
           "name": "agent",
           "uid": ""
         }
-      ],
-      "resourceVersion": "999"
+      ]
     },
     "spec": {
       "replicas": 1,
@@ -79,12 +109,14 @@
       "template": {
         "metadata": {
           "creationTimestamp": null,
-          "generateName": "agent-",
           "labels": {
             "app": "kagent",
+            "config.kagent.dev/hash": "2047300726879699057",
             "kagent": "agent",
             "version": "v1alpha1"
-          }
+          },
+          "name": "agent",
+          "namespace": "test"
         },
         "spec": {
           "containers": [
@@ -93,13 +125,50 @@
                 "uv",
                 "run",
                 "kagent",
-                "start",
-                "--config",
-                "/config/config.yaml"
+                "static",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "8080",
+                "--filepath",
+                "/config/config.json"
               ],
-              "image": "kagent-controller:latest",
+              "env": [
+                {
+                  "name": "KAGENT_NAMESPACE",
+                  "valueFrom": {
+                    "fieldRef": {
+                      "fieldPath": "metadata.namespace"
+                    }
+                  }
+                },
+                {
+                  "name": "OPENAI_API_KEY",
+                  "valueFrom": {
+                    "secretKeyRef": {
+                      "key": "api-key",
+                      "name": "openai-secret"
+                    }
+                  }
+                }
+              ],
+              "image": "cr.kagent.dev/kagent-dev/kagent/app:dev",
               "imagePullPolicy": "IfNotPresent",
               "name": "kagent",
+              "ports": [
+                {
+                  "containerPort": 8080,
+                  "name": "http"
+                }
+              ],
+              "readinessProbe": {
+                "httpGet": {
+                  "path": "/health",
+                  "port": "http"
+                },
+                "initialDelaySeconds": 15,
+                "periodSeconds": 3
+              },
               "resources": {},
               "volumeMounts": [
                 {
@@ -112,7 +181,7 @@
           "volumes": [
             {
               "configMap": {
-                "name": "kagent-config"
+                "name": "agent"
               },
               "name": "config"
             }
@@ -123,8 +192,16 @@
     "status": {}
   },
   "service": {
+    "apiVersion": "v1",
+    "kind": "Service",
     "metadata": {
       "creationTimestamp": null,
+      "labels": {
+        "app": "kagent",
+        "config.kagent.dev/hash": "2047300726879699057",
+        "kagent": "agent",
+        "version": "v1alpha1"
+      },
       "name": "agent",
       "namespace": "test",
       "ownerReferences": [
@@ -136,8 +213,7 @@
           "name": "agent",
           "uid": ""
         }
-      ],
-      "resourceVersion": "999"
+      ]
     },
     "spec": {
       "ports": [

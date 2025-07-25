@@ -25,10 +25,6 @@ import (
 	"trpc.group/trpc-go/trpc-a2a-go/server"
 )
 
-const (
-	AgentConditionTypeAccepted = "Accepted"
-)
-
 type AgentType string
 
 // AgentSpec defines the desired state of Agent.
@@ -127,10 +123,18 @@ type A2AConfig struct {
 
 type AgentSkill server.AgentSkill
 
+const (
+	AgentConditionTypeAccepted = "Accepted"
+	AgentConditionTypeReady    = "Ready"
+)
+
 // AgentStatus defines the observed state of Agent.
 type AgentStatus struct {
-	ObservedGeneration int64              `json:"observedGeneration,omitempty"`
-	Conditions         []metav1.Condition `json:"conditions,omitempty"`
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+	// This is used to determine if the agent config has changed.
+	// If it has changed, the agent will be restarted.
+	ConfigHash uint64             `json:"configHash,omitempty"`
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 // +kubebuilder:object:root=true

@@ -3473,6 +3473,12 @@ spec:
                   - type
                   type: object
                 type: array
+              configHash:
+                description: |-
+                  This is used to determine if the agent config has changed.
+                  If it has changed, the agent will be restarted.
+                format: int64
+                type: integer
               observedGeneration:
                 format: int64
                 type: integer

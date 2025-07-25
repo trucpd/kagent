@@ -118,9 +118,12 @@ func (a *adkApiTranslator) translateOutputs(ctx context.Context, agent *v1alpha1
 	outputs := &AgentOutputs{}
 
 	newLabels := maps.Clone(agent.Labels)
+	if newLabels == nil {
+		newLabels = make(map[string]string)
+	}
 	newLabels["app"] = "kagent"
 	newLabels["kagent"] = agent.Name
-	newLabels["version"] = "v1alpha1"
+	newLabels["version"] = "v1alpha1" // TODO: make this dynamic
 	objMeta := metav1.ObjectMeta{
 		Name:        agent.Name,
 		Namespace:   agent.Namespace,

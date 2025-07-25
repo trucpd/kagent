@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/hashicorp/go-multierror"
+	appsv1 "k8s.io/api/apps/v1"
 	k8s_errors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -70,8 +71,6 @@ func NewKagentReconciler(
 }
 
 func (a *kagentReconciler) ReconcileKagentAgent(ctx context.Context, req ctrl.Request) error {
-	// reconcile the agent team itself
-
 	// TODO(sbx0r): missing finalizer logic
 
 	agent := &v1alpha1.Agent{}
@@ -132,7 +131,7 @@ func (a *kagentReconciler) handleExistingAgent(ctx context.Context, agent *v1alp
 	return a.reconcileAgents(ctx, agent)
 }
 
-func (a *kagentReconciler) reconcileAgentStatus(ctx context.Context, agent *v1alpha1.Agent, err error) error {
+func (a *kagentReconciler) reconcileAgentStatus(ctx context.Context, agent *v1alpha1.Agent, configHash uint64, err error) error {
 	var (
 		status  metav1.ConditionStatus
 		message string
@@ -156,8 +155,39 @@ func (a *kagentReconciler) reconcileAgentStatus(ctx context.Context, agent *v1al
 		Message:            message,
 	})
 
+	deployedCondition := metav1.Condition{
+		Type:               v1alpha1.AgentConditionTypeReady,
+		Status:             metav1.ConditionUnknown,
+		LastTransitionTime: metav1.Now(),
+	}
+
+	// Check if the deployment exists
+	deployment := &appsv1.Deployment{}
+	if err := a.kube.Get(ctx, types.NamespacedName{Namespace: agent.Namespace, Name: agent.Name}, deployment); err != nil {
+		deployedCondition.Status = metav1.ConditionUnknown
+		deployedCondition.Reason = "DeploymentNotFound"
+		deployedCondition.Message = err.Error()
+	} else {
+		replicas := int32(1)
+		if deployment.Spec.Replicas != nil {
+			replicas = *deployment.Spec.Replicas
+		}
+		if deployment.Status.AvailableReplicas == replicas {
+			deployedCondition.Status = metav1.ConditionTrue
+			deployedCondition.Reason = "DeploymentReady"
+			deployedCondition.Message = "Deployment is ready"
+		} else {
+			deployedCondition.Status = metav1.ConditionFalse
+			deployedCondition.Reason = "DeploymentNotReady"
+			deployedCondition.Message = fmt.Sprintf("Deployment is not ready, %d/%d pods are ready", deployment.Status.AvailableReplicas, replicas)
+		}
+	}
+
+	conditionChanged = meta.SetStatusCondition(&agent.Status.Conditions, deployedCondition)
+
 	// update the status if it has changed or the generation has changed
-	if conditionChanged || agent.Status.ObservedGeneration != agent.Generation {
+	if conditionChanged || agent.Status.ObservedGeneration != agent.Generation || agent.Status.ConfigHash != configHash {
+		agent.Status.ConfigHash = configHash
 		agent.Status.ObservedGeneration = agent.Generation
 		if err := a.kube.Status().Update(ctx, agent); err != nil {
 			return fmt.Errorf("failed to update agent status: %v", err)
@@ -374,13 +404,13 @@ func (a *kagentReconciler) reconcileMemoryStatus(ctx context.Context, memory *v1
 func (a *kagentReconciler) reconcileAgents(ctx context.Context, agents ...*v1alpha1.Agent) error {
 	var multiErr *multierror.Error
 	for _, agent := range agents {
-		reconcileErr := a.reconcileAgent(ctx, agent)
+		configHash, reconcileErr := a.reconcileAgent(ctx, agent)
 		// Append error but still try to reconcile the agent status
 		if reconcileErr != nil {
 			multiErr = multierror.Append(multiErr, fmt.Errorf(
 				"failed to reconcile agent %s/%s: %v", agent.Namespace, agent.Name, reconcileErr))
 		}
-		if err := a.reconcileAgentStatus(ctx, agent, reconcileErr); err != nil {
+		if err := a.reconcileAgentStatus(ctx, agent, configHash, reconcileErr); err != nil {
 			multiErr = multierror.Append(multiErr, fmt.Errorf(
 				"failed to reconcile agent status %s/%s: %v", agent.Namespace, agent.Name, err))
 		}
@@ -389,19 +419,19 @@ func (a *kagentReconciler) reconcileAgents(ctx context.Context, agents ...*v1alp
 	return multiErr.ErrorOrNil()
 }
 
-func (a *kagentReconciler) reconcileAgent(ctx context.Context, agent *v1alpha1.Agent) error {
+func (a *kagentReconciler) reconcileAgent(ctx context.Context, agent *v1alpha1.Agent) (uint64, error) {
 	agentOutputs, err := a.adkTranslator.TranslateAgent(ctx, agent)
 	if err != nil {
-		return fmt.Errorf("failed to translate agent %s/%s: %v", agent.Namespace, agent.Name, err)
+		return 0, fmt.Errorf("failed to translate agent %s/%s: %v", agent.Namespace, agent.Name, err)
 	}
 	if err := a.reconcileA2A(ctx, agent, agentOutputs.Config); err != nil {
-		return fmt.Errorf("failed to reconcile A2A for agent %s/%s: %v", agent.Namespace, agent.Name, err)
+		return 0, fmt.Errorf("failed to reconcile A2A for agent %s/%s: %v", agent.Namespace, agent.Name, err)
 	}
-	if err := a.upsertAgent(ctx, agentOutputs); err != nil {
-		return fmt.Errorf("failed to upsert agent %s/%s: %v", agent.Namespace, agent.Name, err)
+	if err := a.upsertAgent(ctx, agent, agentOutputs); err != nil {
+		return 0, fmt.Errorf("failed to upsert agent %s/%s: %v", agent.Namespace, agent.Name, err)
 	}
 
-	return nil
+	return agentOutputs.ConfigHash, nil
 }
 
 func (a *kagentReconciler) reconcileToolServer(ctx context.Context, server *v1alpha1.ToolServer) error {
@@ -417,12 +447,26 @@ func (a *kagentReconciler) reconcileToolServer(ctx context.Context, server *v1al
 	return nil
 }
 
-func (a *kagentReconciler) upsertAgent(ctx context.Context, agentOutputs *translator.AgentOutputs) error {
+func (a *kagentReconciler) upsertAgent(ctx context.Context, agent *v1alpha1.Agent, agentOutputs *translator.AgentOutputs) error {
 	// lock to prevent races
 	a.upsertLock.Lock()
 	defer a.upsertLock.Unlock()
 
-	// TODO: Only patch if the config hash has changed
+	dbAgent := &database.Agent{
+		ID:     agentOutputs.Config.Name,
+		Config: agentOutputs.Config,
+	}
+
+	if err := a.dbClient.StoreAgent(dbAgent); err != nil {
+		return fmt.Errorf("failed to store agent %s: %v", agentOutputs.Config.Name, err)
+	}
+
+	// If the config hash has not changed, we can skip the patch
+	if agentOutputs.ConfigHash == agent.Status.ConfigHash {
+		return nil
+	}
+
+	// Patch the agent resources if the config hash has changed
 	if err := a.kube.Patch(ctx, agentOutputs.ConfigMap, client.Apply, &client.PatchOptions{
 		FieldManager: "kagent-controller",
 		Force:        ptr.To(true),
@@ -442,12 +486,7 @@ func (a *kagentReconciler) upsertAgent(ctx context.Context, agentOutputs *transl
 		return fmt.Errorf("failed to patch agent %s: %v", agentOutputs.Config.Name, err)
 	}
 
-	dbAgent := &database.Agent{
-		ID:     agentOutputs.Config.Name,
-		Config: agentOutputs.Config,
-	}
-
-	return a.dbClient.StoreAgent(dbAgent)
+	return nil
 }
 
 func (a *kagentReconciler) upsertToolServer(ctx context.Context, toolServer *database.ToolServer) error {

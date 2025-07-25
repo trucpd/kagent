@@ -22,18 +22,29 @@
     "description": "An agent using Ollama local model",
     "http_tools": null,
     "instruction": "You are a helpful AI assistant running locally via Ollama.",
-    "kagent_url": "http://kagent.kagent.svc.cluster.local:8080",
-    "model": "gemini-2.0-flash",
+    "kagent_url": "http://kagent.kagent.svc.cluster.local:8083",
+    "model": {
+      "model": "llama3.2:latest",
+      "type": "ollama"
+    },
     "name": "test__NS__ollama_agent",
     "sse_tools": null
   },
-  "configHash": 17577323777392826000,
+  "configHash": 6096063864714739000,
   "configMap": {
+    "apiVersion": "v1",
     "data": {
-      "config.yaml": "{\"kagent_url\":\"http://kagent.kagent.svc.cluster.local:8080\",\"agent_card\":{\"name\":\"ollama-agent\",\"description\":\"An agent using Ollama local model\",\"url\":\"http://ollama-agent.test.svc.cluster.local:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":null},\"name\":\"test__NS__ollama_agent\",\"model\":\"gemini-2.0-flash\",\"description\":\"An agent using Ollama local model\",\"instruction\":\"You are a helpful AI assistant running locally via Ollama.\",\"http_tools\":null,\"sse_tools\":null,\"agents\":null}"
+      "config.json": "{\"kagent_url\":\"http://kagent.kagent.svc.cluster.local:8083\",\"agent_card\":{\"name\":\"ollama-agent\",\"description\":\"An agent using Ollama local model\",\"url\":\"http://ollama-agent.test.svc.cluster.local:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":[]},\"name\":\"test__NS__ollama_agent\",\"model\":{\"model\":\"llama3.2:latest\",\"type\":\"ollama\"},\"description\":\"An agent using Ollama local model\",\"instruction\":\"You are a helpful AI assistant running locally via Ollama.\",\"http_tools\":null,\"sse_tools\":null,\"agents\":null}"
     },
+    "kind": "ConfigMap",
     "metadata": {
       "creationTimestamp": null,
+      "labels": {
+        "app": "kagent",
+        "config.kagent.dev/hash": "6096063864714738673",
+        "kagent": "ollama-agent",
+        "version": "v1alpha1"
+      },
       "name": "ollama-agent",
       "namespace": "test",
       "ownerReferences": [
@@ -45,13 +56,20 @@
           "name": "ollama-agent",
           "uid": ""
         }
-      ],
-      "resourceVersion": "999"
+      ]
     }
   },
   "deployment": {
+    "apiVersion": "apps/v1",
+    "kind": "Deployment",
     "metadata": {
       "creationTimestamp": null,
+      "labels": {
+        "app": "kagent",
+        "config.kagent.dev/hash": "6096063864714738673",
+        "kagent": "ollama-agent",
+        "version": "v1alpha1"
+      },
       "name": "ollama-agent",
       "namespace": "test",
       "ownerReferences": [
@@ -63,8 +81,7 @@
           "name": "ollama-agent",
           "uid": ""
         }
-      ],
-      "resourceVersion": "999"
+      ]
     },
     "spec": {
       "replicas": 1,
@@ -79,12 +96,14 @@
       "template": {
         "metadata": {
           "creationTimestamp": null,
-          "generateName": "ollama-agent-",
           "labels": {
             "app": "kagent",
+            "config.kagent.dev/hash": "6096063864714738673",
             "kagent": "ollama-agent",
             "version": "v1alpha1"
-          }
+          },
+          "name": "ollama-agent",
+          "namespace": "test"
         },
         "spec": {
           "containers": [
@@ -93,13 +112,45 @@
                 "uv",
                 "run",
                 "kagent",
-                "start",
-                "--config",
-                "/config/config.yaml"
+                "static",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "8080",
+                "--filepath",
+                "/config/config.json"
               ],
-              "image": "kagent-controller:latest",
+              "env": [
+                {
+                  "name": "KAGENT_NAMESPACE",
+                  "valueFrom": {
+                    "fieldRef": {
+                      "fieldPath": "metadata.namespace"
+                    }
+                  }
+                },
+                {
+                  "name": "OLLAMA_API_BASE",
+                  "value": "http://localhost:11434"
+                }
+              ],
+              "image": "cr.kagent.dev/kagent-dev/kagent/app:dev",
               "imagePullPolicy": "IfNotPresent",
               "name": "kagent",
+              "ports": [
+                {
+                  "containerPort": 8080,
+                  "name": "http"
+                }
+              ],
+              "readinessProbe": {
+                "httpGet": {
+                  "path": "/health",
+                  "port": "http"
+                },
+                "initialDelaySeconds": 15,
+                "periodSeconds": 3
+              },
               "resources": {},
               "volumeMounts": [
                 {
@@ -112,7 +163,7 @@
           "volumes": [
             {
               "configMap": {
-                "name": "kagent-config"
+                "name": "ollama-agent"
               },
               "name": "config"
             }
@@ -123,8 +174,16 @@
     "status": {}
   },
   "service": {
+    "apiVersion": "v1",
+    "kind": "Service",
     "metadata": {
       "creationTimestamp": null,
+      "labels": {
+        "app": "kagent",
+        "config.kagent.dev/hash": "6096063864714738673",
+        "kagent": "ollama-agent",
+        "version": "v1alpha1"
+      },
       "name": "ollama-agent",
       "namespace": "test",
       "ownerReferences": [
@@ -136,8 +195,7 @@
           "name": "ollama-agent",
           "uid": ""
         }
-      ],
-      "resourceVersion": "999"
+      ]
     },
     "spec": {
       "ports": [
