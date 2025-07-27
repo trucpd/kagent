@@ -129,7 +129,7 @@ func (a *adkApiTranslator) translateOutputs(_ context.Context, agent *v1alpha1.A
 	}
 	newLabels["app"] = "kagent"
 	newLabels["kagent"] = agent.Name
-	newLabels["config.kagent.dev/hash"] = fmt.Sprintf("%d", configHash)
+
 	objMeta := metav1.ObjectMeta{
 		Name:        agent.Name,
 		Namespace:   agent.Namespace,
@@ -139,7 +139,8 @@ func (a *adkApiTranslator) translateOutputs(_ context.Context, agent *v1alpha1.A
 	if agent.Spec.Deployment != nil {
 		envVars = append(envVars, agent.Spec.Deployment.Env...)
 	}
-	spec := defaultDeploymentSpec(objMeta.Name, newLabels, envVars...)
+
+	spec := defaultDeploymentSpec(objMeta.Name, newLabels, configHash, envVars...)
 	outputs.Deployment = &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "apps/v1",
@@ -157,9 +158,8 @@ func (a *adkApiTranslator) translateOutputs(_ context.Context, agent *v1alpha1.A
 		ObjectMeta: objMeta,
 		Spec: corev1.ServiceSpec{
 			Selector: map[string]string{
-				"app":     "kagent",
-				"kagent":  agent.Name,
-				"version": "v1alpha1",
+				"app":    "kagent",
+				"kagent": agent.Name,
 			},
 			Ports: []corev1.ServicePort{
 				{
@@ -198,7 +198,7 @@ func (a *adkApiTranslator) translateOutputs(_ context.Context, agent *v1alpha1.A
 	return outputs, nil
 }
 
-func defaultDeploymentSpec(name string, labels map[string]string, envVars ...corev1.EnvVar) appsv1.DeploymentSpec {
+func defaultDeploymentSpec(name string, labels map[string]string, configHash uint64, envVars ...corev1.EnvVar) appsv1.DeploymentSpec {
 	// TODO: Come up with a better way to do tracing config for the agents
 	envVars = append(envVars, slices.Collect(utils.Map(
 		utils.Filter(
@@ -225,6 +225,9 @@ func defaultDeploymentSpec(name string, labels map[string]string, envVars ...cor
 		},
 	})
 
+	podTemplateLabels := maps.Clone(labels)
+	podTemplateLabels["config.kagent.dev/hash"] = fmt.Sprintf("%d", configHash)
+
 	return appsv1.DeploymentSpec{
 		Replicas: ptr.To(int32(1)),
 		Selector: &metav1.LabelSelector{
@@ -232,7 +235,7 @@ func defaultDeploymentSpec(name string, labels map[string]string, envVars ...cor
 		},
 		Template: corev1.PodTemplateSpec{
 			ObjectMeta: metav1.ObjectMeta{
-				Labels: labels,
+				Labels: podTemplateLabels,
 			},
 			Spec: corev1.PodSpec{
 				Containers: []corev1.Container{
@@ -455,6 +458,7 @@ func (a *adkApiTranslator) translateModel(ctx context.Context, namespace, modelC
 					LocalObjectReference: corev1.LocalObjectReference{
 						Name: model.Spec.APIKeySecretRef,
 					},
+					Key: model.Spec.APIKeySecretKey,
 				},
 			},
 		})
@@ -558,6 +562,24 @@ func (a *adkApiTranslator) translateModel(ctx context.Context, namespace, modelC
 			},
 		}
 		return ollama, envVars, nil
+	case v1alpha1.ModelProviderGemini:
+		envVars = append(envVars, corev1.EnvVar{
+			Name: "GOOGLE_API_KEY",
+			ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: model.Spec.APIKeySecretRef,
+					},
+					Key: model.Spec.APIKeySecretKey,
+				},
+			},
+		})
+		gemini := &adk.Gemini{
+			BaseModel: adk.BaseModel{
+				Model: model.Spec.Model,
+			},
+		}
+		return gemini, envVars, nil
 	}
 	return nil, nil, fmt.Errorf("unknown model provider: %s", model.Spec.Provider)
 }

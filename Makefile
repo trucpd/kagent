@@ -52,7 +52,7 @@ LDFLAGS := "-X github.com/kagent-dev/kagent/go/internal/version.Version=$(VERSIO
 TOOLS_UV_VERSION ?= 0.7.2
 TOOLS_BUN_VERSION ?= 1.2.16
 TOOLS_NODE_VERSION ?= 22.16.0
-TOOLS_PYTHON_VERSION ?= 3.12
+TOOLS_PYTHON_VERSION ?= 3.13
 TOOLS_KIND_IMAGE_VERSION ?= 1.33.1
 
 # build args

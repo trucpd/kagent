@@ -1,7 +1,8 @@
 #! /usr/bin/env python3
-
+import faulthandler
 import logging
 import os
+import sys
 from contextlib import asynccontextmanager
 
 import httpx
@@ -24,7 +25,6 @@ from kagent import KAgentSessionService, KAgentTaskStore
 USER_ID = "admin@kagent.dev"
 
 # --- Configure Logging ---
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -109,7 +109,6 @@ def build_app(root_agent: BaseAgent, kagent_url: str, app_name: str, agent_card:
 
     # Health check/readiness probe
     app.add_route("/health", methods=["GET"], route=health_check)
-
     a2a_app.add_routes_to_app(app)
 
     return app

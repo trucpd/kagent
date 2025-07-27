@@ -139,6 +139,22 @@ func (o *Ollama) GetType() string {
 	return "ollama"
 }
 
+type Gemini struct {
+	BaseModel
+}
+
+func (g *Gemini) MarshalJSON() ([]byte, error) {
+
+	return json.Marshal(map[string]interface{}{
+		"type":  "gemini",
+		"model": g.Model,
+	})
+}
+
+func (g *Gemini) GetType() string {
+	return "gemini"
+}
+
 func ParseModel(bytes []byte) (Model, error) {
 	var model BaseModel
 	if err := json.Unmarshal(bytes, &model); err != nil {
@@ -175,6 +191,12 @@ func ParseModel(bytes []byte) (Model, error) {
 			return nil, err
 		}
 		return &ollama, nil
+	case "gemini":
+		var gemini Gemini
+		if err := json.Unmarshal(bytes, &gemini); err != nil {
+			return nil, err
+		}
+		return &gemini, nil
 	}
 	return nil, fmt.Errorf("unknown model type: %s", model.Type)
 }

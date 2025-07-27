@@ -6,8 +6,9 @@ import aiofiles
 from a2a.types import AgentCard
 from google.adk.agents import Agent
 from google.adk.agents.llm_agent import ToolUnion
-from google.adk.models.google_llm import Gemini as GeminiLLM
+from google.adk.agents.run_config import RunConfig, StreamingMode
 from google.adk.models.anthropic_llm import Claude as ClaudeLLM
+from google.adk.models.google_llm import Gemini as GeminiLLM
 from google.adk.models.lite_llm import LiteLlm
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
@@ -61,11 +62,17 @@ class Ollama(BaseLLM):
     type: Literal["ollama"]
 
 
+class Gemini(BaseLLM):
+    type: Literal["gemini"]
+
+
 class AgentConfig(BaseModel):
     kagent_url: str  # The URL of the KAgent server
     agent_card: AgentCard
     name: str
-    model: Union[OpenAI, Anthropic, GeminiVertexAI, GeminiAnthropic, Ollama, AzureOpenAI] = Field(discriminator="type")
+    model: Union[OpenAI, Anthropic, GeminiVertexAI, GeminiAnthropic, Ollama, AzureOpenAI, Gemini] = Field(
+        discriminator="type"
+    )
     description: str
     instruction: str
     http_tools: list[HttpMcpServerConfig] | None = None  # tools, always MCP
@@ -95,6 +102,8 @@ class AgentConfig(BaseModel):
             model = LiteLlm(model=f"ollama_chat/{self.model.model}")
         elif self.model.type == "azure_openai":
             model = LiteLlm(model=f"azure/{self.model.model}")
+        elif self.model.type == "gemini":
+            model = self.model.model
         else:
             raise ValueError(f"Invalid model type: {self.model.type}")
         return Agent(
@@ -134,7 +143,11 @@ async def test_agent(filepath: str, task: str):
     content = types.Content(role="user", parts=[types.Part(text=task)])
     # Key Concept: run_async executes the agent logic and yields Events.
     # We iterate through events to find the final answer.
-    async for event in runner.run_async(user_id=USER_ID, session_id=SESSION_ID, new_message=content):
+    async for event in runner.run_async(
+        user_id=USER_ID,
+        session_id=SESSION_ID,
+        new_message=content,
+    ):
         # You can uncomment the line below to see *all* events during execution
         # print(f"  [Event] Author: {event.author}, Type: {type(event).__name__}, Final: {event.is_final_response()}, Content: {event.content}")
 

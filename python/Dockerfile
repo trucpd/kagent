@@ -10,7 +10,7 @@ RUN --mount=type=cache,target=/var/cache/apk,rw \
 
 ### STAGE 2: python
 FROM base-os AS python-os
-ARG TOOLS_PYTHON_VERSION=3.12
+ARG TOOLS_PYTHON_VERSION=3.13
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
