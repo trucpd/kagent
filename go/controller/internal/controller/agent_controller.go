@@ -58,6 +58,7 @@ func (r *AgentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&appsv1.Deployment{}).
 		Owns(&corev1.ConfigMap{}).
 		Owns(&corev1.Service{}).
+		Owns(&corev1.ServiceAccount{}).
 		Named("agent").
 		Complete(r)
 }
