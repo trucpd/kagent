@@ -34,8 +34,8 @@ type AgentOutputs struct {
 	Service    *corev1.Service    `json:"service,omitempty"`
 	ConfigMap  *corev1.ConfigMap  `json:"configMap,omitempty"`
 
-	Config     *adk.AgentConfig `json:"config,omitempty"`
-	ConfigHash uint64           `json:"configHash,omitempty"`
+	Config     *adk.AgentConfig  `json:"config,omitempty"`
+	ConfigHash [sha256.Size]byte `json:"configHash"`
 }
 
 var adkLog = ctrllog.Log.WithName("adk")
@@ -115,7 +115,7 @@ func (a *adkApiTranslator) TranslateAgent(
 		return nil, err
 	}
 	outputs.Config = adkAgent
-	outputs.ConfigHash = configHash
+	outputs.ConfigHash = hash
 
 	return outputs, nil
 }
@@ -123,24 +123,28 @@ func (a *adkApiTranslator) TranslateAgent(
 func (a *adkApiTranslator) translateOutputs(_ context.Context, agent *v1alpha1.Agent, configHash uint64, configJson []byte, envVars ...corev1.EnvVar) (*AgentOutputs, error) {
 	outputs := &AgentOutputs{}
 
-	newLabels := maps.Clone(agent.Labels)
-	if newLabels == nil {
-		newLabels = make(map[string]string)
+	podLabels := map[string]string{
+		"app":    "kagent",
+		"kagent": agent.Name,
 	}
-	newLabels["app"] = "kagent"
-	newLabels["kagent"] = agent.Name
+
+	deploymentLabels := maps.Clone(agent.Labels)
+	if deploymentLabels == nil {
+		deploymentLabels = make(map[string]string)
+	}
+	maps.Copy(deploymentLabels, podLabels)
 
 	objMeta := metav1.ObjectMeta{
 		Name:        agent.Name,
 		Namespace:   agent.Namespace,
 		Annotations: agent.Annotations,
-		Labels:      newLabels,
+		Labels:      deploymentLabels,
 	}
 	if agent.Spec.Deployment != nil {
 		envVars = append(envVars, agent.Spec.Deployment.Env...)
 	}
 
-	spec := defaultDeploymentSpec(objMeta.Name, newLabels, configHash, envVars...)
+	spec := defaultDeploymentSpec(objMeta.Name, podLabels, configHash, envVars...)
 	outputs.Deployment = &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "apps/v1",

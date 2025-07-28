@@ -1,7 +1,9 @@
 package reconciler
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"reflect"
 	"sync"
@@ -120,17 +122,17 @@ func (a *kagentReconciler) handleExistingAgent(ctx context.Context, agent *v1alp
 	return a.reconcileAgents(ctx, agent)
 }
 
-func (a *kagentReconciler) reconcileAgentStatus(ctx context.Context, agent *v1alpha1.Agent, configHash uint64, err error) error {
+func (a *kagentReconciler) reconcileAgentStatus(ctx context.Context, agent *v1alpha1.Agent, configHash *[sha256.Size]byte, inputErr error) error {
 	var (
 		status  metav1.ConditionStatus
 		message string
 		reason  string
 	)
-	if err != nil {
+	if inputErr != nil {
 		status = metav1.ConditionFalse
-		message = err.Error()
+		message = inputErr.Error()
 		reason = "AgentReconcileFailed"
-		reconcileLog.Error(err, "failed to reconcile agent", "agent", utils.GetObjectRef(agent))
+		reconcileLog.Error(inputErr, "failed to reconcile agent", "agent", utils.GetObjectRef(agent))
 	} else {
 		status = metav1.ConditionTrue
 		reason = "AgentReconciled"
@@ -174,9 +176,15 @@ func (a *kagentReconciler) reconcileAgentStatus(ctx context.Context, agent *v1al
 
 	conditionChanged = meta.SetStatusCondition(&agent.Status.Conditions, deployedCondition)
 
+	// Only update the config hash if the config hash has changed and there was no error
+	configHashChanged := configHash != nil && !bytes.Equal((agent.Status.ConfigHash)[:], (*configHash)[:])
+
 	// update the status if it has changed or the generation has changed
-	if conditionChanged || agent.Status.ObservedGeneration != agent.Generation || agent.Status.ConfigHash != configHash {
-		agent.Status.ConfigHash = configHash
+	if conditionChanged || agent.Status.ObservedGeneration != agent.Generation || configHashChanged {
+		// If the config hash is nil, it means there was an error during the reconciliation
+		if configHash != nil {
+			agent.Status.ConfigHash = (*configHash)[:]
+		}
 		agent.Status.ObservedGeneration = agent.Generation
 		if err := a.kube.Status().Update(ctx, agent); err != nil {
 			return fmt.Errorf("failed to update agent status: %v", err)
@@ -408,19 +416,19 @@ func (a *kagentReconciler) reconcileAgents(ctx context.Context, agents ...*v1alp
 	return multiErr.ErrorOrNil()
 }
 
-func (a *kagentReconciler) reconcileAgent(ctx context.Context, agent *v1alpha1.Agent) (uint64, error) {
+func (a *kagentReconciler) reconcileAgent(ctx context.Context, agent *v1alpha1.Agent) (*[sha256.Size]byte, error) {
 	agentOutputs, err := a.adkTranslator.TranslateAgent(ctx, agent)
 	if err != nil {
-		return 0, fmt.Errorf("failed to translate agent %s/%s: %v", agent.Namespace, agent.Name, err)
+		return nil, fmt.Errorf("failed to translate agent %s/%s: %v", agent.Namespace, agent.Name, err)
 	}
 	if err := a.reconcileA2A(ctx, agent, agentOutputs.Config); err != nil {
-		return 0, fmt.Errorf("failed to reconcile A2A for agent %s/%s: %v", agent.Namespace, agent.Name, err)
+		return nil, fmt.Errorf("failed to reconcile A2A for agent %s/%s: %v", agent.Namespace, agent.Name, err)
 	}
 	if err := a.upsertAgent(ctx, agent, agentOutputs); err != nil {
-		return 0, fmt.Errorf("failed to upsert agent %s/%s: %v", agent.Namespace, agent.Name, err)
+		return nil, fmt.Errorf("failed to upsert agent %s/%s: %v", agent.Namespace, agent.Name, err)
 	}
 
-	return agentOutputs.ConfigHash, nil
+	return &agentOutputs.ConfigHash, nil
 }
 
 func (a *kagentReconciler) reconcileToolServer(ctx context.Context, server *v1alpha1.ToolServer) error {
@@ -451,7 +459,7 @@ func (a *kagentReconciler) upsertAgent(ctx context.Context, agent *v1alpha1.Agen
 	}
 
 	// If the config hash has not changed, we can skip the patch
-	if agentOutputs.ConfigHash == agent.Status.ConfigHash {
+	if bytes.Equal(agentOutputs.ConfigHash[:], agent.Status.ConfigHash) {
 		return nil
 	}
 

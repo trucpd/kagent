@@ -130,10 +130,10 @@ const (
 
 // AgentStatus defines the observed state of Agent.
 type AgentStatus struct {
-	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+	ObservedGeneration int64 `json:"observedGeneration"`
 	// This is used to determine if the agent config has changed.
 	// If it has changed, the agent will be restarted.
-	ConfigHash uint64             `json:"configHash,omitempty"`
+	ConfigHash []byte             `json:"configHash"`
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 

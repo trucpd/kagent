@@ -2,7 +2,6 @@ package api
 
 import (
 	"github.com/kagent-dev/kagent/go/controller/api/v1alpha1"
-	"github.com/kagent-dev/kagent/go/internal/adk"
 	"github.com/kagent-dev/kagent/go/internal/database"
 )
 
@@ -77,9 +76,9 @@ type UpdateModelConfigRequest struct {
 // Agent types
 
 type AgentResponse struct {
-	ID             string                 `json:"id"`
-	Agent          *v1alpha1.Agent        `json:"agent"`
-	Config         *adk.AgentConfig       `json:"config"`
+	ID    string          `json:"id"`
+	Agent *v1alpha1.Agent `json:"agent"`
+	// Config         *adk.AgentConfig       `json:"config"`
 	ModelProvider  v1alpha1.ModelProvider `json:"modelProvider"`
 	Model          string                 `json:"model"`
 	ModelConfigRef string                 `json:"modelConfigRef"`

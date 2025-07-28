@@ -2,13 +2,11 @@ package handlers
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 
 	"github.com/go-logr/logr"
 	"github.com/kagent-dev/kagent/go/controller/api/v1alpha1"
 	"github.com/kagent-dev/kagent/go/controller/translator"
-	"github.com/kagent-dev/kagent/go/internal/database"
 	"github.com/kagent-dev/kagent/go/internal/httpserver/errors"
 	"github.com/kagent-dev/kagent/go/internal/utils"
 	common "github.com/kagent-dev/kagent/go/internal/utils"
@@ -33,22 +31,22 @@ func (h *AgentsHandler) HandleListAgents(w ErrorResponseWriter, r *http.Request)
 
 	agentList := &v1alpha1.AgentList{}
 	if err := h.KubeClient.List(r.Context(), agentList); err != nil {
-		w.RespondWithError(errors.NewInternalServerError("Failed to list Teams from Kubernetes", err))
+		w.RespondWithError(errors.NewInternalServerError("Failed to list Agents from Kubernetes", err))
 		return
 	}
 
 	agentsWithID := make([]api.AgentResponse, 0)
-	for _, team := range agentList.Items {
-		teamRef := common.GetObjectRef(&team)
-		log.V(1).Info("Processing Team", "teamRef", teamRef)
+	for _, agent := range agentList.Items {
+		agentRef := common.GetObjectRef(&agent)
+		log.V(1).Info("Processing Agent", "agentRef", agentRef)
 
-		agent, err := h.DatabaseService.GetAgent(teamRef)
-		if err != nil {
-			w.RespondWithError(errors.NewNotFoundError("Agent not found", err))
-			return
-		}
+		// dgAgent, err := h.DatabaseService.GetAgent(common.ConvertToPythonIdentifier(agentRef))
+		// if err != nil {
+		// 	w.RespondWithError(errors.NewNotFoundError("Agent not found", err))
+		// 	return
+		// }
 
-		agentResponse, err := h.getAgentResponse(r.Context(), log, &team, agent)
+		agentResponse, err := h.getAgentResponse(r.Context(), log, &agent)
 		if err != nil {
 			w.RespondWithError(err)
 			return
@@ -62,10 +60,10 @@ func (h *AgentsHandler) HandleListAgents(w ErrorResponseWriter, r *http.Request)
 	RespondWithJSON(w, http.StatusOK, data)
 }
 
-func (h *AgentsHandler) getAgentResponse(ctx context.Context, log logr.Logger, agent *v1alpha1.Agent, dbAgent *database.Agent) (api.AgentResponse, error) {
+func (h *AgentsHandler) getAgentResponse(ctx context.Context, log logr.Logger, agent *v1alpha1.Agent) (api.AgentResponse, error) {
 
 	agentRef := common.GetObjectRef(agent)
-	log.V(1).Info("Processing Team", "teamRef", agentRef)
+	log.V(1).Info("Processing Agent", "agentRef", agentRef)
 
 	// Get the ModelConfig for the team
 	modelConfig := &v1alpha1.ModelConfig{}
@@ -129,9 +127,9 @@ func (h *AgentsHandler) getAgentResponse(ctx context.Context, log logr.Logger, a
 	}
 
 	return api.AgentResponse{
-		ID:             dbAgent.ID,
-		Agent:          agent,
-		Config:         dbAgent.Config,
+		ID:    common.ConvertToPythonIdentifier(agentRef),
+		Agent: agent,
+		// Config:         dbAgent.Config,
 		ModelProvider:  modelConfig.Spec.Provider,
 		Model:          modelConfig.Spec.Model,
 		ModelConfigRef: common.GetObjectRef(modelConfig),
@@ -170,14 +168,14 @@ func (h *AgentsHandler) HandleGetAgent(w ErrorResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.V(1).Info("Getting agent from database")
-	dbAgent, err := h.DatabaseService.GetAgent(fmt.Sprintf("%s/%s", agentNamespace, agentName))
-	if err != nil {
-		w.RespondWithError(errors.NewNotFoundError("Agent not found", err))
-		return
-	}
+	// log.V(1).Info("Getting agent from database")
+	// dbAgent, err := h.DatabaseService.GetAgent(fmt.Sprintf("%s/%s", agentNamespace, agentName))
+	// if err != nil {
+	// 	w.RespondWithError(errors.NewNotFoundError("Agent not found", err))
+	// 	return
+	// }
 
-	agentResponse, err := h.getAgentResponse(r.Context(), log, agent, dbAgent)
+	agentResponse, err := h.getAgentResponse(r.Context(), log, agent)
 	if err != nil {
 		w.RespondWithError(err)
 		return
