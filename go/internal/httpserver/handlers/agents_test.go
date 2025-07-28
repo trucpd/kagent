@@ -211,7 +211,7 @@ func TestHandleCreateAgent(t *testing.T) {
 		agent := &v1alpha1.Agent{
 			ObjectMeta: metav1.ObjectMeta{Name: "test-team", Namespace: "default"},
 			Spec: v1alpha1.AgentSpec{
-				ModelConfig:   common.GetObjectRef(modelConfig),
+				ModelConfig:   modelConfig.Name,
 				SystemMessage: "You are an imagenary agent",
 				Description:   "Test team description",
 			},
@@ -232,7 +232,7 @@ func TestHandleCreateAgent(t *testing.T) {
 		require.Equal(t, "test-team", response.Data.Name)
 		require.Equal(t, "default", response.Data.Namespace)
 		require.Equal(t, "You are an imagenary agent", response.Data.Spec.SystemMessage)
-		require.Equal(t, "default/test-model-config", response.Data.Spec.ModelConfig)
+		require.Equal(t, "test-model-config", response.Data.Spec.ModelConfig)
 	})
 }
 

@@ -64,10 +64,7 @@ func ChatCmd(c *ishell.Context) {
 
 		agentNames := make([]string, len(agentListResp.Data))
 		for i, agent := range agentListResp.Data {
-			if agent.Config.Name == "" {
-				continue
-			}
-			agentNames[i] = agent.Config.Name
+			agentNames[i] = utils.ConvertToKubernetesIdentifier(agent.ID)
 		}
 
 		selectedTeamIdx := c.MultiChoice(agentNames, "Select an agent:")
@@ -119,8 +116,10 @@ func ChatCmd(c *ishell.Context) {
 		session = existingSessions[selectedSessionIdx-1]
 	}
 
+	agentRef := utils.ConvertToKubernetesIdentifier(agentResp.ID)
+
 	// Setup A2A client
-	a2aURL := fmt.Sprintf("%s/a2a/%s/%s", cfg.APIURL, cfg.Namespace, agentResp.Config.Name)
+	a2aURL := fmt.Sprintf("%s/a2a/%s", cfg.APIURL, agentRef)
 	a2aClient, err := a2aclient.NewA2AClient(a2aURL)
 	if err != nil {
 		c.Printf("Failed to create A2A client: %v\n", err)
@@ -131,7 +130,7 @@ func ChatCmd(c *ishell.Context) {
 	cancel := startPortForward(context.Background())
 	defer cancel()
 
-	promptStr := config.BoldGreen(fmt.Sprintf("%s--%s> ", agentResp.Config.Name, session.ID))
+	promptStr := config.BoldGreen(fmt.Sprintf("%s--%s> ", agentRef, session.ID))
 	c.SetPrompt(promptStr)
 	c.ShowPrompt(true)
 

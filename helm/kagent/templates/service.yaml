@@ -8,14 +8,14 @@ metadata:
 spec:
   type: {{ .Values.service.type }}
   ports:
-    - port: {{ .Values.service.ports.ui.port }}
-      targetPort: {{ .Values.service.ports.ui.targetPort }}
-      protocol: TCP
-      name: ui
     - port: {{ .Values.service.ports.controller.port }}
       targetPort: {{ .Values.service.ports.controller.targetPort }}
       protocol: TCP
       name: controller
+    - port: {{ .Values.service.ports.ui.port }}
+      targetPort: {{ .Values.service.ports.ui.targetPort }}
+      protocol: TCP
+      name: ui
     - port: {{ .Values.service.ports.tools.port }}
       targetPort: {{ .Values.service.ports.tools.targetPort }}
       protocol: TCP

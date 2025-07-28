@@ -15,7 +15,7 @@
       "description": "A parent agent that can delegate to specialists",
       "name": "parent-agent",
       "skills": null,
-      "url": "http://parent-agent.test.svc.cluster.local:8080",
+      "url": "http://parent-agent.test.svc:8080",
       "version": ""
     },
     "agents": [
@@ -35,14 +35,14 @@
           "description": "A specialist agent for math problems",
           "name": "specialist-agent",
           "skills": null,
-          "url": "http://specialist-agent.test.svc.cluster.local:8080",
+          "url": "http://specialist-agent.test.svc:8080",
           "version": ""
         },
         "agents": null,
         "description": "A specialist agent for math problems",
         "http_tools": null,
         "instruction": "You are a math specialist. Focus on solving mathematical problems step by step.",
-        "kagent_url": "http://kagent.kagent.svc.cluster.local:8083",
+        "kagent_url": "http://kagent.kagent.svc:8083",
         "model": {
           "base_url": "",
           "model": "gpt-4o",
@@ -55,7 +55,7 @@
     "description": "A parent agent that can delegate to specialists",
     "http_tools": null,
     "instruction": "You are a coordinating agent that can delegate tasks to specialists.",
-    "kagent_url": "http://kagent.kagent.svc.cluster.local:8083",
+    "kagent_url": "http://kagent.kagent.svc:8083",
     "model": {
       "base_url": "",
       "model": "gpt-4o",
@@ -64,195 +64,243 @@
     "name": "test__NS__parent_agent",
     "sse_tools": null
   },
-  "configHash": 4657623043688031000,
-  "configMap": {
-    "apiVersion": "v1",
-    "data": {
-      "config.json": "{\"kagent_url\":\"http://kagent.kagent.svc.cluster.local:8083\",\"agent_card\":{\"name\":\"parent-agent\",\"description\":\"A parent agent that can delegate to specialists\",\"url\":\"http://parent-agent.test.svc.cluster.local:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":[]},\"name\":\"test__NS__parent_agent\",\"model\":{\"base_url\":\"\",\"model\":\"gpt-4o\",\"type\":\"openai\"},\"description\":\"A parent agent that can delegate to specialists\",\"instruction\":\"You are a coordinating agent that can delegate tasks to specialists.\",\"http_tools\":null,\"sse_tools\":null,\"agents\":[{\"kagent_url\":\"http://kagent.kagent.svc.cluster.local:8083\",\"agent_card\":{\"name\":\"specialist-agent\",\"description\":\"A specialist agent for math problems\",\"url\":\"http://specialist-agent.test.svc.cluster.local:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":[]},\"name\":\"test__NS__specialist_agent\",\"model\":{\"base_url\":\"\",\"model\":\"gpt-4o\",\"type\":\"openai\"},\"description\":\"A specialist agent for math problems\",\"instruction\":\"You are a math specialist. Focus on solving mathematical problems step by step.\",\"http_tools\":null,\"sse_tools\":null,\"agents\":null}]}"
-    },
-    "kind": "ConfigMap",
-    "metadata": {
-      "creationTimestamp": null,
-      "labels": {
-        "app": "kagent",
-        "config.kagent.dev/hash": "4657623043688030785",
-        "kagent": "parent-agent",
-        "version": "v1alpha1"
-      },
-      "name": "parent-agent",
-      "namespace": "test",
-      "ownerReferences": [
-        {
-          "apiVersion": "kagent.dev/v1alpha1",
-          "blockOwnerDeletion": true,
-          "controller": true,
-          "kind": "Agent",
-          "name": "parent-agent",
-          "uid": ""
-        }
-      ]
-    }
-  },
-  "deployment": {
-    "apiVersion": "apps/v1",
-    "kind": "Deployment",
-    "metadata": {
-      "creationTimestamp": null,
-      "labels": {
-        "app": "kagent",
-        "config.kagent.dev/hash": "4657623043688030785",
-        "kagent": "parent-agent",
-        "version": "v1alpha1"
-      },
-      "name": "parent-agent",
-      "namespace": "test",
-      "ownerReferences": [
-        {
-          "apiVersion": "kagent.dev/v1alpha1",
-          "blockOwnerDeletion": true,
-          "controller": true,
-          "kind": "Agent",
-          "name": "parent-agent",
-          "uid": ""
-        }
-      ]
-    },
-    "spec": {
-      "replicas": 1,
-      "selector": {
-        "matchLabels": {
+  "configHash": [
+    23,
+    4,
+    195,
+    246,
+    134,
+    237,
+    115,
+    31,
+    187,
+    111,
+    98,
+    70,
+    12,
+    164,
+    97,
+    253,
+    145,
+    3,
+    221,
+    120,
+    121,
+    102,
+    99,
+    216,
+    12,
+    136,
+    90,
+    195,
+    23,
+    163,
+    208,
+    121
+  ],
+  "manifest": [
+    {
+      "apiVersion": "v1",
+      "kind": "ServiceAccount",
+      "metadata": {
+        "creationTimestamp": null,
+        "labels": {
           "app": "kagent",
-          "kagent": "parent-agent",
-          "version": "v1alpha1"
-        }
-      },
-      "strategy": {},
-      "template": {
-        "metadata": {
-          "creationTimestamp": null,
-          "labels": {
-            "app": "kagent",
-            "config.kagent.dev/hash": "4657623043688030785",
-            "kagent": "parent-agent",
-            "version": "v1alpha1"
-          },
-          "name": "parent-agent",
-          "namespace": "test"
+          "kagent": "parent-agent"
         },
-        "spec": {
-          "containers": [
-            {
-              "command": [
-                "uv",
-                "run",
-                "kagent",
-                "static",
-                "--host",
-                "0.0.0.0",
-                "--port",
-                "8080",
-                "--filepath",
-                "/config/config.json"
-              ],
-              "env": [
-                {
-                  "name": "KAGENT_NAMESPACE",
-                  "valueFrom": {
-                    "fieldRef": {
-                      "fieldPath": "metadata.namespace"
-                    }
-                  }
-                },
-                {
-                  "name": "OPENAI_API_KEY",
-                  "valueFrom": {
-                    "secretKeyRef": {
-                      "key": "api-key",
-                      "name": "openai-secret"
-                    }
-                  }
-                }
-              ],
-              "image": "cr.kagent.dev/kagent-dev/kagent/app:dev",
-              "imagePullPolicy": "IfNotPresent",
-              "name": "kagent",
-              "ports": [
-                {
-                  "containerPort": 8080,
-                  "name": "http"
-                }
-              ],
-              "readinessProbe": {
-                "httpGet": {
-                  "path": "/health",
-                  "port": "http"
-                },
-                "initialDelaySeconds": 15,
-                "periodSeconds": 3
-              },
-              "resources": {},
-              "volumeMounts": [
-                {
-                  "mountPath": "/config",
-                  "name": "config"
-                }
-              ]
-            }
-          ],
-          "volumes": [
-            {
-              "configMap": {
-                "name": "parent-agent"
-              },
-              "name": "config"
-            }
-          ]
-        }
+        "name": "parent-agent",
+        "namespace": "test",
+        "ownerReferences": [
+          {
+            "apiVersion": "kagent.dev/v1alpha1",
+            "blockOwnerDeletion": true,
+            "controller": true,
+            "kind": "Agent",
+            "name": "parent-agent",
+            "uid": ""
+          }
+        ]
       }
     },
-    "status": {}
-  },
-  "service": {
-    "apiVersion": "v1",
-    "kind": "Service",
-    "metadata": {
-      "creationTimestamp": null,
-      "labels": {
-        "app": "kagent",
-        "config.kagent.dev/hash": "4657623043688030785",
-        "kagent": "parent-agent",
-        "version": "v1alpha1"
+    {
+      "apiVersion": "v1",
+      "data": {
+        "config.json": "{\"kagent_url\":\"http://kagent.kagent.svc:8083\",\"agent_card\":{\"name\":\"parent-agent\",\"description\":\"A parent agent that can delegate to specialists\",\"url\":\"http://parent-agent.test.svc:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":[]},\"name\":\"test__NS__parent_agent\",\"model\":{\"base_url\":\"\",\"model\":\"gpt-4o\",\"type\":\"openai\"},\"description\":\"A parent agent that can delegate to specialists\",\"instruction\":\"You are a coordinating agent that can delegate tasks to specialists.\",\"http_tools\":null,\"sse_tools\":null,\"agents\":[{\"kagent_url\":\"http://kagent.kagent.svc:8083\",\"agent_card\":{\"name\":\"specialist-agent\",\"description\":\"A specialist agent for math problems\",\"url\":\"http://specialist-agent.test.svc:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":[]},\"name\":\"test__NS__specialist_agent\",\"model\":{\"base_url\":\"\",\"model\":\"gpt-4o\",\"type\":\"openai\"},\"description\":\"A specialist agent for math problems\",\"instruction\":\"You are a math specialist. Focus on solving mathematical problems step by step.\",\"http_tools\":null,\"sse_tools\":null,\"agents\":null}]}"
       },
-      "name": "parent-agent",
-      "namespace": "test",
-      "ownerReferences": [
-        {
-          "apiVersion": "kagent.dev/v1alpha1",
-          "blockOwnerDeletion": true,
-          "controller": true,
-          "kind": "Agent",
-          "name": "parent-agent",
-          "uid": ""
-        }
-      ]
+      "kind": "ConfigMap",
+      "metadata": {
+        "creationTimestamp": null,
+        "labels": {
+          "app": "kagent",
+          "kagent": "parent-agent"
+        },
+        "name": "parent-agent",
+        "namespace": "test",
+        "ownerReferences": [
+          {
+            "apiVersion": "kagent.dev/v1alpha1",
+            "blockOwnerDeletion": true,
+            "controller": true,
+            "kind": "Agent",
+            "name": "parent-agent",
+            "uid": ""
+          }
+        ]
+      }
     },
-    "spec": {
-      "ports": [
-        {
-          "name": "http",
-          "port": 8080,
-          "targetPort": 8080
-        }
-      ],
-      "selector": {
-        "app": "kagent",
-        "kagent": "parent-agent",
-        "version": "v1alpha1"
+    {
+      "apiVersion": "apps/v1",
+      "kind": "Deployment",
+      "metadata": {
+        "creationTimestamp": null,
+        "labels": {
+          "app": "kagent",
+          "kagent": "parent-agent"
+        },
+        "name": "parent-agent",
+        "namespace": "test",
+        "ownerReferences": [
+          {
+            "apiVersion": "kagent.dev/v1alpha1",
+            "blockOwnerDeletion": true,
+            "controller": true,
+            "kind": "Agent",
+            "name": "parent-agent",
+            "uid": ""
+          }
+        ]
       },
-      "type": "ClusterIP"
+      "spec": {
+        "replicas": 1,
+        "selector": {
+          "matchLabels": {
+            "app": "kagent",
+            "kagent": "parent-agent"
+          }
+        },
+        "strategy": {},
+        "template": {
+          "metadata": {
+            "creationTimestamp": null,
+            "labels": {
+              "app": "kagent",
+              "config.kagent.dev/hash": "1658666026372264735",
+              "kagent": "parent-agent"
+            }
+          },
+          "spec": {
+            "containers": [
+              {
+                "command": [
+                  "uv",
+                  "run",
+                  "kagent",
+                  "static",
+                  "--host",
+                  "0.0.0.0",
+                  "--port",
+                  "8080",
+                  "--filepath",
+                  "/config/config.json"
+                ],
+                "env": [
+                  {
+                    "name": "OPENAI_API_KEY",
+                    "valueFrom": {
+                      "secretKeyRef": {
+                        "key": "api-key",
+                        "name": "openai-secret"
+                      }
+                    }
+                  },
+                  {
+                    "name": "KAGENT_NAMESPACE",
+                    "valueFrom": {
+                      "fieldRef": {
+                        "fieldPath": "metadata.namespace"
+                      }
+                    }
+                  }
+                ],
+                "image": "cr.kagent.dev/kagent-dev/kagent/app:dev",
+                "imagePullPolicy": "IfNotPresent",
+                "name": "kagent",
+                "ports": [
+                  {
+                    "containerPort": 8080,
+                    "name": "http"
+                  }
+                ],
+                "readinessProbe": {
+                  "httpGet": {
+                    "path": "/health",
+                    "port": "http"
+                  },
+                  "initialDelaySeconds": 15,
+                  "periodSeconds": 3
+                },
+                "resources": {},
+                "volumeMounts": [
+                  {
+                    "mountPath": "/config",
+                    "name": "config"
+                  }
+                ]
+              }
+            ],
+            "serviceAccountName": "parent-agent",
+            "volumes": [
+              {
+                "configMap": {
+                  "name": "parent-agent"
+                },
+                "name": "config"
+              }
+            ]
+          }
+        }
+      },
+      "status": {}
     },
-    "status": {
-      "loadBalancer": {}
+    {
+      "apiVersion": "v1",
+      "kind": "Service",
+      "metadata": {
+        "creationTimestamp": null,
+        "labels": {
+          "app": "kagent",
+          "kagent": "parent-agent"
+        },
+        "name": "parent-agent",
+        "namespace": "test",
+        "ownerReferences": [
+          {
+            "apiVersion": "kagent.dev/v1alpha1",
+            "blockOwnerDeletion": true,
+            "controller": true,
+            "kind": "Agent",
+            "name": "parent-agent",
+            "uid": ""
+          }
+        ]
+      },
+      "spec": {
+        "ports": [
+          {
+            "name": "http",
+            "port": 8080,
+            "targetPort": 8080
+          }
+        ],
+        "selector": {
+          "app": "kagent",
+          "kagent": "parent-agent"
+        },
+        "type": "ClusterIP"
+      },
+      "status": {
+        "loadBalancer": {}
+      }
     }
-  }
+  ]
 }

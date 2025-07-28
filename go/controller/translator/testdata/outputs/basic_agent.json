@@ -15,14 +15,14 @@
       "description": "A basic test agent",
       "name": "basic-agent",
       "skills": null,
-      "url": "http://basic-agent.test.svc.cluster.local:8080",
+      "url": "http://basic-agent.test.svc:8080",
       "version": ""
     },
     "agents": null,
     "description": "A basic test agent",
     "http_tools": null,
     "instruction": "You are a helpful assistant.",
-    "kagent_url": "http://kagent.kagent.svc.cluster.local:8083",
+    "kagent_url": "http://kagent.kagent.svc:8083",
     "model": {
       "base_url": "",
       "model": "gpt-4o",
@@ -31,195 +31,243 @@
     "name": "test__NS__basic_agent",
     "sse_tools": null
   },
-  "configHash": 8902601038440216000,
-  "configMap": {
-    "apiVersion": "v1",
-    "data": {
-      "config.json": "{\"kagent_url\":\"http://kagent.kagent.svc.cluster.local:8083\",\"agent_card\":{\"name\":\"basic-agent\",\"description\":\"A basic test agent\",\"url\":\"http://basic-agent.test.svc.cluster.local:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":[]},\"name\":\"test__NS__basic_agent\",\"model\":{\"base_url\":\"\",\"model\":\"gpt-4o\",\"type\":\"openai\"},\"description\":\"A basic test agent\",\"instruction\":\"You are a helpful assistant.\",\"http_tools\":null,\"sse_tools\":null,\"agents\":null}"
-    },
-    "kind": "ConfigMap",
-    "metadata": {
-      "creationTimestamp": null,
-      "labels": {
-        "app": "kagent",
-        "config.kagent.dev/hash": "8902601038440215169",
-        "kagent": "basic-agent",
-        "version": "v1alpha1"
-      },
-      "name": "basic-agent",
-      "namespace": "test",
-      "ownerReferences": [
-        {
-          "apiVersion": "kagent.dev/v1alpha1",
-          "blockOwnerDeletion": true,
-          "controller": true,
-          "kind": "Agent",
-          "name": "basic-agent",
-          "uid": ""
-        }
-      ]
-    }
-  },
-  "deployment": {
-    "apiVersion": "apps/v1",
-    "kind": "Deployment",
-    "metadata": {
-      "creationTimestamp": null,
-      "labels": {
-        "app": "kagent",
-        "config.kagent.dev/hash": "8902601038440215169",
-        "kagent": "basic-agent",
-        "version": "v1alpha1"
-      },
-      "name": "basic-agent",
-      "namespace": "test",
-      "ownerReferences": [
-        {
-          "apiVersion": "kagent.dev/v1alpha1",
-          "blockOwnerDeletion": true,
-          "controller": true,
-          "kind": "Agent",
-          "name": "basic-agent",
-          "uid": ""
-        }
-      ]
-    },
-    "spec": {
-      "replicas": 1,
-      "selector": {
-        "matchLabels": {
+  "configHash": [
+    112,
+    38,
+    198,
+    41,
+    239,
+    127,
+    6,
+    158,
+    73,
+    243,
+    124,
+    22,
+    180,
+    110,
+    38,
+    139,
+    210,
+    90,
+    131,
+    66,
+    225,
+    81,
+    202,
+    214,
+    152,
+    249,
+    243,
+    213,
+    51,
+    153,
+    254,
+    37
+  ],
+  "manifest": [
+    {
+      "apiVersion": "v1",
+      "kind": "ServiceAccount",
+      "metadata": {
+        "creationTimestamp": null,
+        "labels": {
           "app": "kagent",
-          "kagent": "basic-agent",
-          "version": "v1alpha1"
-        }
-      },
-      "strategy": {},
-      "template": {
-        "metadata": {
-          "creationTimestamp": null,
-          "labels": {
-            "app": "kagent",
-            "config.kagent.dev/hash": "8902601038440215169",
-            "kagent": "basic-agent",
-            "version": "v1alpha1"
-          },
-          "name": "basic-agent",
-          "namespace": "test"
+          "kagent": "basic-agent"
         },
-        "spec": {
-          "containers": [
-            {
-              "command": [
-                "uv",
-                "run",
-                "kagent",
-                "static",
-                "--host",
-                "0.0.0.0",
-                "--port",
-                "8080",
-                "--filepath",
-                "/config/config.json"
-              ],
-              "env": [
-                {
-                  "name": "KAGENT_NAMESPACE",
-                  "valueFrom": {
-                    "fieldRef": {
-                      "fieldPath": "metadata.namespace"
-                    }
-                  }
-                },
-                {
-                  "name": "OPENAI_API_KEY",
-                  "valueFrom": {
-                    "secretKeyRef": {
-                      "key": "api-key",
-                      "name": "openai-secret"
-                    }
-                  }
-                }
-              ],
-              "image": "cr.kagent.dev/kagent-dev/kagent/app:dev",
-              "imagePullPolicy": "IfNotPresent",
-              "name": "kagent",
-              "ports": [
-                {
-                  "containerPort": 8080,
-                  "name": "http"
-                }
-              ],
-              "readinessProbe": {
-                "httpGet": {
-                  "path": "/health",
-                  "port": "http"
-                },
-                "initialDelaySeconds": 15,
-                "periodSeconds": 3
-              },
-              "resources": {},
-              "volumeMounts": [
-                {
-                  "mountPath": "/config",
-                  "name": "config"
-                }
-              ]
-            }
-          ],
-          "volumes": [
-            {
-              "configMap": {
-                "name": "basic-agent"
-              },
-              "name": "config"
-            }
-          ]
-        }
+        "name": "basic-agent",
+        "namespace": "test",
+        "ownerReferences": [
+          {
+            "apiVersion": "kagent.dev/v1alpha1",
+            "blockOwnerDeletion": true,
+            "controller": true,
+            "kind": "Agent",
+            "name": "basic-agent",
+            "uid": ""
+          }
+        ]
       }
     },
-    "status": {}
-  },
-  "service": {
-    "apiVersion": "v1",
-    "kind": "Service",
-    "metadata": {
-      "creationTimestamp": null,
-      "labels": {
-        "app": "kagent",
-        "config.kagent.dev/hash": "8902601038440215169",
-        "kagent": "basic-agent",
-        "version": "v1alpha1"
+    {
+      "apiVersion": "v1",
+      "data": {
+        "config.json": "{\"kagent_url\":\"http://kagent.kagent.svc:8083\",\"agent_card\":{\"name\":\"basic-agent\",\"description\":\"A basic test agent\",\"url\":\"http://basic-agent.test.svc:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":[]},\"name\":\"test__NS__basic_agent\",\"model\":{\"base_url\":\"\",\"model\":\"gpt-4o\",\"type\":\"openai\"},\"description\":\"A basic test agent\",\"instruction\":\"You are a helpful assistant.\",\"http_tools\":null,\"sse_tools\":null,\"agents\":null}"
       },
-      "name": "basic-agent",
-      "namespace": "test",
-      "ownerReferences": [
-        {
-          "apiVersion": "kagent.dev/v1alpha1",
-          "blockOwnerDeletion": true,
-          "controller": true,
-          "kind": "Agent",
-          "name": "basic-agent",
-          "uid": ""
-        }
-      ]
+      "kind": "ConfigMap",
+      "metadata": {
+        "creationTimestamp": null,
+        "labels": {
+          "app": "kagent",
+          "kagent": "basic-agent"
+        },
+        "name": "basic-agent",
+        "namespace": "test",
+        "ownerReferences": [
+          {
+            "apiVersion": "kagent.dev/v1alpha1",
+            "blockOwnerDeletion": true,
+            "controller": true,
+            "kind": "Agent",
+            "name": "basic-agent",
+            "uid": ""
+          }
+        ]
+      }
     },
-    "spec": {
-      "ports": [
-        {
-          "name": "http",
-          "port": 8080,
-          "targetPort": 8080
-        }
-      ],
-      "selector": {
-        "app": "kagent",
-        "kagent": "basic-agent",
-        "version": "v1alpha1"
+    {
+      "apiVersion": "apps/v1",
+      "kind": "Deployment",
+      "metadata": {
+        "creationTimestamp": null,
+        "labels": {
+          "app": "kagent",
+          "kagent": "basic-agent"
+        },
+        "name": "basic-agent",
+        "namespace": "test",
+        "ownerReferences": [
+          {
+            "apiVersion": "kagent.dev/v1alpha1",
+            "blockOwnerDeletion": true,
+            "controller": true,
+            "kind": "Agent",
+            "name": "basic-agent",
+            "uid": ""
+          }
+        ]
       },
-      "type": "ClusterIP"
+      "spec": {
+        "replicas": 1,
+        "selector": {
+          "matchLabels": {
+            "app": "kagent",
+            "kagent": "basic-agent"
+          }
+        },
+        "strategy": {},
+        "template": {
+          "metadata": {
+            "creationTimestamp": null,
+            "labels": {
+              "app": "kagent",
+              "config.kagent.dev/hash": "8081364464776971934",
+              "kagent": "basic-agent"
+            }
+          },
+          "spec": {
+            "containers": [
+              {
+                "command": [
+                  "uv",
+                  "run",
+                  "kagent",
+                  "static",
+                  "--host",
+                  "0.0.0.0",
+                  "--port",
+                  "8080",
+                  "--filepath",
+                  "/config/config.json"
+                ],
+                "env": [
+                  {
+                    "name": "OPENAI_API_KEY",
+                    "valueFrom": {
+                      "secretKeyRef": {
+                        "key": "api-key",
+                        "name": "openai-secret"
+                      }
+                    }
+                  },
+                  {
+                    "name": "KAGENT_NAMESPACE",
+                    "valueFrom": {
+                      "fieldRef": {
+                        "fieldPath": "metadata.namespace"
+                      }
+                    }
+                  }
+                ],
+                "image": "cr.kagent.dev/kagent-dev/kagent/app:dev",
+                "imagePullPolicy": "IfNotPresent",
+                "name": "kagent",
+                "ports": [
+                  {
+                    "containerPort": 8080,
+                    "name": "http"
+                  }
+                ],
+                "readinessProbe": {
+                  "httpGet": {
+                    "path": "/health",
+                    "port": "http"
+                  },
+                  "initialDelaySeconds": 15,
+                  "periodSeconds": 3
+                },
+                "resources": {},
+                "volumeMounts": [
+                  {
+                    "mountPath": "/config",
+                    "name": "config"
+                  }
+                ]
+              }
+            ],
+            "serviceAccountName": "basic-agent",
+            "volumes": [
+              {
+                "configMap": {
+                  "name": "basic-agent"
+                },
+                "name": "config"
+              }
+            ]
+          }
+        }
+      },
+      "status": {}
     },
-    "status": {
-      "loadBalancer": {}
+    {
+      "apiVersion": "v1",
+      "kind": "Service",
+      "metadata": {
+        "creationTimestamp": null,
+        "labels": {
+          "app": "kagent",
+          "kagent": "basic-agent"
+        },
+        "name": "basic-agent",
+        "namespace": "test",
+        "ownerReferences": [
+          {
+            "apiVersion": "kagent.dev/v1alpha1",
+            "blockOwnerDeletion": true,
+            "controller": true,
+            "kind": "Agent",
+            "name": "basic-agent",
+            "uid": ""
+          }
+        ]
+      },
+      "spec": {
+        "ports": [
+          {
+            "name": "http",
+            "port": 8080,
+            "targetPort": 8080
+          }
+        ],
+        "selector": {
+          "app": "kagent",
+          "kagent": "basic-agent"
+        },
+        "type": "ClusterIP"
+      },
+      "status": {
+        "loadBalancer": {}
+      }
     }
-  }
+  ]
 }

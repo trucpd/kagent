@@ -34,7 +34,7 @@ tests:
           value: 30s
       - equal:
           path: spec.config.streamableHttp.url
-          value: http://localhost:8085/mcp
+          value: http://kagent.NAMESPACE.svc.cluster.local:8085/mcp
 
   - it: should not have labels when provider is openAI (toolserver-docs template doesn't include common labels)
     set:
@@ -75,7 +75,7 @@ tests:
     asserts:
       - equal:
           path: spec.config.streamableHttp.url
-          value: http://localhost:9085/mcp
+          value: http://kagent.NAMESPACE.svc.cluster.local:9085/mcp
 
   - it: should have correct APIVersion and Kind when provider is openAI
     set:

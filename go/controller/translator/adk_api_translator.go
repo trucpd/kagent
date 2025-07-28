@@ -30,9 +30,7 @@ import (
 )
 
 type AgentOutputs struct {
-	Deployment *appsv1.Deployment `json:"deployment,omitempty"`
-	Service    *corev1.Service    `json:"service,omitempty"`
-	ConfigMap  *corev1.ConfigMap  `json:"configMap,omitempty"`
+	Manifest []client.Object `json:"manifest,omitempty"`
 
 	Config     *adk.AgentConfig  `json:"config,omitempty"`
 	ConfigHash [sha256.Size]byte `json:"configHash"`
@@ -144,17 +142,36 @@ func (a *adkApiTranslator) translateOutputs(_ context.Context, agent *v1alpha1.A
 		envVars = append(envVars, agent.Spec.Deployment.Env...)
 	}
 
+	outputs.Manifest = append(outputs.Manifest, &corev1.ServiceAccount{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "ServiceAccount",
+		},
+		ObjectMeta: objMeta,
+	})
+
+	outputs.Manifest = append(outputs.Manifest, &corev1.ConfigMap{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "ConfigMap",
+		},
+		ObjectMeta: objMeta,
+		Data: map[string]string{
+			"config.json": string(configJson),
+		},
+	})
+
 	spec := defaultDeploymentSpec(objMeta.Name, podLabels, configHash, envVars...)
-	outputs.Deployment = &appsv1.Deployment{
+	outputs.Manifest = append(outputs.Manifest, &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "apps/v1",
 			Kind:       "Deployment",
 		},
 		ObjectMeta: objMeta,
 		Spec:       spec,
-	}
+	})
 
-	outputs.Service = &corev1.Service{
+	outputs.Manifest = append(outputs.Manifest, &corev1.Service{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
 			Kind:       "Service",
@@ -174,29 +191,12 @@ func (a *adkApiTranslator) translateOutputs(_ context.Context, agent *v1alpha1.A
 			},
 			Type: corev1.ServiceTypeClusterIP,
 		},
-	}
+	})
 
-	outputs.ConfigMap = &corev1.ConfigMap{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "v1",
-			Kind:       "ConfigMap",
-		},
-		ObjectMeta: objMeta,
-		Data: map[string]string{
-			"config.json": string(configJson),
-		},
-	}
-
-	if err := controllerutil.SetControllerReference(agent, outputs.Deployment, a.kube.Scheme()); err != nil {
-		return nil, err
-	}
-
-	if err := controllerutil.SetControllerReference(agent, outputs.Service, a.kube.Scheme()); err != nil {
-		return nil, err
-	}
-
-	if err := controllerutil.SetControllerReference(agent, outputs.ConfigMap, a.kube.Scheme()); err != nil {
-		return nil, err
+	for _, obj := range outputs.Manifest {
+		if err := controllerutil.SetControllerReference(agent, obj, a.kube.Scheme()); err != nil {
+			return nil, err
+		}
 	}
 
 	return outputs, nil
@@ -242,6 +242,7 @@ func defaultDeploymentSpec(name string, labels map[string]string, configHash uin
 				Labels: podTemplateLabels,
 			},
 			Spec: corev1.PodSpec{
+				ServiceAccountName: name,
 				Containers: []corev1.Container{
 					{
 						Name:            "kagent",

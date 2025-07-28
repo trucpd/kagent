@@ -19,34 +19,46 @@ tests:
     asserts:
       - equal:
           path: spec.ports[0].name
-          value: ui
+          value: controller
       - equal:
           path: spec.ports[0].port
-          value: 80
+          value: 8083
       - equal:
           path: spec.ports[0].targetPort
-          value: 8080
+          value: 8083
       - equal:
           path: spec.ports[0].protocol
           value: TCP
       - equal:
           path: spec.ports[1].name
-          value: app
+          value: ui
       - equal:
           path: spec.ports[1].port
-          value: 8081
+          value: 80
       - equal:
           path: spec.ports[1].targetPort
-          value: 8081
+          value: 8080
       - equal:
           path: spec.ports[2].name
-          value: controller
+          value: tools
       - equal:
           path: spec.ports[2].port
-          value: 8083
+          value: 8084
       - equal:
           path: spec.ports[2].targetPort
-          value: 8083
+          value: 8084
+      - equal:
+          path: spec.ports[3].name
+          value: querydoc
+      - equal:
+          path: spec.ports[3].port
+          value: 8085
+      - equal:
+          path: spec.ports[3].targetPort
+          value: 8085
+      - equal:
+          path: spec.ports[3].protocol
+          value: TCP
 
   - it: should have correct selector labels
     asserts:
@@ -73,31 +85,31 @@ tests:
           ui:
             port: 8080
             targetPort: 8080
-          app:
-            port: 9000
-            targetPort: 9000
           controller:
             port: 9001
             targetPort: 9001
+          tools:
+            port: 9002
+            targetPort: 9002
     asserts:
       - equal:
           path: spec.ports[0].port
-          value: 8080
+          value: 9001
       - equal:
           path: spec.ports[0].targetPort
-          value: 8080
+          value: 9001
       - equal:
           path: spec.ports[1].port
-          value: 9000
+          value: 8080
       - equal:
           path: spec.ports[1].targetPort
-          value: 9000
+          value: 8080
       - equal:
           path: spec.ports[2].port
-          value: 9001
+          value: 9002
       - equal:
           path: spec.ports[2].targetPort
-          value: 9001
+          value: 9002
 
   - it: should have correct metadata labels
     asserts:

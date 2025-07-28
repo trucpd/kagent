@@ -33,15 +33,9 @@ tests:
           pattern: "^cr\\.kagent\\.dev/kagent-dev/kagent/controller:.+"
       - equal:
           path: spec.template.spec.containers[1].name
-          value: app
-      - matchRegex:
-          path: spec.template.spec.containers[1].image
-          pattern: "^cr\\.kagent\\.dev/kagent-dev/kagent/app:.+"
-      - equal:
-          path: spec.template.spec.containers[2].name
           value: ui
       - matchRegex:
-          path: spec.template.spec.containers[2].image
+          path: spec.template.spec.containers[1].image
           pattern: "^cr\\.kagent\\.dev/kagent-dev/kagent/ui:.+"
 
   - it: should use global tag when set
@@ -54,9 +48,6 @@ tests:
           value: cr.kagent.dev/kagent-dev/kagent/controller:v1.0.0
       - equal:
           path: spec.template.spec.containers[1].image
-          value: cr.kagent.dev/kagent-dev/kagent/app:v1.0.0
-      - equal:
-          path: spec.template.spec.containers[2].image
           value: cr.kagent.dev/kagent-dev/kagent/ui:v1.0.0
 
   - it: should have correct resource limits and requests
@@ -93,9 +84,6 @@ tests:
           value: 8083
       - equal:
           path: spec.template.spec.containers[1].ports[0].containerPort
-          value: 8081
-      - equal:
-          path: spec.template.spec.containers[2].ports[0].containerPort
           value: 8080
 
   - it: should include namespace environment variable for controller
@@ -109,25 +97,25 @@ tests:
                 apiVersion: v1
                 fieldPath: metadata.namespace
 
-  - it: should have otel environment variables for app container
+  - it: should have otel environment variables for controller container
     asserts:
       - contains:
-          path: spec.template.spec.containers[1].env
+          path: spec.template.spec.containers[0].env
           content:
             name: OTEL_TRACING_ENABLED
             value: "false"
       - contains:
-          path: spec.template.spec.containers[1].env
+          path: spec.template.spec.containers[0].env
           content:
             name: OTEL_EXPORTER_OTLP_ENDPOINT
             value: "http://host.docker.internal:4317"
       - contains:
-          path: spec.template.spec.containers[1].env
+          path: spec.template.spec.containers[0].env
           content:
             name: OTEL_EXPORTER_OTLP_TRACES_TIMEOUT
             value: "15"
       - contains:
-          path: spec.template.spec.containers[1].env
+          path: spec.template.spec.containers[0].env
           content:
             name: OTEL_EXPORTER_OTLP_TRACES_INSECURE
             value: "true"
@@ -139,7 +127,7 @@ tests:
           enabled: true
     asserts:
       - contains:
-          path: spec.template.spec.containers[1].env
+          path: spec.template.spec.containers[0].env
           content:
             name: OTEL_TRACING_ENABLED
             value: "true"
@@ -150,7 +138,7 @@ tests:
           enabled: true
     asserts:
       - contains:
-          path: spec.template.spec.containers[1].env
+          path: spec.template.spec.containers[0].env
           content:
             name: OTEL_TRACING_ENABLED
             value: "true"
@@ -201,18 +189,6 @@ tests:
           path: spec.template.spec.imagePullSecrets[1].name
           value: another-secret
 
-  - it: should have readiness probe for app container
-    asserts:
-      - equal:
-          path: spec.template.spec.containers[1].readinessProbe.httpGet.path
-          value: /api/version
-      - equal:
-          path: spec.template.spec.containers[1].readinessProbe.httpGet.port
-          value: http-app
-      - equal:
-          path: spec.template.spec.containers[1].readinessProbe.initialDelaySeconds
-          value: 15
-
   - it: should use custom loglevel when set
     set:
       controller:
@@ -244,12 +220,12 @@ tests:
               value: "json"
     asserts:
       - contains:
-          path: spec.template.spec.containers[4].env
+          path: spec.template.spec.containers[3].env
           content:
             name: DEBUG
             value: "true"
       - contains:
-          path: spec.template.spec.containers[4].env
+          path: spec.template.spec.containers[3].env
           content:
             name: LOG_FORMAT
             value: "json"
@@ -264,12 +240,12 @@ tests:
             value: "json"
     asserts:
       - contains:
-          path: spec.template.spec.containers[3].env
+          path: spec.template.spec.containers[2].env
           content:
             name: DEBUG
             value: "true"
       - contains:
-          path: spec.template.spec.containers[3].env
+          path: spec.template.spec.containers[2].env
           content:
             name: LOG_FORMAT
             value: "json"

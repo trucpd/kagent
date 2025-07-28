@@ -122,8 +122,9 @@ func TestSessionsHandler(t *testing.T) {
 			var response api.StandardResponse[*database.Session]
 			err := json.Unmarshal(responseRecorder.Body.Bytes(), &response)
 			require.NoError(t, err)
-			assert.Equal(t, "test-session", response.Data.Name)
+			assert.Equal(t, "test-session", *response.Data.Name)
 			assert.Equal(t, userID, response.Data.UserID)
+			assert.NotEmpty(t, response.Data.ID)
 		})
 
 		t.Run("MissingUserID", func(t *testing.T) {
@@ -212,11 +213,11 @@ func TestSessionsHandler(t *testing.T) {
 
 			assert.Equal(t, http.StatusOK, responseRecorder.Code)
 
-			var response api.StandardResponse[*database.Session]
+			var response api.StandardResponse[handlers.SessionResponse]
 			err := json.Unmarshal(responseRecorder.Body.Bytes(), &response)
 			require.NoError(t, err)
-			assert.Equal(t, session.ID, response.Data.ID)
-			assert.Equal(t, session.UserID, response.Data.UserID)
+			assert.Equal(t, session.ID, response.Data.Session.ID)
+			assert.Equal(t, session.UserID, response.Data.Session.UserID)
 		})
 
 		t.Run("SessionNotFound", func(t *testing.T) {
@@ -279,7 +280,7 @@ func TestSessionsHandler(t *testing.T) {
 			err := json.Unmarshal(responseRecorder.Body.Bytes(), &response)
 			require.NoError(t, err)
 			assert.Equal(t, session.ID, response.Data.ID)
-			assert.Equal(t, newAgent.ID, response.Data.AgentID)
+			assert.Equal(t, newAgent.ID, *response.Data.AgentID)
 		})
 
 		t.Run("MissingSessionName", func(t *testing.T) {

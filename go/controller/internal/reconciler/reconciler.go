@@ -463,24 +463,13 @@ func (a *kagentReconciler) upsertAgent(ctx context.Context, agent *v1alpha1.Agen
 		return nil
 	}
 
-	// Patch the agent resources if the config hash has changed
-	if err := a.kube.Patch(ctx, agentOutputs.ConfigMap, client.Apply, &client.PatchOptions{
-		FieldManager: "kagent-controller",
-		Force:        ptr.To(true),
-	}); err != nil {
-		return fmt.Errorf("failed to patch agent %s: %v", agentOutputs.Config.Name, err)
-	}
-	if err := a.kube.Patch(ctx, agentOutputs.Service, client.Apply, &client.PatchOptions{
-		FieldManager: "kagent-controller",
-		Force:        ptr.To(true),
-	}); err != nil {
-		return fmt.Errorf("failed to patch agent %s: %v", agentOutputs.Config.Name, err)
-	}
-	if err := a.kube.Patch(ctx, agentOutputs.Deployment, client.Apply, &client.PatchOptions{
-		FieldManager: "kagent-controller",
-		Force:        ptr.To(true),
-	}); err != nil {
-		return fmt.Errorf("failed to patch agent %s: %v", agentOutputs.Config.Name, err)
+	for _, obj := range agentOutputs.Manifest {
+		if err := a.kube.Patch(ctx, obj, client.Apply, &client.PatchOptions{
+			FieldManager: "kagent-controller",
+			Force:        ptr.To(true),
+		}); err != nil {
+			return fmt.Errorf("failed to patch agent output %s: %v", agentOutputs.Config.Name, err)
+		}
 	}
 
 	return nil
