@@ -40,7 +40,7 @@ func TestInvokeAPI(t *testing.T) {
 				Message: protocol.Message{
 					Kind:  protocol.KindMessage,
 					Role:  protocol.MessageRoleUser,
-					Parts: []protocol.Part{protocol.NewTextPart("List all pods in the cluster, always use output mode wide")},
+					Parts: []protocol.Part{protocol.NewTextPart("List all pods in the cluster")},
 				},
 			})
 			require.NoError(t, err)
@@ -61,7 +61,7 @@ func TestInvokeAPI(t *testing.T) {
 				Message: protocol.Message{
 					Kind:  protocol.KindMessage,
 					Role:  protocol.MessageRoleUser,
-					Parts: []protocol.Part{protocol.NewTextPart("List all pods in the cluster, always use output mode wide")},
+					Parts: []protocol.Part{protocol.NewTextPart("List all pods in the cluster")},
 				},
 			})
 			require.NoError(t, err)
