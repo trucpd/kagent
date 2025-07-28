@@ -19,7 +19,8 @@ from google.adk.a2a.executor.a2a_agent_executor import A2aAgentExecutor
 from google.adk.agents import BaseAgent
 from google.adk.runners import Runner
 
-from kagent import KAgentSessionService, KAgentTaskStore
+from .kagent_session_service import KAgentSessionService
+from .kagent_task_store import KAgentTaskStore
 
 # --- Constants ---
 USER_ID = "admin@kagent.dev"
@@ -73,42 +74,49 @@ def health_check(request: Request) -> PlainTextResponse:
 kagent_url_override = os.getenv("KAGENT_URL")
 
 
-def build_app(root_agent: BaseAgent, kagent_url: str, app_name: str, agent_card: AgentCard) -> FastAPI:
-    http_client = httpx.AsyncClient(base_url=kagent_url_override or kagent_url)
-    session_service = KAgentSessionService(http_client)
-    runner = Runner(
-        agent=root_agent,
-        app_name=app_name,
-        session_service=session_service,
-    )
+class KAgentApp:
+    def __init__(self, root_agent: BaseAgent, agent_card: AgentCard, kagent_url: str, app_name: str):
+        self.root_agent = root_agent
+        self.kagent_url = kagent_url
+        self.app_name = app_name
+        self.agent_card = agent_card
 
-    agent_executor = A2aAgentExecutor(
-        runner=runner,
-    )
+    def build(self) -> FastAPI:
+        http_client = httpx.AsyncClient(base_url=kagent_url_override or self.kagent_url)
+        session_service = KAgentSessionService(http_client)
+        runner = Runner(
+            agent=self.root_agent,
+            app_name=self.app_name,
+            session_service=session_service,
+        )
 
-    kagent_task_store = KAgentTaskStore(http_client)
+        agent_executor = A2aAgentExecutor(
+            runner=runner,
+        )
 
-    request_context_builder = KAgentRequestContextBuilder(user_id=USER_ID, task_store=kagent_task_store)
-    request_handler = DefaultRequestHandler(
-        agent_executor=agent_executor,
-        task_store=kagent_task_store,
-        request_context_builder=request_context_builder,
-    )
+        kagent_task_store = KAgentTaskStore(http_client)
 
-    a2a_app = A2AStarletteApplication(
-        agent_card=agent_card,
-        http_handler=request_handler,
-    )
+        request_context_builder = KAgentRequestContextBuilder(user_id=USER_ID, task_store=kagent_task_store)
+        request_handler = DefaultRequestHandler(
+            agent_executor=agent_executor,
+            task_store=kagent_task_store,
+            request_context_builder=request_context_builder,
+        )
 
-    @asynccontextmanager
-    async def agent_lifespan(app: FastAPI):
-        yield
-        await runner.close()
+        a2a_app = A2AStarletteApplication(
+            agent_card=self.agent_card,
+            http_handler=request_handler,
+        )
 
-    app = FastAPI(lifespan=agent_lifespan)
+        @asynccontextmanager
+        async def agent_lifespan(app: FastAPI):
+            yield
+            await runner.close()
 
-    # Health check/readiness probe
-    app.add_route("/health", methods=["GET"], route=health_check)
-    a2a_app.add_routes_to_app(app)
+        app = FastAPI(lifespan=agent_lifespan)
 
-    return app
+        # Health check/readiness probe
+        app.add_route("/health", methods=["GET"], route=health_check)
+        a2a_app.add_routes_to_app(app)
+
+        return app

@@ -41,7 +41,7 @@ ENV PATH=$PATH:/app/python/bin
 COPY --chown=python:pythongroup pyproject.toml  .
 COPY --chown=python:pythongroup .python-version .
 COPY --chown=python:pythongroup uv.lock .
-COPY --chown=python:pythongroup src src
+COPY --chown=python:pythongroup packages packages
 COPY --chown=python:pythongroup README.md .
 
 # Install dependencies

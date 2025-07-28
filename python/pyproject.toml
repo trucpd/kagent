@@ -1,62 +1,16 @@
-[build-system]
-requires = [
-  "setuptools>=67.0.0",
-  "wheel"
-]
-build-backend = "setuptools.build_meta"
+[tool.uv.workspace]
+members = ["packages/*"]
 
-[project]
-name = "kagent"
-version = "0.3.0"
-description = "kagent is a tool for building and deploying agent-based applications."
-readme = "README.md"
-requires-python = ">=3.12.11"
-dependencies = [
-  "openai>=1.72.0",
-  "python-dotenv>=1.1.0",
-  "pyyaml>=6.0.2",
-  "mcp>=1.8.1",
-  "typer>=0.15.0",
-  "protobuf>=6.31.1",
-  "opentelemetry-api>=1.32.0",
-  "opentelemetry-sdk>=1.32.0",
-  "opentelemetry-exporter-otlp-proto-grpc>=1.32.0",
-  "opentelemetry-instrumentation-openai>= 0.39.0",
-  "opentelemetry-instrumentation-httpx >= 0.52.0",
-  "anthropic[vertex]>=0.49.0",
-  "fastapi>=0.103.1",
-  "websockets>=11.0",
-  "litellm>=1.74.3",
-  "google-adk>=1.7.0",
-  "google-genai>=1.18.0",
-  "google-auth>=2.40.2",
-  "h11>=0.16.0",
-  "httpx>=0.25.0",
-  "pydantic>=2.5.0",
-  "typing-extensions>=4.8.0",
-  "jsonref>=1.1.0",
-  "a2a-sdk>=0.2.16",
-  "aiofiles>=24.1.0",
-]
-
-[project.optional-dependencies]
-jupyter-executor = [
-    "ipykernel>=6.29.5",
-    "nbclient>=0.10.2",
-]
-test = [
+[dependency-groups]
+dev = [
   "pytest>=8.3.5",
   "pytest-asyncio>=0.25.3",
-]
-lint = [
   "ruff>=0.11.5",
 ]
 
-[project.scripts]
-kagent = "kagent.cli:run"
-
 [tool.uv.sources]
 kagent = { workspace = true }
+kagent-adk = { workspace = true }
 
 [tool.ruff]
 line-length = 120
@@ -75,7 +29,7 @@ select = ["E", "F", "W", "B", "Q", "I", "ASYNC", "T20"]
 ignore = ["F401", "E501", "B008", "ASYNC109"]
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["packages"]
 
 [tool.setuptools.package-data]
 "*" = ["*.json", "*.yaml", "*.yml", "*.txt", "*.md"]

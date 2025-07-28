@@ -1,8 +1,6 @@
-import json
 import logging
 from typing import Literal, Self, Union
 
-import aiofiles
 from a2a.types import AgentCard
 from google.adk.agents import Agent
 from google.adk.agents.llm_agent import ToolUnion
@@ -10,11 +8,8 @@ from google.adk.agents.run_config import RunConfig, StreamingMode
 from google.adk.models.anthropic_llm import Claude as ClaudeLLM
 from google.adk.models.google_llm import Gemini as GeminiLLM
 from google.adk.models.lite_llm import LiteLlm
-from google.adk.runners import Runner
-from google.adk.sessions import InMemorySessionService
 from google.adk.tools.agent_tool import AgentTool
 from google.adk.tools.mcp_tool import MCPToolset, SseConnectionParams, StreamableHTTPConnectionParams
-from google.genai import types  # For creating message Content/Parts
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -113,44 +108,3 @@ class AgentConfig(BaseModel):
             instruction=self.instruction,
             tools=mcp_toolsets,
         )
-
-
-async def test_agent(filepath: str, task: str):
-    async with aiofiles.open(filepath, "r") as f:
-        content = await f.read()
-        config = json.loads(content)
-    agent_config = AgentConfig.model_validate(config)
-    root_agent = agent_config.to_agent()
-
-    session_service = InMemorySessionService()
-    SESSION_ID = "12345"
-    USER_ID = "admin"
-    await session_service.create_session(
-        app_name=agent_config.name,
-        session_id=SESSION_ID,
-        user_id=USER_ID,
-    )
-
-    runner = Runner(
-        agent=root_agent,
-        app_name=agent_config.name,
-        session_service=session_service,
-    )
-
-    logger.info(f"\n>>> User Query: {task}")
-
-    # Prepare the user's message in ADK format
-    content = types.Content(role="user", parts=[types.Part(text=task)])
-    # Key Concept: run_async executes the agent logic and yields Events.
-    # We iterate through events to find the final answer.
-    async for event in runner.run_async(
-        user_id=USER_ID,
-        session_id=SESSION_ID,
-        new_message=content,
-    ):
-        # You can uncomment the line below to see *all* events during execution
-        # print(f"  [Event] Author: {event.author}, Type: {type(event).__name__}, Final: {event.is_final_response()}, Content: {event.content}")
-
-        # Key Concept: is_final_response() marks the concluding message for the turn.
-        jsn = event.model_dump_json()
-        logger.info(f"  [Event] {jsn}")
