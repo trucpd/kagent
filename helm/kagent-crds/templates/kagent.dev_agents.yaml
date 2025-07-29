@@ -15,13 +15,17 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - description: Whether or not the agent has been accepted by the system.
-      jsonPath: .status.conditions[0].status
-      name: Accepted
-      type: string
     - description: The ModelConfig resource referenced by this agent.
       jsonPath: .spec.modelConfig
       name: ModelConfig
+      type: string
+    - description: Whether or not the agent is ready to serve requests.
+      jsonPath: .status.conditions[?(@.type=='Ready')].status
+      name: Ready
+      type: string
+    - description: Whether or not the agent has been accepted by the system.
+      jsonPath: .status.conditions[?(@.type=='Accepted')].status
+      name: Accepted
       type: string
     name: v1alpha1
     schema:
