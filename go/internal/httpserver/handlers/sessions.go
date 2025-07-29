@@ -7,6 +7,7 @@ import (
 
 	"github.com/kagent-dev/kagent/go/internal/database"
 	"github.com/kagent-dev/kagent/go/internal/httpserver/errors"
+	"github.com/kagent-dev/kagent/go/internal/utils"
 	"github.com/kagent-dev/kagent/go/pkg/client/api"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 	"trpc.group/trpc-go/trpc-a2a-go/protocol"
@@ -51,7 +52,7 @@ func (h *SessionsHandler) HandleGetSessionsForAgent(w ErrorResponseWriter, r *ht
 	}
 
 	// Get agent ID from agent ref
-	agent, err := h.DatabaseService.GetAgent(namespace + "/" + agentName)
+	agent, err := h.DatabaseService.GetAgent(utils.ConvertToPythonIdentifier(namespace + "/" + agentName))
 	if err != nil {
 		w.RespondWithError(errors.NewNotFoundError("Agent not found", err))
 		return
@@ -119,7 +120,7 @@ func (h *SessionsHandler) HandleCreateSession(w ErrorResponseWriter, r *http.Req
 		id = *sessionRequest.ID
 	}
 
-	agent, err := h.DatabaseService.GetAgent(*sessionRequest.AgentRef)
+	agent, err := h.DatabaseService.GetAgent(utils.ConvertToPythonIdentifier(*sessionRequest.AgentRef))
 	if err != nil {
 		w.RespondWithError(errors.NewNotFoundError("Agent not found", err))
 		return
@@ -240,7 +241,7 @@ func (h *SessionsHandler) HandleUpdateSession(w ErrorResponseWriter, r *http.Req
 		return
 	}
 
-	agent, err := h.DatabaseService.GetAgent(*sessionRequest.AgentRef)
+	agent, err := h.DatabaseService.GetAgent(utils.ConvertToPythonIdentifier(*sessionRequest.AgentRef))
 	if err != nil {
 		w.RespondWithError(errors.NewNotFoundError("Agent not found", err))
 		return
