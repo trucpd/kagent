@@ -24,5 +24,9 @@ spec:
       targetPort: {{ .Values.service.ports.querydoc.targetPort }}
       protocol: TCP
       name: querydoc
+    - port: 8000
+      targetPort: 8000
+      protocol: TCP
+      name: grafana-mcp
   selector:
     {{- include "kagent.selectorLabels" . | nindent 4 }}

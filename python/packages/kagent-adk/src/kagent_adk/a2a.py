@@ -4,6 +4,7 @@ import logging
 import os
 import sys
 from contextlib import asynccontextmanager
+from typing import Callable
 
 import httpx
 from a2a.auth.user import User
@@ -18,6 +19,8 @@ from fastapi.responses import PlainTextResponse
 from google.adk.a2a.executor.a2a_agent_executor import A2aAgentExecutor
 from google.adk.agents import BaseAgent
 from google.adk.runners import Runner
+from google.adk.sessions import InMemorySessionService
+from google.genai import types
 
 from .kagent_session_service import KAgentSessionService
 from .kagent_task_store import KAgentTaskStore
@@ -71,11 +74,26 @@ def health_check(request: Request) -> PlainTextResponse:
     return PlainTextResponse("OK")
 
 
+def thread_dump(request: Request) -> PlainTextResponse:
+    import io
+
+    buf = io.StringIO()
+    faulthandler.dump_traceback(file=buf)
+    buf.seek(0)
+    return PlainTextResponse(buf.read())
+
+
 kagent_url_override = os.getenv("KAGENT_URL")
 
 
 class KAgentApp:
-    def __init__(self, root_agent: BaseAgent, agent_card: AgentCard, kagent_url: str, app_name: str):
+    def __init__(
+        self,
+        root_agent: BaseAgent | Callable[[], BaseAgent],
+        agent_card: AgentCard,
+        kagent_url: str,
+        app_name: str,
+    ):
         self.root_agent = root_agent
         self.kagent_url = kagent_url
         self.app_name = app_name
@@ -84,11 +102,31 @@ class KAgentApp:
     def build(self) -> FastAPI:
         http_client = httpx.AsyncClient(base_url=kagent_url_override or self.kagent_url)
         session_service = KAgentSessionService(http_client)
-        runner = Runner(
-            agent=self.root_agent,
-            app_name=self.app_name,
-            session_service=session_service,
-        )
+
+        if isinstance(self.root_agent, Callable):
+            agent_factory = self.root_agent
+
+            def create_runner() -> Runner:
+                return Runner(
+                    agent=agent_factory(),
+                    app_name=self.app_name,
+                    session_service=session_service,
+                )
+
+            runner = create_runner
+        elif isinstance(self.root_agent, BaseAgent):
+            agent_instance = self.root_agent
+
+            def create_runner() -> Runner:
+                return Runner(
+                    agent=agent_instance,
+                    app_name=self.app_name,
+                    session_service=session_service,
+                )
+
+            runner = create_runner
+        else:
+            raise ValueError(f"Invalid root agent: {self.root_agent}")
 
         agent_executor = A2aAgentExecutor(
             runner=runner,
@@ -108,15 +146,57 @@ class KAgentApp:
             http_handler=request_handler,
         )
 
-        @asynccontextmanager
-        async def agent_lifespan(app: FastAPI):
-            yield
-            await runner.close()
+        # @asynccontextmanager
+        # async def agent_lifespan(app: FastAPI):
+        #     yield
+        #     if isinstance(runner, Runner):
+        #         await runner.close()
 
-        app = FastAPI(lifespan=agent_lifespan)
+        faulthandler.enable()
+        app = FastAPI()
 
         # Health check/readiness probe
         app.add_route("/health", methods=["GET"], route=health_check)
+        app.add_route("/thread_dump", methods=["GET"], route=thread_dump)
         a2a_app.add_routes_to_app(app)
 
         return app
+
+    async def test(self, task: str):
+        session_service = InMemorySessionService()
+        SESSION_ID = "12345"
+        USER_ID = "admin"
+        await session_service.create_session(
+            app_name=self.app_name,
+            session_id=SESSION_ID,
+            user_id=USER_ID,
+        )
+        if isinstance(self.root_agent, Callable):
+            agent_factory = self.root_agent
+            root_agent = agent_factory()
+        else:
+            root_agent = self.root_agent
+
+        runner = Runner(
+            agent=root_agent,
+            app_name=self.app_name,
+            session_service=session_service,
+        )
+
+        logger.info(f"\n>>> User Query: {task}")
+
+        # Prepare the user's message in ADK format
+        content = types.Content(role="user", parts=[types.Part(text=task)])
+        # Key Concept: run_async executes the agent logic and yields Events.
+        # We iterate through events to find the final answer.
+        async for event in runner.run_async(
+            user_id=USER_ID,
+            session_id=SESSION_ID,
+            new_message=content,
+        ):
+            # You can uncomment the line below to see *all* events during execution
+            # print(f"  [Event] Author: {event.author}, Type: {type(event).__name__}, Final: {event.is_final_response()}, Content: {event.content}")
+
+            # Key Concept: is_final_response() marks the concluding message for the turn.
+            jsn = event.model_dump_json()
+            logger.info(f"  [Event] {jsn}")
