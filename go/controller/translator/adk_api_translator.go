@@ -19,6 +19,7 @@ import (
 	"github.com/kagent-dev/kagent/go/internal/version"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -248,11 +249,21 @@ func defaultDeploymentSpec(name string, labels map[string]string, configHash uin
 						Name:            "kagent",
 						Image:           fmt.Sprintf("cr.kagent.dev/kagent-dev/kagent/app:%s", version.Get().Version),
 						ImagePullPolicy: corev1.PullIfNotPresent,
-						Command:         []string{"uv", "run", "kagent", "static", "--host", "0.0.0.0", "--port", "8080", "--filepath", "/config/config.json"},
+						Command:         []string{"kagent", "static", "--host", "0.0.0.0", "--port", "8080", "--filepath", "/config/config.json"},
 						Ports: []corev1.ContainerPort{
 							{
 								Name:          "http",
 								ContainerPort: 8080,
+							},
+						},
+						Resources: corev1.ResourceRequirements{
+							Requests: corev1.ResourceList{
+								corev1.ResourceCPU:    resource.MustParse("100m"),
+								corev1.ResourceMemory: resource.MustParse("256Mi"),
+							},
+							Limits: corev1.ResourceList{
+								corev1.ResourceCPU:    resource.MustParse("1000m"),
+								corev1.ResourceMemory: resource.MustParse("1Gi"),
 							},
 						},
 						Env: envVars,

@@ -60,9 +60,9 @@ async def test_agent(filepath: str, task: str):
         content = await f.read()
         config = json.loads(content)
     agent_config = AgentConfig.model_validate(config)
-    root_agent = agent_config.to_agent()
+    agent = agent_config.to_agent()
 
-    app = KAgentApp(root_agent, agent_config.agent_card, agent_config.kagent_url, agent_config.name)
+    app = KAgentApp(agent, agent_config.agent_card, agent_config.kagent_url, agent_config.name)
     await app.test(task)
 
 

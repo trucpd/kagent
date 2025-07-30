@@ -158,8 +158,6 @@
             "containers": [
               {
                 "command": [
-                  "uv",
-                  "run",
                   "kagent",
                   "static",
                   "--host",
@@ -200,7 +198,16 @@
                   "initialDelaySeconds": 15,
                   "periodSeconds": 3
                 },
-                "resources": {},
+                "resources": {
+                  "limits": {
+                    "cpu": "1",
+                    "memory": "1Gi"
+                  },
+                  "requests": {
+                    "cpu": "100m",
+                    "memory": "256Mi"
+                  }
+                },
                 "volumeMounts": [
                   {
                     "mountPath": "/config",

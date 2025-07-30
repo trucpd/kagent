@@ -36,7 +36,7 @@ ARG TOOLS_PYTHON_VERSION
 
 WORKDIR /app/python
 
-ENV PATH=$PATH:/app/python/bin
+ENV PATH=$PATH:/app/python/bin:/app/python/.venv/bin
 
 COPY --chown=python:pythongroup pyproject.toml  .
 COPY --chown=python:pythongroup .python-version .
@@ -44,25 +44,28 @@ COPY --chown=python:pythongroup uv.lock .
 COPY --chown=python:pythongroup packages packages
 COPY --chown=python:pythongroup README.md .
 
+ARG VERSION
+
 # Install dependencies
 RUN echo "Installing dependencies..."                   \
     && uv venv --python=python$TOOLS_PYTHON_VERSION     \
-    && uv sync --locked --refresh                       \
-    && uv pip install setuptools wheel                  \
+    && uv sync --locked --refresh
+
+RUN uv version ${VERSION%%-*} --package kagent \
+    && uv build --package kagent \
     && uv cache prune
 
 # Offline mode
 ENV UV_OFFLINE=1
 
 # Test if the tool is working and fetch all dependencies
-RUN uv run kagent --help
+RUN kagent --help
 
 EXPOSE 8081
-ARG VERSION
 
 LABEL org.opencontainers.image.source=https://github.com/kagent-dev/kagent
 LABEL org.opencontainers.image.description="Kagent app is the apiserver for running agents."
 LABEL org.opencontainers.image.authors="Kagent Creators 🤖"
 LABEL org.opencontainers.image.version="$VERSION"
 
-CMD ["uv", "run", "kagent", "--host", "0.0.0.0", "--port", "8081"]
+CMD ["kagent", "--host", "0.0.0.0", "--port", "8081"]

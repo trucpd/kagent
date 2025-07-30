@@ -1,10 +1,11 @@
 #! /usr/bin/env python3
 import faulthandler
+import inspect
 import logging
 import os
 import sys
 from contextlib import asynccontextmanager
-from typing import Callable
+from typing import Awaitable, Callable, override
 
 import httpx
 from a2a.auth.user import User
@@ -16,14 +17,14 @@ from a2a.server.tasks import TaskStore
 from a2a.types import AgentCard, MessageSendParams, Task
 from fastapi import FastAPI, Request
 from fastapi.responses import PlainTextResponse
-from google.adk.a2a.executor.a2a_agent_executor import A2aAgentExecutor
 from google.adk.agents import BaseAgent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.genai import types
 
-from .kagent_session_service import KAgentSessionService
-from .kagent_task_store import KAgentTaskStore
+from ._agent_executor import A2aAgentExecutor
+from ._session_service import KAgentSessionService
+from ._task_store import KAgentTaskStore
 
 # --- Constants ---
 USER_ID = "admin@kagent.dev"
@@ -89,7 +90,7 @@ kagent_url_override = os.getenv("KAGENT_URL")
 class KAgentApp:
     def __init__(
         self,
-        root_agent: BaseAgent | Callable[[], BaseAgent],
+        root_agent: BaseAgent,
         agent_card: AgentCard,
         kagent_url: str,
         app_name: str,
@@ -103,33 +104,15 @@ class KAgentApp:
         http_client = httpx.AsyncClient(base_url=kagent_url_override or self.kagent_url)
         session_service = KAgentSessionService(http_client)
 
-        if isinstance(self.root_agent, Callable):
-            agent_factory = self.root_agent
-
-            def create_runner() -> Runner:
-                return Runner(
-                    agent=agent_factory(),
-                    app_name=self.app_name,
-                    session_service=session_service,
-                )
-
-            runner = create_runner
-        elif isinstance(self.root_agent, BaseAgent):
-            agent_instance = self.root_agent
-
-            def create_runner() -> Runner:
-                return Runner(
-                    agent=agent_instance,
-                    app_name=self.app_name,
-                    session_service=session_service,
-                )
-
-            runner = create_runner
-        else:
-            raise ValueError(f"Invalid root agent: {self.root_agent}")
+        def create_runner() -> Runner:
+            return Runner(
+                agent=self.root_agent,
+                app_name=self.app_name,
+                session_service=session_service,
+            )
 
         agent_executor = A2aAgentExecutor(
-            runner=runner,
+            runner=create_runner,
         )
 
         kagent_task_store = KAgentTaskStore(http_client)
