@@ -13,7 +13,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { getTools } from "../actions/tools";
 import Link from "next/link";
 import CategoryFilter from "@/components/tools/CategoryFilter";
-import McpIcon from "@/components/icons/McpIcon";
 
 export default function ToolsPage() {
   const [toolsData, setToolsData] = useState<{

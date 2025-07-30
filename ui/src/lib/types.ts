@@ -1,13 +1,3 @@
-import { Component, ToolConfig } from "@/types/datamodel";
-
-export interface CreateAgentFormData {
-  name: string;
-  description: string;
-  system_prompt: string;
-  model: ModelConfig;
-  tools: Component<ToolConfig>[];
-}
-
 export interface ModelConfig {
   ref: string;
   providerName: string;

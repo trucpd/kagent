@@ -76,13 +76,16 @@ export const getToolResponseDescription = (tool: ToolResponse): string => {
 };
 
 export const getToolResponseCategory = (tool: ToolResponse): string => {
-  // Extract category from server name (e.g., "k8s.helm" -> "helm")
-  const parts = tool.id.split("_");
-  if (parts.length > 1) {
-    return parts[0];
-  } else {
-    return tool.id;
-  } 
+
+  if (tool.server_name === 'kagent/kagent-tool-server') {
+    const parts = tool.id.split("_");
+    if (parts.length > 1) {
+      return parts[0];
+    } else {
+      return tool.id;
+    } 
+  }
+  return tool.server_name;
 };
 
 export const getToolResponseIdentifier = (tool: ToolResponse): string => {
