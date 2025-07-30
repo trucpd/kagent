@@ -51,7 +51,8 @@ RUN echo "Installing dependencies..."                   \
     && uv venv --python=python$TOOLS_PYTHON_VERSION     \
     && uv sync --locked --refresh
 
-RUN uv build --package kagent \
+RUN uv version ${VERSION%%-*} --package kagent \
+    && uv build --package kagent \
     && uv cache prune
 
 # Offline mode
