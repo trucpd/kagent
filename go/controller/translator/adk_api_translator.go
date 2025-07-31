@@ -310,7 +310,7 @@ func (a *adkApiTranslator) translateDeclarativeAgent(ctx context.Context, agent 
 	}
 
 	cfg := &adk.AgentConfig{
-		KagentUrl:   fmt.Sprintf("http://kagent.%s.svc:8083", common.GetResourceNamespace()),
+		KagentUrl:   fmt.Sprintf("http://kagent-controller.%s.svc:8083", common.GetResourceNamespace()),
 		Name:        common.ConvertToPythonIdentifier(common.GetObjectRef(agent)),
 		Description: agent.Spec.Description,
 		Instruction: agent.Spec.SystemMessage,

@@ -61,11 +61,11 @@ ENV UV_OFFLINE=1
 # Test if the tool is working and fetch all dependencies
 RUN kagent --help
 
-EXPOSE 8081
+EXPOSE 8080
 
 LABEL org.opencontainers.image.source=https://github.com/kagent-dev/kagent
 LABEL org.opencontainers.image.description="Kagent app is the apiserver for running agents."
 LABEL org.opencontainers.image.authors="Kagent Creators 🤖"
 LABEL org.opencontainers.image.version="$VERSION"
 
-CMD ["kagent", "--host", "0.0.0.0", "--port", "8081"]
+CMD ["kagent", "--host", "0.0.0.0", "--port", "8080"]
