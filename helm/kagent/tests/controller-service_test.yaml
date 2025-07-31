@@ -29,39 +29,6 @@ tests:
       - equal:
           path: spec.ports[0].protocol
           value: TCP
-<<<<<<< HEAD:helm/kagent/tests/service_test.yaml
-      - equal:
-          path: spec.ports[1].name
-          value: ui
-      - equal:
-          path: spec.ports[1].port
-          value: 80
-      - equal:
-          path: spec.ports[1].targetPort
-          value: 8080
-      - equal:
-          path: spec.ports[2].name
-          value: tools
-      - equal:
-          path: spec.ports[2].port
-          value: 8084
-      - equal:
-          path: spec.ports[2].targetPort
-          value: 8084
-      - equal:
-          path: spec.ports[3].name
-          value: querydoc
-      - equal:
-          path: spec.ports[3].port
-          value: 8085
-      - equal:
-          path: spec.ports[3].targetPort
-          value: 8085
-      - equal:
-          path: spec.ports[3].protocol
-          value: TCP
-=======
->>>>>>> 4067b282ea4b0f4a3afe4227196b1e5352fbb542:helm/kagent/tests/controller-service_test.yaml
 
   - it: should have correct selector labels
     asserts:
@@ -71,54 +38,9 @@ tests:
       - equal:
           path: spec.selector["app.kubernetes.io/instance"]
           value: RELEASE-NAME
-<<<<<<< HEAD:helm/kagent/tests/service_test.yaml
-
-  - it: should use custom service type when set
-    set:
-      service:
-        type: LoadBalancer
-    asserts:
-      - equal:
-          path: spec.type
-          value: LoadBalancer
-
-  - it: should use custom ports when configured
-    set:
-      service:
-        ports:
-          ui:
-            port: 8080
-            targetPort: 8080
-          controller:
-            port: 9001
-            targetPort: 9001
-          tools:
-            port: 9002
-            targetPort: 9002
-    asserts:
-      - equal:
-          path: spec.ports[0].port
-          value: 9001
-      - equal:
-          path: spec.ports[0].targetPort
-          value: 9001
-      - equal:
-          path: spec.ports[1].port
-          value: 8080
-      - equal:
-          path: spec.ports[1].targetPort
-          value: 8080
-      - equal:
-          path: spec.ports[2].port
-          value: 9002
-      - equal:
-          path: spec.ports[2].targetPort
-          value: 9002
-=======
       - equal:
           path: spec.selector["app.kubernetes.io/component"]
           value: controller
->>>>>>> 4067b282ea4b0f4a3afe4227196b1e5352fbb542:helm/kagent/tests/controller-service_test.yaml
 
   - it: should have correct metadata labels
     asserts:
