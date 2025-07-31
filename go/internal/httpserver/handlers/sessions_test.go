@@ -19,6 +19,7 @@ import (
 	"github.com/kagent-dev/kagent/go/internal/database"
 	database_fake "github.com/kagent-dev/kagent/go/internal/database/fake"
 	"github.com/kagent-dev/kagent/go/internal/httpserver/handlers"
+	"github.com/kagent-dev/kagent/go/internal/utils"
 	"github.com/kagent-dev/kagent/go/pkg/client/api"
 )
 
@@ -100,7 +101,7 @@ func TestSessionsHandler(t *testing.T) {
 		t.Run("Success", func(t *testing.T) {
 			handler, dbClient, responseRecorder := setupHandler()
 			userID := "test-user"
-			agentRef := "default/test-agent"
+			agentRef := utils.ConvertToPythonIdentifier("default/test-agent")
 
 			// Create test agent
 			createTestAgent(dbClient, agentRef)
@@ -129,7 +130,7 @@ func TestSessionsHandler(t *testing.T) {
 
 		t.Run("MissingUserID", func(t *testing.T) {
 			handler, _, responseRecorder := setupHandler()
-			agentRef := "default/test-agent"
+			agentRef := utils.ConvertToPythonIdentifier("default/test-agent")
 
 			sessionReq := api.SessionRequest{
 				AgentRef: &agentRef,
@@ -166,7 +167,7 @@ func TestSessionsHandler(t *testing.T) {
 		t.Run("AgentNotFound", func(t *testing.T) {
 			handler, _, responseRecorder := setupHandler()
 			userID := "test-user"
-			agentRef := "default/non-existent-agent"
+			agentRef := utils.ConvertToPythonIdentifier("default/non-existent-agent")
 
 			sessionReq := api.SessionRequest{
 				UserID:   userID,
@@ -255,11 +256,11 @@ func TestSessionsHandler(t *testing.T) {
 			sessionName := "test-session"
 
 			// Create test agent and session
-			agentRef := "default/test-agent"
+			agentRef := utils.ConvertToPythonIdentifier("default/test-agent")
 			agent := createTestAgent(dbClient, agentRef)
 			session := createTestSession(dbClient, sessionName, userID, agent.ID)
 
-			newAgentRef := "default/new-agent"
+			newAgentRef := utils.ConvertToPythonIdentifier("default/new-agent")
 			newAgent := createTestAgent(dbClient, newAgentRef)
 
 			sessionReq := api.SessionRequest{
@@ -371,7 +372,7 @@ func TestSessionsHandler(t *testing.T) {
 			userID := "test-user"
 			namespace := "default"
 			agentName := "test-agent"
-			agentRef := namespace + "/" + agentName
+			agentRef := utils.ConvertToPythonIdentifier(namespace + "/" + agentName)
 
 			// Create test agent and sessions
 			agent := createTestAgent(dbClient, agentRef)

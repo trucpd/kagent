@@ -34,7 +34,7 @@
       }
     ],
     "instruction": "You are a math toolserver. Focus on solving mathematical problems step by step.",
-    "kagent_url": "http://kagent.kagent.svc:8083",
+    "kagent_url": "http://kagent-controller.kagent.svc:8083",
     "model": {
       "base_url": "",
       "model": "gpt-4o",
@@ -44,38 +44,38 @@
     "sse_tools": null
   },
   "configHash": [
-    1,
-    13,
-    229,
-    166,
-    10,
-    155,
-    28,
-    16,
-    229,
-    147,
-    103,
-    180,
-    52,
-    15,
-    43,
-    167,
+    6,
+    37,
     107,
-    239,
-    205,
-    160,
-    150,
-    125,
-    255,
-    251,
-    14,
-    183,
-    232,
-    187,
-    77,
+    15,
+    35,
+    154,
+    38,
+    177,
+    198,
+    193,
+    243,
+    63,
+    108,
+    228,
+    230,
+    94,
+    60,
+    23,
+    180,
+    218,
+    11,
+    108,
+    238,
     39,
-    118,
-    174
+    144,
+    13,
+    221,
+    4,
+    86,
+    223,
+    90,
+    159
   ],
   "manifest": [
     {
@@ -104,7 +104,7 @@
     {
       "apiVersion": "v1",
       "data": {
-        "config.json": "{\"kagent_url\":\"http://kagent.kagent.svc:8083\",\"agent_card\":{\"name\":\"agent\",\"description\":\"A toolserver for math problems\",\"url\":\"http://agent.test.svc:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":[]},\"name\":\"test__NS__agent\",\"model\":{\"base_url\":\"\",\"model\":\"gpt-4o\",\"type\":\"openai\"},\"description\":\"A toolserver for math problems\",\"instruction\":\"You are a math toolserver. Focus on solving mathematical problems step by step.\",\"http_tools\":[{\"params\":{\"url\":\"http://localhost:8084/mcp\",\"headers\":{},\"timeout\":30,\"sse_read_timeout\":300},\"tools\":[\"k8s_get_resources\"]}],\"sse_tools\":null,\"agents\":null}"
+        "config.json": "{\"kagent_url\":\"http://kagent-controller.kagent.svc:8083\",\"agent_card\":{\"name\":\"agent\",\"description\":\"A toolserver for math problems\",\"url\":\"http://agent.test.svc:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":[]},\"name\":\"test__NS__agent\",\"model\":{\"base_url\":\"\",\"model\":\"gpt-4o\",\"type\":\"openai\"},\"description\":\"A toolserver for math problems\",\"instruction\":\"You are a math toolserver. Focus on solving mathematical problems step by step.\",\"http_tools\":[{\"params\":{\"url\":\"http://localhost:8084/mcp\",\"headers\":{},\"timeout\":30,\"sse_read_timeout\":300},\"tools\":[\"k8s_get_resources\"]}],\"sse_tools\":null,\"agents\":null}"
       },
       "kind": "ConfigMap",
       "metadata": {
@@ -163,7 +163,7 @@
             "creationTimestamp": null,
             "labels": {
               "app": "kagent",
-              "config.kagent.dev/hash": "75969270040435728",
+              "config.kagent.dev/hash": "442877851131848369",
               "kagent": "agent"
             }
           },

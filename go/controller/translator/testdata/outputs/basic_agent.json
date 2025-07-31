@@ -22,7 +22,7 @@
     "description": "A basic test agent",
     "http_tools": null,
     "instruction": "You are a helpful assistant.",
-    "kagent_url": "http://kagent.kagent.svc:8083",
+    "kagent_url": "http://kagent-controller.kagent.svc:8083",
     "model": {
       "base_url": "",
       "model": "gpt-4o",
@@ -32,38 +32,38 @@
     "sse_tools": null
   },
   "configHash": [
-    112,
-    38,
-    198,
-    41,
-    239,
-    127,
-    6,
-    158,
-    73,
-    243,
-    124,
-    22,
-    180,
-    110,
-    38,
-    139,
-    210,
-    90,
-    131,
-    66,
-    225,
-    81,
-    202,
-    214,
-    152,
-    249,
-    243,
-    213,
-    51,
-    153,
-    254,
-    37
+    246,
+    144,
+    96,
+    168,
+    86,
+    173,
+    114,
+    171,
+    33,
+    166,
+    132,
+    169,
+    232,
+    79,
+    105,
+    242,
+    221,
+    68,
+    177,
+    46,
+    63,
+    132,
+    114,
+    85,
+    205,
+    53,
+    96,
+    206,
+    215,
+    67,
+    174,
+    12
   ],
   "manifest": [
     {
@@ -92,7 +92,7 @@
     {
       "apiVersion": "v1",
       "data": {
-        "config.json": "{\"kagent_url\":\"http://kagent.kagent.svc:8083\",\"agent_card\":{\"name\":\"basic-agent\",\"description\":\"A basic test agent\",\"url\":\"http://basic-agent.test.svc:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":[]},\"name\":\"test__NS__basic_agent\",\"model\":{\"base_url\":\"\",\"model\":\"gpt-4o\",\"type\":\"openai\"},\"description\":\"A basic test agent\",\"instruction\":\"You are a helpful assistant.\",\"http_tools\":null,\"sse_tools\":null,\"agents\":null}"
+        "config.json": "{\"kagent_url\":\"http://kagent-controller.kagent.svc:8083\",\"agent_card\":{\"name\":\"basic-agent\",\"description\":\"A basic test agent\",\"url\":\"http://basic-agent.test.svc:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":[]},\"name\":\"test__NS__basic_agent\",\"model\":{\"base_url\":\"\",\"model\":\"gpt-4o\",\"type\":\"openai\"},\"description\":\"A basic test agent\",\"instruction\":\"You are a helpful assistant.\",\"http_tools\":null,\"sse_tools\":null,\"agents\":null}"
       },
       "kind": "ConfigMap",
       "metadata": {
@@ -151,7 +151,7 @@
             "creationTimestamp": null,
             "labels": {
               "app": "kagent",
-              "config.kagent.dev/hash": "8081364464776971934",
+              "config.kagent.dev/hash": "17766806806101586603",
               "kagent": "basic-agent"
             }
           },

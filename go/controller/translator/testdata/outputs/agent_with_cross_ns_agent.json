@@ -42,7 +42,7 @@
         "description": "A provider agent with vector memory",
         "http_tools": null,
         "instruction": "You are a provider assistant with access to memory.",
-        "kagent_url": "http://kagent.kagent.svc:8083",
+        "kagent_url": "http://kagent-controller.kagent.svc:8083",
         "model": {
           "base_url": "",
           "model": "gpt-4o",
@@ -55,7 +55,7 @@
     "description": "An agent that uses another agent from a different namespace",
     "http_tools": null,
     "instruction": "You are an assistant that can delegate to other agents.",
-    "kagent_url": "http://kagent.kagent.svc:8083",
+    "kagent_url": "http://kagent-controller.kagent.svc:8083",
     "model": {
       "base_url": "",
       "model": "gpt-3.5-turbo",
@@ -65,38 +65,38 @@
     "sse_tools": null
   },
   "configHash": [
-    220,
-    40,
-    36,
-    198,
-    213,
-    185,
-    33,
-    244,
-    132,
+    191,
+    192,
+    25,
+    252,
+    4,
     170,
-    12,
-    32,
-    181,
-    119,
-    74,
-    31,
-    124,
-    20,
-    73,
-    203,
-    81,
-    254,
-    172,
-    176,
-    248,
-    189,
-    175,
-    38,
-    136,
-    169,
-    78,
-    241
+    63,
+    220,
+    195,
+    140,
+    194,
+    249,
+    133,
+    102,
+    241,
+    161,
+    117,
+    152,
+    64,
+    230,
+    184,
+    200,
+    89,
+    0,
+    122,
+    87,
+    186,
+    123,
+    57,
+    117,
+    214,
+    108
   ],
   "manifest": [
     {
@@ -125,7 +125,7 @@
     {
       "apiVersion": "v1",
       "data": {
-        "config.json": "{\"kagent_url\":\"http://kagent.kagent.svc:8083\",\"agent_card\":{\"name\":\"agent-with-cross-ns-agent\",\"description\":\"An agent that uses another agent from a different namespace\",\"url\":\"http://agent-with-cross-ns-agent.test-consumer.svc:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":[]},\"name\":\"test_consumer__NS__agent_with_cross_ns_agent\",\"model\":{\"base_url\":\"\",\"model\":\"gpt-3.5-turbo\",\"type\":\"openai\"},\"description\":\"An agent that uses another agent from a different namespace\",\"instruction\":\"You are an assistant that can delegate to other agents.\",\"http_tools\":null,\"sse_tools\":null,\"agents\":[{\"kagent_url\":\"http://kagent.kagent.svc:8083\",\"agent_card\":{\"name\":\"provider-agent\",\"description\":\"A provider agent with vector memory\",\"url\":\"http://provider-agent.test-provider.svc:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":[]},\"name\":\"test_provider__NS__provider_agent\",\"model\":{\"base_url\":\"\",\"model\":\"gpt-4o\",\"type\":\"openai\"},\"description\":\"A provider agent with vector memory\",\"instruction\":\"You are a provider assistant with access to memory.\",\"http_tools\":null,\"sse_tools\":null,\"agents\":null}]}"
+        "config.json": "{\"kagent_url\":\"http://kagent-controller.kagent.svc:8083\",\"agent_card\":{\"name\":\"agent-with-cross-ns-agent\",\"description\":\"An agent that uses another agent from a different namespace\",\"url\":\"http://agent-with-cross-ns-agent.test-consumer.svc:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":[]},\"name\":\"test_consumer__NS__agent_with_cross_ns_agent\",\"model\":{\"base_url\":\"\",\"model\":\"gpt-3.5-turbo\",\"type\":\"openai\"},\"description\":\"An agent that uses another agent from a different namespace\",\"instruction\":\"You are an assistant that can delegate to other agents.\",\"http_tools\":null,\"sse_tools\":null,\"agents\":[{\"kagent_url\":\"http://kagent-controller.kagent.svc:8083\",\"agent_card\":{\"name\":\"provider-agent\",\"description\":\"A provider agent with vector memory\",\"url\":\"http://provider-agent.test-provider.svc:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":[]},\"name\":\"test_provider__NS__provider_agent\",\"model\":{\"base_url\":\"\",\"model\":\"gpt-4o\",\"type\":\"openai\"},\"description\":\"A provider agent with vector memory\",\"instruction\":\"You are a provider assistant with access to memory.\",\"http_tools\":null,\"sse_tools\":null,\"agents\":null}]}"
       },
       "kind": "ConfigMap",
       "metadata": {
@@ -184,7 +184,7 @@
             "creationTimestamp": null,
             "labels": {
               "app": "kagent",
-              "config.kagent.dev/hash": "15863970123820376564",
+              "config.kagent.dev/hash": "13817072226973401052",
               "kagent": "agent-with-cross-ns-agent"
             }
           },
