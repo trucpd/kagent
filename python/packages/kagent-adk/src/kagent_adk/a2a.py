@@ -129,12 +129,6 @@ class KAgentApp:
             http_handler=request_handler,
         )
 
-        # @asynccontextmanager
-        # async def agent_lifespan(app: FastAPI):
-        #     yield
-        #     if isinstance(runner, Runner):
-        #         await runner.close()
-
         faulthandler.enable()
         app = FastAPI()
 
