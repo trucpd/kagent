@@ -105,7 +105,7 @@ class AgentConfig(BaseModel):
         if self.model.type == "openai":
             model = LiteLlm(model=f"openai/{self.model.model}", base_url=self.model.base_url)
         elif self.model.type == "anthropic":
-            model = LiteLlm(model=f"anthropic/{self.model.model}", base_url=self.model.base_url)
+            model = ClaudeLLM(model=self.model.model)
         elif self.model.type == "gemini_vertex_ai":
             model = GeminiLLM(model=self.model.model)
         elif self.model.type == "gemini_anthropic":
