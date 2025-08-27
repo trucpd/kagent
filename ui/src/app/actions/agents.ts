@@ -138,6 +138,11 @@ function fromAgentFormDataToAgent(agentFormData: AgentFormData): Agent {
         imagePullPolicy: agentFormData.imagePullPolicy,
       },
     };
+  } else if (type === "Remote") {
+    base.spec!.remote = {
+      url: agentFormData.remoteUrl || "",
+      agentCardUrl: agentFormData.remoteAgentCardUrl || undefined,
+    } as any;
   }
 
   return base as Agent;
