@@ -21,6 +21,8 @@ type Agent struct {
 	// For agent types that require configuration, this field should be populated.
 	// For agent types that do not require configuration, this field should be nil.
 	Config *adk.AgentConfig `gorm:"type:json" json:"config"`
+	// RemoteConfig is optional and is primarily used for remote agents.
+	RemoteConfig *adk.RemoteAgentConfig `gorm:"type:json" json:"remote_config"`
 }
 
 type Event struct {

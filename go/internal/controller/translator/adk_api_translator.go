@@ -6,7 +6,9 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"io"
 	"maps"
+	"net/http"
 	"os"
 	"slices"
 	"strconv"
@@ -57,8 +59,9 @@ var DefaultImageConfig = ImageConfig{
 type AgentOutputs struct {
 	Manifest []client.Object `json:"manifest,omitempty"`
 
-	Config    *adk.AgentConfig `json:"config,omitempty"`
-	AgentCard server.AgentCard `json:"agentCard"`
+	Config       *adk.AgentConfig       `json:"config,omitempty"`
+	RemoteConfig *adk.RemoteAgentConfig `json:"remoteConfig,omitempty"`
+	AgentCard    server.AgentCard       `json:"agentCard"`
 }
 
 type AdkApiTranslator interface {
@@ -140,10 +143,61 @@ func (a *adkApiTranslator) TranslateAgent(
 			DefaultOutputModes: []string{"text"},
 		}
 		return a.buildManifest(ctx, agent, dep, nil, agentCard)
+	case v1alpha2.AgentType_Remote:
+		var agentCardURL string
+		if agent.Spec.Remote.AgentCardURL != "" {
+			agentCardURL = agent.Spec.Remote.AgentCardURL
+		} else {
+			agentCardURL = fmt.Sprintf("%s/.well-known/agent.json", agent.Spec.Remote.URL)
+		}
 
+		// fetch the agent card from the URL
+		agentCard, remoteConfig, err := a.fetchRemoteAgentDetails(agent.Spec.Remote.URL, agentCardURL)
+		if err != nil {
+			return nil, err
+		}
+
+		// remote agents are already served elsewhere, so we don't need to build a manifest
+		return &AgentOutputs{
+			Manifest:     []client.Object{},
+			AgentCard:    *agentCard,
+			RemoteConfig: remoteConfig,
+		}, nil
 	default:
 		return nil, fmt.Errorf("unknown agent type: %s", agent.Spec.Type)
 	}
+}
+
+// TODO: Move away from this (no need to store information in the database) after resolving issue with not seeing the agent response in chat.
+func (a *adkApiTranslator) fetchRemoteAgentDetails(serverURL, agentCardURL string) (*server.AgentCard, *adk.RemoteAgentConfig, error) {
+	agentCard := &server.AgentCard{}
+
+	resp, err := http.Get(agentCardURL)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = json.Unmarshal(body, agentCard)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// modify the agent card url to be the provided server url for communication
+	agentCard.URL = serverURL
+
+	agentConfig := &adk.RemoteAgentConfig{
+		Name:        agentCard.Name,
+		Url:         serverURL,
+		Description: agentCard.Description,
+	}
+
+	return agentCard, agentConfig, nil
 }
 
 func (a *adkApiTranslator) buildManifest(
