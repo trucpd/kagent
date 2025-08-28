@@ -166,18 +166,18 @@ func (a *adkApiTranslator) fetchRemoteAgentDetails(r *v1alpha2.RemoteAgentSpec) 
 
 	resp, err := http.Get(r.AgentCardURL)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to fetch agent card: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to read agent card body: %w", err)
 	}
 
 	err = json.Unmarshal(body, agentCard)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to unmarshal agent card: %w", err)
 	}
 
 	// override the agent card's server url to be the provided server url if provided
