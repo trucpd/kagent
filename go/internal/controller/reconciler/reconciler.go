@@ -2,6 +2,7 @@ package reconciler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -488,11 +489,21 @@ func (a *kagentReconciler) upsertAgent(ctx context.Context, agent *v1alpha2.Agen
 	defer a.upsertLock.Unlock()
 
 	id := utils.ConvertToPythonIdentifier(utils.GetObjectRef(agent))
+
+	// Marshal remote agent's AgentCard to store in DB
+	var serializedCard string
+	if agent.Spec.Type == v1alpha2.AgentType_Remote && agentOutputs != nil {
+		if cardBytes, err := json.Marshal(agentOutputs.AgentCard); err == nil {
+			serializedCard = string(cardBytes)
+		}
+	}
+
 	dbAgent := &database.Agent{
 		ID:           id,
 		Type:         string(agent.Spec.Type),
 		Config:       agentOutputs.Config,
 		RemoteConfig: agentOutputs.RemoteConfig,
+		AgentCard:    serializedCard,
 	}
 
 	if err := a.dbClient.StoreAgent(dbAgent); err != nil {

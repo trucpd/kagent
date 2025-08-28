@@ -238,3 +238,18 @@ export async function getAgents(): Promise<BaseResponse<AgentResponse[]>> {
     return createErrorResponse<AgentResponse[]>(error, "Error getting agents");
   }
 }
+
+/**
+ * Gets the agent card for an agent
+ * @param namespace The agent namespace
+ * @param name The agent name
+ * @returns A promise with the agent card as a json string
+ */
+export async function getAgentCard(namespace: string, name: string): Promise<BaseResponse<string>> {
+  try {
+    const { data } = await fetchApi<BaseResponse<string>>(`/agents/${namespace}/${name}/card`);
+    return { message: "Successfully fetched agent card", data };
+  } catch (error) {
+    return createErrorResponse<string>(error, "Error getting agent card");
+  }
+}

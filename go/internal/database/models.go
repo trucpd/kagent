@@ -23,6 +23,9 @@ type Agent struct {
 	Config *adk.AgentConfig `gorm:"type:json" json:"config"`
 	// RemoteConfig is optional and is primarily used for remote agents.
 	RemoteConfig *adk.RemoteAgentConfig `gorm:"type:json" json:"remote_config"`
+	// AgentCard stores the serialized A2A AgentCard JSON for display purposes.
+	// We currently only store the AgentCard for remote agents to avoid storing too much unnecessary data.
+	AgentCard string `gorm:"type:text" json:"agent_card"`
 }
 
 type Event struct {
