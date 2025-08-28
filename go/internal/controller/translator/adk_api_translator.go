@@ -488,6 +488,15 @@ func (a *adkApiTranslator) translateInlineAgent(ctx context.Context, agent *v1al
 					Url:         url,
 					Description: toolAgent.Spec.Description,
 				})
+			case v1alpha2.AgentType_Remote:
+				/* TODO: Add support for remote agents.
+				Either:
+					- Add the dbClient be a part of the *adkApiTranslator, which we'd fetch the remote agent config based on the agent
+					- Do a fetch to the remote agent card url to get the remote agent config.
+
+				We'll also need to look into how the polling system would work to update the db with updated details AND ensuring the updated details are reflected when the agent is used as a tool.
+				*/
+				return nil, nil, nil, fmt.Errorf("remote agent type is not supported")
 			default:
 				return nil, nil, nil, fmt.Errorf("unknown agent type: %s", toolAgent.Spec.Type)
 			}
