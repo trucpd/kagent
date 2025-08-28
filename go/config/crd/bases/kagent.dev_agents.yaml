@@ -6429,13 +6429,13 @@ spec:
               remote:
                 properties:
                   agentCardUrl:
-                    description: |-
-                      AgentCardURL is the URL of the agent card JSON file.
-                      If not specified, the default value is {url}/.well-known/agent.json.
-                    type: string
-                  url:
-                    description: URL is the URL the agent is served at.
+                    description: AgentCardURL is the URL of the agent card JSON file.
                     minLength: 1
+                    type: string
+                  serverUrl:
+                    description: |-
+                      ServerURL is the URL of the agent server.
+                      If not specified, the default value is fetched from the agent card.
                     type: string
                 type: object
               type:

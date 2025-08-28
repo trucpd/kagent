@@ -34,7 +34,7 @@ interface ValidationErrors {
   knowledgeSources?: string;
   tools?: string;
   memory?: string;
-  remoteUrl?: string;
+  remoteAgentCardUrl?: string;
 }
 
 interface AgentPageContentProps {
@@ -77,8 +77,8 @@ function AgentPageContent({ isEditMode, agentName, agentNamespace }: AgentPageCo
     byoCmd: string;
     byoArgs: string;
     // Remote
-    remoteUrl: string;
     remoteAgentCardUrl: string;
+    remoteServerUrl: string;
     replicas: string;
     imagePullPolicy: string;
     imagePullSecrets: string[];
@@ -101,8 +101,8 @@ function AgentPageContent({ isEditMode, agentName, agentNamespace }: AgentPageCo
     byoImage: "",
     byoCmd: "",
     byoArgs: "",
-    remoteUrl: "",
     remoteAgentCardUrl: "",
+    remoteServerUrl: "",
     replicas: "",
     imagePullPolicy: "",
     imagePullSecrets: [""],
@@ -146,8 +146,8 @@ function AgentPageContent({ isEditMode, agentName, agentNamespace }: AgentPageCo
                   byoImage: "",
                   byoCmd: "",
                   byoArgs: "",
-                  remoteUrl: "",
                   remoteAgentCardUrl: "",
+                  remoteServerUrl: "",
                 }));
               } else if (agent.spec.type === "BYO") {
                 setState(prev => ({
@@ -167,8 +167,8 @@ function AgentPageContent({ isEditMode, agentName, agentNamespace }: AgentPageCo
                       ? { name: e.name || "", isSecret: true, secretName: e.valueFrom.secretKeyRef.name || "", secretKey: e.valueFrom.secretKeyRef.key || "", optional: e.valueFrom.secretKeyRef.optional }
                       : { name: e.name || "", value: e.value || "", isSecret: false }
                   )).concat((agent.spec?.byo?.deployment?.env || []).length === 0 ? [{ name: "", value: "", isSecret: false }] : []),
-                  remoteUrl: "",
                   remoteAgentCardUrl: "",
+                  remoteServerUrl: "",
                 }));
               } else if (agent.spec.type === "Remote") {
                 setState(prev => ({
@@ -184,8 +184,8 @@ function AgentPageContent({ isEditMode, agentName, agentNamespace }: AgentPageCo
                   imagePullPolicy: "",
                   imagePullSecrets: [""],
                   envPairs: [{ name: "", value: "", isSecret: false }],
-                  remoteUrl: agent.spec?.remote?.url || "",
                   remoteAgentCardUrl: agent.spec?.remote?.agentCardUrl || "",
+                  remoteServerUrl: agent.spec?.remote?.serverUrl || "",
                 }));
               }
 
@@ -235,7 +235,7 @@ function AgentPageContent({ isEditMode, agentName, agentNamespace }: AgentPageCo
       modelName: state.selectedModel?.ref || "",
       tools: state.selectedTools,
       byoImage: state.byoImage,
-      remoteUrl: state.remoteUrl,
+      remoteAgentCardUrl: state.remoteAgentCardUrl,
     };
 
     const newErrors = validateAgentData(formData);
@@ -258,7 +258,7 @@ function AgentPageContent({ isEditMode, agentName, agentNamespace }: AgentPageCo
       case 'model': formData.modelName = value; break;
       case 'tools': formData.tools = value; break;
       case 'memory': formData.memory = value; break;
-      case 'remoteUrl': (formData as any).remoteUrl = value; break;
+      case 'remoteAgentCardUrl': (formData as any).remoteAgentCardUrl = value; break;
     }
 
     const fieldErrors = validateAgentData(formData);
@@ -325,8 +325,8 @@ function AgentPageContent({ isEditMode, agentName, agentNamespace }: AgentPageCo
           })
           .filter((e): e is EnvVar => e !== null),
         // Remote
-        remoteUrl: state.remoteUrl || undefined,
-        remoteAgentCardUrl: state.remoteAgentCardUrl || undefined,
+        remoteAgentCardUrl: state.remoteAgentCardUrl || "",
+        remoteServerUrl: state.remoteServerUrl || undefined,
       };
 
       let result;
@@ -617,25 +617,25 @@ function AgentPageContent({ isEditMode, agentName, agentNamespace }: AgentPageCo
                 {state.agentType === "Remote" && (
                   <div className="space-y-4">
                     <div>
-                      <Label className="text-sm mb-2 block">Remote Agent URL</Label>
-                      <Input
-                        value={state.remoteUrl}
-                        onChange={(e) => setState(prev => ({ ...prev, remoteUrl: e.target.value }))}
-                        onBlur={() => validateField('remoteUrl', state.remoteUrl)}
-                        placeholder="https://remote-agent.example.com"
-                        disabled={state.isSubmitting || state.isLoading}
-                      />
-                      {state.errors && state.errors.remoteUrl && <p className="text-red-500 text-sm mt-1">{state.errors.remoteUrl}</p>}
-                    </div>
-                    <div>
-                      <Label className="text-sm mb-2 block">Agent Card URL (optional)</Label>
-                      <p className="text-xs mb-2 block text-muted-foreground">
-                        If not provided, the agent card will be automatically discovered using the remote agent URL.
-                      </p>
+                      <Label className="text-sm mb-2 block">Agent Card URL</Label>
                       <Input
                         value={state.remoteAgentCardUrl}
                         onChange={(e) => setState(prev => ({ ...prev, remoteAgentCardUrl: e.target.value }))}
-                        placeholder={`${state.remoteUrl}/.well-known/agent.json`}
+                        onBlur={() => validateField('remoteAgentCardUrl', state.remoteAgentCardUrl)}
+                        placeholder={`https://remote-agent.example.com/.well-known/agent.json`}
+                        disabled={state.isSubmitting || state.isLoading}
+                      />
+                      {state.errors.remoteAgentCardUrl && <p className="text-red-500 text-sm mt-1">{state.errors.remoteAgentCardUrl}</p>}
+                    </div>
+                    <div>
+                      <Label className="text-sm mb-2 block">Agent Server URL</Label>
+                      <p className="text-xs mb-2 block text-muted-foreground">
+                        The URL of the agent server to use for the remote agent. If not provided, the agent card will be used to discover the agent server URL.
+                      </p>
+                      <Input
+                        value={state.remoteServerUrl}
+                        onChange={(e) => setState(prev => ({ ...prev, remoteServerUrl: e.target.value }))}
+                        placeholder="https://remote-agent.example.com"
                         disabled={state.isSubmitting || state.isLoading}
                       />
                     </div>

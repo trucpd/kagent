@@ -140,8 +140,8 @@ function fromAgentFormDataToAgent(agentFormData: AgentFormData): Agent {
     };
   } else if (type === "Remote") {
     base.spec!.remote = {
-      url: agentFormData.remoteUrl || "",
-      agentCardUrl: agentFormData.remoteAgentCardUrl || undefined,
+      agentCardUrl: agentFormData.remoteAgentCardUrl || "",
+      serverUrl: agentFormData.remoteServerUrl || undefined,
     } as any;
   }
 

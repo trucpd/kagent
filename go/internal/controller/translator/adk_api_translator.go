@@ -144,15 +144,8 @@ func (a *adkApiTranslator) TranslateAgent(
 		}
 		return a.buildManifest(ctx, agent, dep, nil, agentCard)
 	case v1alpha2.AgentType_Remote:
-		var agentCardURL string
-		if agent.Spec.Remote.AgentCardURL != "" {
-			agentCardURL = agent.Spec.Remote.AgentCardURL
-		} else {
-			agentCardURL = fmt.Sprintf("%s/.well-known/agent.json", agent.Spec.Remote.URL)
-		}
-
-		// fetch the agent card from the URL
-		agentCard, remoteConfig, err := a.fetchRemoteAgentDetails(agent.Spec.Remote.URL, agentCardURL)
+		// fetch the agent card details from the URL
+		agentCard, remoteConfig, err := a.fetchRemoteAgentDetails(agent.Spec.Remote)
 		if err != nil {
 			return nil, err
 		}
@@ -168,11 +161,10 @@ func (a *adkApiTranslator) TranslateAgent(
 	}
 }
 
-// TODO: Move away from this (no need to store information in the database) after resolving issue with not seeing the agent response in chat.
-func (a *adkApiTranslator) fetchRemoteAgentDetails(serverURL, agentCardURL string) (*server.AgentCard, *adk.RemoteAgentConfig, error) {
+func (a *adkApiTranslator) fetchRemoteAgentDetails(r *v1alpha2.RemoteAgentSpec) (*server.AgentCard, *adk.RemoteAgentConfig, error) {
 	agentCard := &server.AgentCard{}
 
-	resp, err := http.Get(agentCardURL)
+	resp, err := http.Get(r.AgentCardURL)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -188,12 +180,14 @@ func (a *adkApiTranslator) fetchRemoteAgentDetails(serverURL, agentCardURL strin
 		return nil, nil, err
 	}
 
-	// modify the agent card url to be the provided server url for communication
-	agentCard.URL = serverURL
+	// override the agent card's server url to be the provided server url if provided
+	if r.ServerURL != "" {
+		agentCard.URL = r.ServerURL
+	}
 
 	agentConfig := &adk.RemoteAgentConfig{
 		Name:        agentCard.Name,
-		Url:         serverURL,
+		Url:         agentCard.URL,
 		Description: agentCard.Description,
 	}
 
