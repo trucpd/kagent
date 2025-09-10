@@ -100,6 +100,8 @@ func (m *Manager) Initialize() error {
 		&Feedback{},
 		&Tool{},
 		&ToolServer{},
+		&LangGraphCheckpoint{},
+		&LangGraphCheckpointWrite{},
 	)
 
 	if err != nil {
@@ -126,6 +128,8 @@ func (m *Manager) Reset(recreateTables bool) error {
 		&Feedback{},
 		&Tool{},
 		&ToolServer{},
+		&LangGraphCheckpoint{},
+		&LangGraphCheckpointWrite{},
 	)
 
 	if err != nil {
@@ -141,6 +145,10 @@ func (m *Manager) Reset(recreateTables bool) error {
 
 // Close closes the database connection
 func (m *Manager) Close() error {
+	if m.db == nil {
+		return nil
+	}
+
 	sqlDB, err := m.db.DB()
 	if err != nil {
 		return err

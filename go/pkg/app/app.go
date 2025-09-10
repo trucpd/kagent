@@ -27,6 +27,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gorilla/mux"
+	"github.com/kagent-dev/kmcp/pkg/controller/transportadapter"
+
 	"github.com/kagent-dev/kagent/go/internal/version"
 
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -39,6 +42,7 @@ import (
 
 	a2a_reconciler "github.com/kagent-dev/kagent/go/internal/controller/a2a"
 	"github.com/kagent-dev/kagent/go/internal/controller/reconciler"
+	reconcilerutils "github.com/kagent-dev/kagent/go/internal/controller/reconciler/utils"
 	"github.com/kagent-dev/kagent/go/internal/httpserver"
 	common "github.com/kagent-dev/kagent/go/internal/utils"
 
@@ -150,9 +154,30 @@ func (cfg *Config) SetFlags(commandLine *flag.FlagSet) {
 	commandLine.DurationVar(&cfg.Streaming.Timeout, "streaming-timeout", 60*time.Second, "The timeout for the streaming connection.")
 }
 
-func Start(authenticator auth.AuthProvider, authorizer auth.Authorizer) {
+type BootstrapConfig struct {
+	Ctx     context.Context
+	Manager manager.Manager
+	Router  *mux.Router
+}
+
+type CtrlManagerConfigFunc func(manager.Manager) error
+
+type ExtensionConfig struct {
+	Authenticator             auth.AuthProvider
+	Authorizer                auth.Authorizer
+	AgentPlugins              []translator.TranslatorPlugin
+	MCPServerPlugins          []transportadapter.TranslatorPlugin
+	ExtendedCtrlManagerConfig []CtrlManagerConfigFunc
+}
+
+type GetExtensionConfig func(bootstrap BootstrapConfig) (*ExtensionConfig, error)
+
+func Start(getExtensionConfig GetExtensionConfig) {
 	var tlsOpts []func(*tls.Config)
 	var cfg Config
+
+	// TODO setup signal handlers
+	ctx := context.Background()
 
 	cfg.SetFlags(flag.CommandLine)
 	flag.StringVar(&translator.DefaultImageConfig.Registry, "image-registry", translator.DefaultImageConfig.Registry, "The registry to use for the image.")
@@ -293,13 +318,24 @@ func Start(authenticator auth.AuthProvider, authorizer auth.Authorizer) {
 	}
 
 	dbClient := database.NewClient(dbManager)
+	router := mux.NewRouter()
+	extensionCfg, err := getExtensionConfig(BootstrapConfig{
+		Ctx:     ctx,
+		Manager: mgr,
+		Router:  router,
+	})
+	if err != nil {
+		setupLog.Error(err, "unable to get start config")
+		os.Exit(1)
+	}
 
 	apiTranslator := translator.NewAdkApiTranslator(
 		mgr.GetClient(),
 		cfg.DefaultModelConfig,
+		extensionCfg.AgentPlugins,
 	)
 
-	a2aHandler := a2a.NewA2AHttpMux(httpserver.APIPathA2A, authenticator, dbClient)
+	a2aHandler := a2a.NewA2AHttpMux(httpserver.APIPathA2A, extensionCfg.Authenticator, dbClient)
 
 	a2aReconciler := a2a_reconciler.NewReconciler(
 		a2aHandler,
@@ -309,7 +345,7 @@ func Start(authenticator auth.AuthProvider, authorizer auth.Authorizer) {
 			StreamingInitialBufSize: int(cfg.Streaming.InitialBufSize.Value()),
 			Timeout:                 cfg.Streaming.Timeout,
 		},
-		authenticator,
+		extensionCfg.Authenticator,
 	)
 
 	rcnclr := reconciler.NewKagentReconciler(
@@ -321,8 +357,9 @@ func Start(authenticator auth.AuthProvider, authorizer auth.Authorizer) {
 	)
 
 	if err = (&kmcpcontroller.MCPServerReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:  mgr.GetClient(),
+		Scheme:  mgr.GetScheme(),
+		Plugins: extensionCfg.MCPServerPlugins,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "MCPServer")
 		os.Exit(1)
@@ -340,13 +377,14 @@ func Start(authenticator auth.AuthProvider, authorizer auth.Authorizer) {
 		Scheme:     mgr.GetScheme(),
 		Reconciler: rcnclr,
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "RemoteMCPServer")
+		setupLog.Error(err, "unable to create controller", "controller", "MCPServer")
 		os.Exit(1)
 	}
 
 	if err = (&controller.AgentController{
-		Scheme:     mgr.GetScheme(),
-		Reconciler: rcnclr,
+		Scheme:        mgr.GetScheme(),
+		Reconciler:    rcnclr,
+		AdkTranslator: apiTranslator,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Agent")
 		os.Exit(1)
@@ -362,7 +400,7 @@ func Start(authenticator auth.AuthProvider, authorizer auth.Authorizer) {
 		Scheme:     mgr.GetScheme(),
 		Reconciler: rcnclr,
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ToolServer")
+		setupLog.Error(err, "unable to create controller", "controller", "RemoteMCPServer")
 		os.Exit(1)
 	}
 	if err = (&controller.MemoryController{
@@ -372,6 +410,19 @@ func Start(authenticator auth.AuthProvider, authorizer auth.Authorizer) {
 		setupLog.Error(err, "unable to create controller", "controller", "Memory")
 		os.Exit(1)
 	}
+
+	if err := reconcilerutils.SetupOwnerIndexes(mgr, rcnclr.GetOwnedResourceTypes()); err != nil {
+		setupLog.Error(err, "failed to setup indexes for owned resources")
+		os.Exit(1)
+	}
+
+	for _, mgrCfgFunc := range extensionCfg.ExtendedCtrlManagerConfig {
+		if err := mgrCfgFunc(mgr); err != nil {
+			setupLog.Error(err, "error when processing extended controller manager configuration")
+			os.Exit(1)
+		}
+	}
+
 	// +kubebuilder:scaffold:builder
 	if metricsCertWatcher != nil {
 		setupLog.Info("Adding metrics certificate watcher to manager")
@@ -404,13 +455,14 @@ func Start(authenticator auth.AuthProvider, authorizer auth.Authorizer) {
 	}
 
 	httpServer, err := httpserver.NewHTTPServer(httpserver.ServerConfig{
+		Router:            router,
 		BindAddr:          cfg.HttpServerAddr,
 		KubeClient:        mgr.GetClient(),
 		A2AHandler:        a2aHandler,
 		WatchedNamespaces: watchNamespacesList,
 		DbClient:          dbClient,
-		Authorizer:        authorizer,
-		Authenticator:     authenticator,
+		Authorizer:        extensionCfg.Authorizer,
+		Authenticator:     extensionCfg.Authenticator,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to create HTTP server")

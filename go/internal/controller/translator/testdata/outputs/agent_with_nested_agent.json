@@ -18,21 +18,6 @@
     "version": ""
   },
   "config": {
-    "agents": [
-      {
-        "agents": null,
-        "description": "",
-        "http_tools": null,
-        "instruction": "You are a math specialist. Focus on solving mathematical problems step by step.",
-        "model": {
-          "base_url": "",
-          "model": "gpt-4o",
-          "type": "openai"
-        },
-        "remote_agents": null,
-        "sse_tools": null
-      }
-    ],
     "description": "",
     "http_tools": null,
     "instruction": "You are a coordinating agent that can delegate tasks to specialists.",
@@ -41,15 +26,19 @@
       "model": "gpt-4o",
       "type": "openai"
     },
-    "remote_agents": null,
+    "remote_agents": [
+      {
+        "name": "test__NS__specialist_agent",
+        "url": "http://specialist-agent.test:8080"
+      }
+    ],
     "sse_tools": null
   },
   "manifest": [
     {
       "apiVersion": "v1",
-      "kind": "ServiceAccount",
+      "kind": "Secret",
       "metadata": {
-        "creationTimestamp": null,
         "labels": {
           "app": "kagent",
           "kagent": "parent-agent"
@@ -66,17 +55,16 @@
             "uid": ""
           }
         ]
+      },
+      "stringData": {
+        "agent-card.json": "{\"name\":\"parent_agent\",\"description\":\"\",\"url\":\"http://parent-agent.test:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":[]}",
+        "config.json": "{\"model\":{\"base_url\":\"\",\"model\":\"gpt-4o\",\"type\":\"openai\"},\"description\":\"\",\"instruction\":\"You are a coordinating agent that can delegate tasks to specialists.\",\"http_tools\":null,\"sse_tools\":null,\"remote_agents\":[{\"name\":\"test__NS__specialist_agent\",\"url\":\"http://specialist-agent.test:8080\"}]}"
       }
     },
     {
       "apiVersion": "v1",
-      "data": {
-        "agent-card.json": "{\"name\":\"parent_agent\",\"description\":\"\",\"url\":\"http://parent-agent.test:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":[]}",
-        "config.json": "{\"model\":{\"base_url\":\"\",\"model\":\"gpt-4o\",\"type\":\"openai\"},\"description\":\"\",\"instruction\":\"You are a coordinating agent that can delegate tasks to specialists.\",\"http_tools\":null,\"sse_tools\":null,\"agents\":[{\"model\":{\"base_url\":\"\",\"model\":\"gpt-4o\",\"type\":\"openai\"},\"description\":\"\",\"instruction\":\"You are a math specialist. Focus on solving mathematical problems step by step.\",\"http_tools\":null,\"sse_tools\":null,\"agents\":null,\"remote_agents\":null}],\"remote_agents\":null}"
-      },
-      "kind": "ConfigMap",
+      "kind": "ServiceAccount",
       "metadata": {
-        "creationTimestamp": null,
         "labels": {
           "app": "kagent",
           "kagent": "parent-agent"
@@ -99,7 +87,6 @@
       "apiVersion": "apps/v1",
       "kind": "Deployment",
       "metadata": {
-        "creationTimestamp": null,
         "labels": {
           "app": "kagent",
           "kagent": "parent-agent"
@@ -134,11 +121,12 @@
         },
         "template": {
           "metadata": {
-            "creationTimestamp": null,
+            "annotations": {
+              "kagent.dev/config-hash": "12337125237270188692"
+            },
             "labels": {
               "app": "kagent",
-              "kagent": "parent-agent",
-              "kagent.dev/config-hash": "17956464138537191240"
+              "kagent": "parent-agent"
             }
           },
           "spec": {
@@ -230,10 +218,10 @@
             "serviceAccountName": "parent-agent",
             "volumes": [
               {
-                "configMap": {
-                  "name": "parent-agent"
-                },
-                "name": "config"
+                "name": "config",
+                "secret": {
+                  "secretName": "parent-agent"
+                }
               },
               {
                 "name": "kagent-token",
@@ -259,7 +247,6 @@
       "apiVersion": "v1",
       "kind": "Service",
       "metadata": {
-        "creationTimestamp": null,
         "labels": {
           "app": "kagent",
           "kagent": "parent-agent"

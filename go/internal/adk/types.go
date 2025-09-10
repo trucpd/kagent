@@ -252,7 +252,6 @@ type AgentConfig struct {
 	Instruction  string                `json:"instruction"`
 	HttpTools    []HttpMcpServerConfig `json:"http_tools"`
 	SseTools     []SseMcpServerConfig  `json:"sse_tools"`
-	Agents       []AgentConfig         `json:"agents"`
 	RemoteAgents []RemoteAgentConfig   `json:"remote_agents"`
 }
 
@@ -263,7 +262,6 @@ func (a *AgentConfig) UnmarshalJSON(data []byte) error {
 		Instruction  string                `json:"instruction"`
 		HttpTools    []HttpMcpServerConfig `json:"http_tools"`
 		SseTools     []SseMcpServerConfig  `json:"sse_tools"`
-		Agents       []AgentConfig         `json:"agents"`
 		RemoteAgents []RemoteAgentConfig   `json:"remote_agents"`
 	}
 	if err := json.Unmarshal(data, &tmp); err != nil {
@@ -278,7 +276,6 @@ func (a *AgentConfig) UnmarshalJSON(data []byte) error {
 	a.Instruction = tmp.Instruction
 	a.HttpTools = tmp.HttpTools
 	a.SseTools = tmp.SseTools
-	a.Agents = tmp.Agents
 	a.RemoteAgents = tmp.RemoteAgents
 	return nil
 }

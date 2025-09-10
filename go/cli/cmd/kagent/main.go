@@ -4,13 +4,14 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 
 	"github.com/abiosoft/ishell/v2"
 	"github.com/kagent-dev/kagent/go/cli/internal/cli"
 	"github.com/kagent-dev/kagent/go/cli/internal/config"
 	"github.com/kagent-dev/kagent/go/cli/internal/profiles"
-	"github.com/kagent-dev/kagent/go/pkg/client"
 	"github.com/spf13/cobra"
 )
 
@@ -18,16 +19,28 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// listen for signals to cancel the context throughout the application
+	done := make(chan os.Signal, 1)
+	signal.Notify(done, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		<-done
+
+		fmt.Fprintf(os.Stderr, "kagent aborted.\n")
+		fmt.Fprintf(os.Stderr, "Exiting.\n")
+
+		cancel()
+	}()
+	cfg := &config.Config{}
+
 	rootCmd := &cobra.Command{
 		Use:   "kagent",
 		Short: "kagent is a CLI for kagent",
-		Long:  `kagent is a CLI for kagent`,
+		Long:  "kagent is a CLI for kagent",
 		Run: func(cmd *cobra.Command, args []string) {
 			runInteractive()
 		},
 	}
-
-	cfg := &config.Config{}
 
 	rootCmd.PersistentFlags().StringVar(&cfg.KAgentURL, "kagent-url", "http://localhost:8083", "KAgent URL")
 	rootCmd.PersistentFlags().StringVarP(&cfg.Namespace, "namespace", "n", "kagent", "Namespace")
@@ -87,8 +100,7 @@ func main() {
 		Short: "Generate a bug report",
 		Long:  `Generate a bug report`,
 		Run: func(cmd *cobra.Command, args []string) {
-			client := client.New(cfg.KAgentURL)
-			if err := cli.CheckServerConnection(client); err != nil {
+			if err := cli.CheckServerConnection(cfg.Client()); err != nil {
 				pf, err := cli.NewPortForward(ctx, cfg)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "Error starting port-forward: %v\n", err)
@@ -105,8 +117,7 @@ func main() {
 		Short: "Print the kagent version",
 		Long:  `Print the kagent version`,
 		Run: func(cmd *cobra.Command, args []string) {
-			client := client.New(cfg.KAgentURL)
-			if err := cli.CheckServerConnection(client); err != nil {
+			if err := cli.CheckServerConnection(cfg.Client()); err != nil {
 				pf, err := cli.NewPortForward(ctx, cfg)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "Error starting port-forward: %v\n", err)
@@ -143,8 +154,7 @@ func main() {
 		Short: "Get a session or list all sessions",
 		Long:  `Get a session by ID or list all sessions`,
 		Run: func(cmd *cobra.Command, args []string) {
-			client := client.New(cfg.KAgentURL)
-			if err := cli.CheckServerConnection(client); err != nil {
+			if err := cli.CheckServerConnection(cfg.Client()); err != nil {
 				pf, err := cli.NewPortForward(ctx, cfg)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "Error starting port-forward: %v\n", err)
@@ -165,8 +175,7 @@ func main() {
 		Short: "Get an agent or list all agents",
 		Long:  `Get an agent by name or list all agents`,
 		Run: func(cmd *cobra.Command, args []string) {
-			client := client.New(cfg.KAgentURL)
-			if err := cli.CheckServerConnection(client); err != nil {
+			if err := cli.CheckServerConnection(cfg.Client()); err != nil {
 				pf, err := cli.NewPortForward(ctx, cfg)
 				if err != nil {
 					return
@@ -186,8 +195,7 @@ func main() {
 		Short: "Get tools",
 		Long:  `List all available tools`,
 		Run: func(cmd *cobra.Command, args []string) {
-			client := client.New(cfg.KAgentURL)
-			if err := cli.CheckServerConnection(client); err != nil {
+			if err := cli.CheckServerConnection(cfg.Client()); err != nil {
 				pf, err := cli.NewPortForward(ctx, cfg)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "Error starting port-forward: %v\n", err)
@@ -210,6 +218,8 @@ func main() {
 	}
 
 	if err := rootCmd.ExecuteContext(ctx); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+
 		os.Exit(1)
 	}
 
@@ -226,7 +236,7 @@ func runInteractive() {
 		os.Exit(1)
 	}
 
-	client := client.New(cfg.KAgentURL, client.WithUserID("admin@kagent.dev"))
+	client := cfg.Client()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 

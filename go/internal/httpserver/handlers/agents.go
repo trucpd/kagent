@@ -266,6 +266,7 @@ func (h *AgentsHandler) HandleCreateAgent(w ErrorResponseWriter, r *http.Request
 	apiTranslator := translator.NewAdkApiTranslator(
 		kubeClientWrapper,
 		h.DefaultModelConfig,
+		nil,
 	)
 
 	log.V(1).Info("Translating Agent to ADK format")

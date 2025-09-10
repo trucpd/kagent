@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -18,6 +19,7 @@ import (
 	"github.com/kagent-dev/kagent/go/internal/adk"
 	"github.com/kagent-dev/kagent/go/internal/utils"
 	"github.com/kagent-dev/kagent/go/internal/version"
+	"github.com/kagent-dev/kagent/go/pkg/translator"
 	"github.com/kagent-dev/kmcp/api/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -56,31 +58,31 @@ var DefaultImageConfig = ImageConfig{
 	Repository: "kagent-dev/kagent/app",
 }
 
-type AgentOutputs struct {
-	Manifest []client.Object `json:"manifest,omitempty"`
-
-	Config       *adk.AgentConfig       `json:"config,omitempty"`
-	RemoteConfig *adk.RemoteAgentConfig `json:"remoteConfig,omitempty"`
-	AgentCard    server.AgentCard       `json:"agentCard"`
-}
+// TODO(ilackarms): migrate this whole package to pkg/translator
+type AgentOutputs = translator.AgentOutputs
 
 type AdkApiTranslator interface {
 	TranslateAgent(
 		ctx context.Context,
 		agent *v1alpha2.Agent,
 	) (*AgentOutputs, error)
+	GetOwnedResourceTypes() []client.Object
 }
 
-func NewAdkApiTranslator(kube client.Client, defaultModelConfig types.NamespacedName) AdkApiTranslator {
+type TranslatorPlugin = translator.TranslatorPlugin
+
+func NewAdkApiTranslator(kube client.Client, defaultModelConfig types.NamespacedName, plugins []TranslatorPlugin) AdkApiTranslator {
 	return &adkApiTranslator{
 		kube:               kube,
 		defaultModelConfig: defaultModelConfig,
+		plugins:            plugins,
 	}
 }
 
 type adkApiTranslator struct {
 	kube               client.Client
 	defaultModelConfig types.NamespacedName
+	plugins            []TranslatorPlugin
 }
 
 const MAX_DEPTH = 10
@@ -109,9 +111,15 @@ func (a *adkApiTranslator) TranslateAgent(
 	agent *v1alpha2.Agent,
 ) (*AgentOutputs, error) {
 
+	err := a.validateAgent(ctx, agent, &tState{})
+	if err != nil {
+		return nil, err
+	}
+
 	switch agent.Spec.Type {
 	case v1alpha2.AgentType_Declarative:
-		cfg, card, mdd, err := a.translateInlineAgent(ctx, agent, &tState{})
+
+		cfg, card, mdd, err := a.translateInlineAgent(ctx, agent)
 		if err != nil {
 			return nil, err
 		}
@@ -161,6 +169,72 @@ func (a *adkApiTranslator) TranslateAgent(
 	}
 }
 
+// GetOwnedResourceTypes returns all the resource types that may be created for an agent.
+// Even though this method returns an array of client.Object, these are (empty)
+// example structs rather than actual resources.
+func (r *adkApiTranslator) GetOwnedResourceTypes() []client.Object {
+	ownedResources := []client.Object{
+		&appsv1.Deployment{},
+		&corev1.ConfigMap{},
+		&corev1.Secret{},
+		&corev1.Service{},
+		&corev1.ServiceAccount{},
+	}
+
+	return ownedResources
+}
+
+func (a *adkApiTranslator) validateAgent(ctx context.Context, agent *v1alpha2.Agent, state *tState) error {
+
+	agentRef := utils.GetObjectRef(agent)
+
+	if state.isVisited(agentRef) {
+		return fmt.Errorf("cycle detected in agent tool chain: %s -> %s", agentRef, agentRef)
+	}
+
+	if state.depth > MAX_DEPTH {
+		return fmt.Errorf("recursion limit reached in agent tool chain: %s -> %s", agentRef, agentRef)
+	}
+
+	if agent.Spec.Type != v1alpha2.AgentType_Declarative {
+		// We only need to validate loops in declarative agents
+		return nil
+	}
+
+	for _, tool := range agent.Spec.Declarative.Tools {
+		if tool.Type != v1alpha2.ToolProviderType_Agent {
+			continue
+		}
+
+		if tool.Agent == nil {
+			return fmt.Errorf("tool must have an agent reference")
+		}
+
+		agentRef := types.NamespacedName{
+			Namespace: agent.Namespace,
+			Name:      tool.Agent.Name,
+		}
+
+		if agentRef.Namespace == agent.Namespace && agentRef.Name == agent.Name {
+			return fmt.Errorf("agent tool cannot be used to reference itself, %s", agentRef)
+		}
+
+		toolAgent := &v1alpha2.Agent{}
+		err := a.kube.Get(ctx, agentRef, toolAgent)
+		if err != nil {
+			return err
+		}
+
+		err = a.validateAgent(ctx, toolAgent, state.with(agent))
+		if err != nil {
+			return err
+		}
+
+	}
+
+	return nil
+}
+
 func (a *adkApiTranslator) fetchRemoteAgentDetails(r *v1alpha2.RemoteAgentSpec) (*server.AgentCard, *adk.RemoteAgentConfig, error) {
 	agentCard := &server.AgentCard{}
 
@@ -203,17 +277,67 @@ func (a *adkApiTranslator) buildManifest(
 ) (*AgentOutputs, error) {
 	outputs := &AgentOutputs{}
 
-	podLabels := map[string]string{
+	// Optional config/card for Inline
+	var configHash uint64
+	var secretVol []corev1.Volume
+	var secretMounts []corev1.VolumeMount
+	var cfgJson string
+	var agentCard string
+	if cfg != nil && card != nil {
+		bCfg, err := json.Marshal(cfg)
+		if err != nil {
+			return nil, err
+		}
+		bCard, err := json.Marshal(card)
+		if err != nil {
+			return nil, err
+		}
+		configHash = computeConfigHash(bCfg, bCard)
+
+		cfgJson = string(bCfg)
+		agentCard = string(bCard)
+
+		secretVol = []corev1.Volume{{
+			Name: "config",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: agent.Name,
+				},
+			},
+		}}
+		secretMounts = []corev1.VolumeMount{{Name: "config", MountPath: "/config"}}
+	}
+
+	selectorLabels := map[string]string{
 		"app":    "kagent",
 		"kagent": agent.Name,
 	}
-
-	objMeta := metav1.ObjectMeta{
-		Name:        agent.Name,
-		Namespace:   agent.Namespace,
-		Annotations: agent.Annotations,
-		Labels:      podLabels,
+	podLabels := func() map[string]string {
+		l := maps.Clone(selectorLabels)
+		if dep.Labels != nil {
+			maps.Copy(l, dep.Labels)
+		}
+		return l
 	}
+
+	objMeta := func() metav1.ObjectMeta {
+		return metav1.ObjectMeta{
+			Name:        agent.Name,
+			Namespace:   agent.Namespace,
+			Annotations: agent.Annotations,
+			Labels:      podLabels(),
+		}
+	}
+
+	// Secret
+	outputs.Manifest = append(outputs.Manifest, &corev1.Secret{
+		TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "Secret"},
+		ObjectMeta: objMeta(),
+		StringData: map[string]string{
+			"config.json":     cfgJson,
+			"agent-card.json": agentCard,
+		},
+	})
 
 	// Service Account
 	outputs.Manifest = append(outputs.Manifest, &corev1.ServiceAccount{
@@ -221,7 +345,7 @@ func (a *adkApiTranslator) buildManifest(
 			APIVersion: "v1",
 			Kind:       "ServiceAccount",
 		},
-		ObjectMeta: objMeta,
+		ObjectMeta: objMeta(),
 	})
 
 	// Base env for both types
@@ -246,44 +370,9 @@ func (a *adkApiTranslator) buildManifest(
 		},
 	)
 
-	// Optional config/card for Inline
-	var configHash uint64
-	var configVol []corev1.Volume
-	var configMounts []corev1.VolumeMount
-	if cfg != nil && card != nil {
-		bCfg, err := json.Marshal(cfg)
-		if err != nil {
-			return nil, err
-		}
-		bCard, err := json.Marshal(card)
-		if err != nil {
-			return nil, err
-		}
-		configHash = computeConfigHash(bCfg, bCard)
-
-		outputs.Manifest = append(outputs.Manifest, &corev1.ConfigMap{
-			TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "ConfigMap"},
-			ObjectMeta: objMeta,
-			Data: map[string]string{
-				"config.json":     string(bCfg),
-				"agent-card.json": string(bCard),
-			},
-		})
-
-		configVol = []corev1.Volume{{
-			Name: "config",
-			VolumeSource: corev1.VolumeSource{
-				ConfigMap: &corev1.ConfigMapVolumeSource{
-					LocalObjectReference: corev1.LocalObjectReference{Name: agent.Name},
-				},
-			},
-		}}
-		configMounts = []corev1.VolumeMount{{Name: "config", MountPath: "/config"}}
-	}
-
 	// Build Deployment
-	volumes := append(configVol, dep.Volumes...)
-	volumeMounts := append(configMounts, dep.VolumeMounts...)
+	volumes := append(secretVol, dep.Volumes...)
+	volumeMounts := append(secretMounts, dep.VolumeMounts...)
 
 	// Token volume
 	volumes = append(volumes, corev1.Volume{
@@ -308,25 +397,21 @@ func (a *adkApiTranslator) buildManifest(
 	})
 	env := append(dep.Env, sharedEnv...)
 
-	podTemplateLabels := maps.Clone(podLabels)
-	if dep.Labels != nil {
-		maps.Copy(podTemplateLabels, dep.Labels)
-	}
-	if configHash != 0 {
-		if podTemplateLabels == nil {
-			podTemplateLabels = map[string]string{}
-		}
-		podTemplateLabels["kagent.dev/config-hash"] = fmt.Sprintf("%d", configHash)
-	}
-
 	var cmd []string
 	if len(dep.Cmd) != 0 {
 		cmd = []string{dep.Cmd}
 	}
 
+	podTemplateAnnotations := dep.Annotations
+	if podTemplateAnnotations == nil {
+		podTemplateAnnotations = map[string]string{}
+	}
+	// Add config hash annotation to pod template to force rollout on config changes
+	podTemplateAnnotations["kagent.dev/config-hash"] = fmt.Sprintf("%d", configHash)
+
 	deployment := &appsv1.Deployment{
 		TypeMeta:   metav1.TypeMeta{APIVersion: "apps/v1", Kind: "Deployment"},
-		ObjectMeta: objMeta,
+		ObjectMeta: objMeta(),
 		Spec: appsv1.DeploymentSpec{
 			Replicas: dep.Replicas,
 			Strategy: appsv1.DeploymentStrategy{
@@ -336,9 +421,9 @@ func (a *adkApiTranslator) buildManifest(
 					MaxSurge:       &intstr.IntOrString{Type: intstr.Int, IntVal: 1},
 				},
 			},
-			Selector: &metav1.LabelSelector{MatchLabels: podLabels},
+			Selector: &metav1.LabelSelector{MatchLabels: selectorLabels},
 			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Labels: podTemplateLabels, Annotations: dep.Annotations},
+				ObjectMeta: metav1.ObjectMeta{Labels: podLabels(), Annotations: podTemplateAnnotations},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: agent.Name,
 					ImagePullSecrets:   dep.ImagePullSecrets,
@@ -380,9 +465,9 @@ func (a *adkApiTranslator) buildManifest(
 	// Service
 	outputs.Manifest = append(outputs.Manifest, &corev1.Service{
 		TypeMeta:   metav1.TypeMeta{APIVersion: "v1", Kind: "Service"},
-		ObjectMeta: objMeta,
+		ObjectMeta: objMeta(),
 		Spec: corev1.ServiceSpec{
-			Selector: podLabels,
+			Selector: selectorLabels,
 			Ports: []corev1.ServicePort{{
 				Name:       "http",
 				Port:       dep.Port,
@@ -404,10 +489,11 @@ func (a *adkApiTranslator) buildManifest(
 	if card != nil {
 		outputs.AgentCard = *card
 	}
-	return outputs, nil
+
+	return outputs, a.runPlugins(ctx, agent, outputs)
 }
 
-func (a *adkApiTranslator) translateInlineAgent(ctx context.Context, agent *v1alpha2.Agent, state *tState) (*adk.AgentConfig, *server.AgentCard, *modelDeploymentData, error) {
+func (a *adkApiTranslator) translateInlineAgent(ctx context.Context, agent *v1alpha2.Agent) (*adk.AgentConfig, *server.AgentCard, *modelDeploymentData, error) {
 
 	model, mdd, err := a.translateModel(ctx, agent.Namespace, agent.Spec.Declarative.ModelConfig)
 	if err != nil {
@@ -457,14 +543,6 @@ func (a *adkApiTranslator) translateInlineAgent(ctx context.Context, agent *v1al
 				return nil, nil, nil, fmt.Errorf("agent tool cannot be used to reference itself, %s", agentRef)
 			}
 
-			if state.isVisited(agentRef.String()) {
-				return nil, nil, nil, fmt.Errorf("cycle detected in agent tool chain: %s -> %s", agentRef, agentRef.String())
-			}
-
-			if state.depth > MAX_DEPTH {
-				return nil, nil, nil, fmt.Errorf("recursion limit reached in agent tool chain: %s -> %s", agentRef, agentRef.String())
-			}
-
 			// Translate a nested tool
 			toolAgent := &v1alpha2.Agent{}
 			err := a.kube.Get(ctx, agentRef, toolAgent)
@@ -472,17 +550,9 @@ func (a *adkApiTranslator) translateInlineAgent(ctx context.Context, agent *v1al
 				return nil, nil, nil, err
 			}
 
-			var toolAgentCfg *adk.AgentConfig
 			switch toolAgent.Spec.Type {
-			case v1alpha2.AgentType_Declarative:
-				toolAgentCfg, _, _, err = a.translateInlineAgent(ctx, toolAgent, state.with(agent))
-				if err != nil {
-					return nil, nil, nil, err
-				}
-				cfg.Agents = append(cfg.Agents, *toolAgentCfg)
-			case v1alpha2.AgentType_BYO:
-				port := int32(8080)
-				url := fmt.Sprintf("http://%s.%s:%d", toolAgent.Name, toolAgent.Namespace, port)
+			case v1alpha2.AgentType_BYO, v1alpha2.AgentType_Declarative:
+				url := fmt.Sprintf("http://%s.%s:8080", toolAgent.Name, toolAgent.Namespace)
 				cfg.RemoteAgents = append(cfg.RemoteAgents, adk.RemoteAgentConfig{
 					Name:        utils.ConvertToPythonIdentifier(utils.GetObjectRef(toolAgent)),
 					Url:         url,
@@ -609,7 +679,7 @@ func (a *adkApiTranslator) translateModel(ctx context.Context, namespace, modelC
 		}
 		if model.Spec.AzureOpenAI.Endpoint != "" {
 			modelDeploymentData.EnvVars = append(modelDeploymentData.EnvVars, corev1.EnvVar{
-				Name:  "AZURE_API_BASE",
+				Name:  "AZURE_OPENAI_ENDPOINT",
 				Value: model.Spec.AzureOpenAI.Endpoint,
 			})
 		}
@@ -1062,9 +1132,9 @@ func (a *adkApiTranslator) resolveByoDeployment(agent *v1alpha2.Agent) (*resolve
 		args = spec.Args
 	}
 
-	imagePullPolicy := corev1.PullIfNotPresent
+	imagePullPolicy := corev1.PullPolicy(DefaultImageConfig.PullPolicy)
 	if spec.ImagePullPolicy != "" {
-		imagePullPolicy = spec.ImagePullPolicy
+		imagePullPolicy = corev1.PullPolicy(spec.ImagePullPolicy)
 	}
 
 	replicas := spec.Replicas
@@ -1088,4 +1158,14 @@ func (a *adkApiTranslator) resolveByoDeployment(agent *v1alpha2.Agent) (*resolve
 	}
 
 	return dep, nil
+}
+
+func (a *adkApiTranslator) runPlugins(ctx context.Context, agent *v1alpha2.Agent, outputs *AgentOutputs) error {
+	var errs error
+	for _, plugin := range a.plugins {
+		if err := plugin(ctx, agent, outputs); err != nil {
+			errs = errors.Join(errs, err)
+		}
+	}
+	return errs
 }

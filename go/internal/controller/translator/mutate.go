@@ -3,9 +3,6 @@
 package translator
 
 import (
-	"fmt"
-	"reflect"
-
 	"dario.cat/mergo"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -41,6 +38,11 @@ func MutateFuncFor(existing, desired client.Object) controllerutil.MutateFn {
 			wantCm := desired.(*corev1.ConfigMap)
 			mutateConfigMap(cm, wantCm)
 
+		case *corev1.Secret:
+			s := existing.(*corev1.Secret)
+			wantS := desired.(*corev1.Secret)
+			mutateSecret(s, wantS)
+
 		case *corev1.Service:
 			svc := existing.(*corev1.Service)
 			wantSvc := desired.(*corev1.Service)
@@ -57,8 +59,7 @@ func MutateFuncFor(existing, desired client.Object) controllerutil.MutateFn {
 			return mutateDeployment(dpl, wantDpl)
 
 		default:
-			t := reflect.TypeOf(existing).String()
-			return fmt.Errorf("missing mutate implementation for resource type: %s", t)
+			return mergeWithOverride(existing, desired)
 		}
 		return nil
 	}
@@ -70,6 +71,11 @@ func mergeWithOverride(dst, src interface{}) error {
 
 func mutateConfigMap(existing, desired *corev1.ConfigMap) {
 	existing.BinaryData = desired.BinaryData
+	existing.Data = desired.Data
+}
+
+func mutateSecret(existing, desired *corev1.Secret) {
+	existing.StringData = desired.StringData
 	existing.Data = desired.Data
 }
 

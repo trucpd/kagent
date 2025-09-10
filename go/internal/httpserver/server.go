@@ -8,7 +8,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/kagent-dev/kagent/go/internal/a2a"
 	"github.com/kagent-dev/kagent/go/internal/database"
-	authimpl "github.com/kagent-dev/kagent/go/internal/httpserver/auth"
 	"github.com/kagent-dev/kagent/go/internal/httpserver/handlers"
 	common "github.com/kagent-dev/kagent/go/internal/utils"
 	"github.com/kagent-dev/kagent/go/internal/version"
@@ -36,6 +35,7 @@ const (
 	APIPathNamespaces  = "/api/namespaces"
 	APIPathA2A         = "/api/a2a"
 	APIPathFeedback    = "/api/feedback"
+	APIPathLangGraph   = "/api/langgraph"
 )
 
 var defaultModelConfig = types.NamespacedName{
@@ -45,6 +45,7 @@ var defaultModelConfig = types.NamespacedName{
 
 // ServerConfig holds the configuration for the HTTP server
 type ServerConfig struct {
+	Router            *mux.Router
 	BindAddr          string
 	KubeClient        ctrl_client.Client
 	A2AHandler        a2a.A2AHandlerMux
@@ -70,7 +71,7 @@ func NewHTTPServer(config ServerConfig) (*HTTPServer, error) {
 
 	return &HTTPServer{
 		config:        config,
-		router:        mux.NewRouter(),
+		router:        config.Router,
 		handlers:      handlers.NewHandlers(config.KubeClient, defaultModelConfig, config.DbClient, config.WatchedNamespaces, config.Authorizer),
 		authenticator: config.Authenticator,
 	}, nil
@@ -203,11 +204,17 @@ func (s *HTTPServer) setupRoutes() {
 	s.router.HandleFunc(APIPathFeedback, adaptHandler(s.handlers.Feedback.HandleCreateFeedback)).Methods(http.MethodPost)
 	s.router.HandleFunc(APIPathFeedback, adaptHandler(s.handlers.Feedback.HandleListFeedback)).Methods(http.MethodGet)
 
+	// LangGraph Checkpoints
+	s.router.HandleFunc(APIPathLangGraph+"/checkpoints", adaptHandler(s.handlers.Checkpoints.HandlePutCheckpoint)).Methods(http.MethodPost)
+	s.router.HandleFunc(APIPathLangGraph+"/checkpoints", adaptHandler(s.handlers.Checkpoints.HandleListCheckpoints)).Methods(http.MethodGet)
+	s.router.HandleFunc(APIPathLangGraph+"/checkpoints/writes", adaptHandler(s.handlers.Checkpoints.HandlePutWrites)).Methods(http.MethodPost)
+	s.router.HandleFunc(APIPathLangGraph+"/checkpoints/{thread_id}", adaptHandler(s.handlers.Checkpoints.HandleDeleteThread)).Methods(http.MethodDelete)
+
 	// A2A
-	s.router.PathPrefix(APIPathA2A).Handler(s.config.A2AHandler)
+	s.router.PathPrefix(APIPathA2A + "/{namespace}/{name}").Handler(s.config.A2AHandler)
 
 	// Use middleware for common functionality
-	s.router.Use(authimpl.AuthnMiddleware(s.authenticator))
+	s.router.Use(auth.AuthnMiddleware(s.authenticator))
 	s.router.Use(contentTypeMiddleware)
 	s.router.Use(loggingMiddleware)
 	s.router.Use(errorHandlerMiddleware)
