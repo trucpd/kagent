@@ -109,6 +109,7 @@ build-all: buildx-create
 	$(DOCKER_BUILDER) build $(BUILD_ARGS) $(TOOLS_IMAGE_BUILD_ARGS) -f ui/Dockerfile     ./ui
 	$(DOCKER_BUILDER) build $(BUILD_ARGS) $(TOOLS_IMAGE_BUILD_ARGS) -f python/Dockerfile ./python
 
+# TODO(infocus7): Set this up for remote agent test setup as well.
 .PHONY: push-test-agent
 push-test-agent: build-kagent-adk
 	$(DOCKER_BUILDER) build --push --build-arg DOCKER_REGISTRY=$(DOCKER_REGISTRY) --build-arg VERSION=$(VERSION) -t $(DOCKER_REGISTRY)/kebab:latest -f go/test/e2e/agents/kebab/Dockerfile ./go/test/e2e/agents/kebab
