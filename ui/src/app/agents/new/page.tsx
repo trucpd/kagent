@@ -384,7 +384,7 @@ function AgentPageContent({ isEditMode, agentName, agentNamespace }: AgentPageCo
                 <div>
                   <Label className="text-base mb-2 block font-bold">Agent Type</Label>
                   <p className="text-xs mb-2 block text-muted-foreground">
-                    Choose declarative (uses a model) or BYO (bring your own containerized agent).
+                    Choose Declarative (uses a model), BYO (bring your own containerized agent), or Remote (reference an external agent).
                   </p>
                   <Select
                     value={state.agentType}
