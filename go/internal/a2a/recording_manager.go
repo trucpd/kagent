@@ -57,9 +57,14 @@ func (m *RecordingManager) OnSendMessageStream(ctx context.Context, request prot
 		taskID        string
 		assistantText string
 		persisted     int32
+		taskMetadata  map[string]interface{}
 	)
 
-	// TODO: Verify this is correct method to capture messages, and the expected messages are being captured. Based on minimal manual testing, this works.
+	/*
+	  TODO:
+	  - What total events would we need to capture?
+	  - Should usage metadata be added instead of overwriting?
+	*/
 	go func() {
 		defer close(out)
 		for ev := range upstream {
@@ -76,6 +81,15 @@ func (m *RecordingManager) OnSendMessageStream(ctx context.Context, request prot
 					if taskID == "" {
 						taskID = v.TaskID
 					}
+					// Collect metadata from artifact update events
+					if v.Artifact.Metadata != nil {
+						if taskMetadata == nil {
+							taskMetadata = make(map[string]interface{})
+						}
+						for k, v := range v.Artifact.Metadata {
+							taskMetadata[k] = v
+						}
+					}
 					for _, p := range v.Artifact.Parts {
 						if tp, ok := p.(*protocol.TextPart); ok {
 							assistantText += tp.Text
@@ -89,6 +103,15 @@ func (m *RecordingManager) OnSendMessageStream(ctx context.Context, request prot
 					}
 					if taskID == "" {
 						taskID = v.TaskID
+					}
+					// Collect metadata from status update events
+					if v.Metadata != nil {
+						if taskMetadata == nil {
+							taskMetadata = make(map[string]interface{})
+						}
+						for k, v := range v.Metadata {
+							taskMetadata[k] = v
+						}
 					}
 					if v.Status.Message != nil {
 						// ignore status message text for persistence; keep only artifact text
@@ -136,6 +159,7 @@ func (m *RecordingManager) OnSendMessageStream(ctx context.Context, request prot
 							ID:        taskID,
 							ContextID: desiredContextID,
 							History:   []protocol.Message{userMsg, assistantMsg},
+							Metadata:  taskMetadata,
 						}
 						_ = m.dbClient.StoreTask(task)
 					}

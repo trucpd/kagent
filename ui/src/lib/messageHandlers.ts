@@ -26,6 +26,32 @@ export function extractMessagesFromTasks(tasks: Task[]): Message[] {
   return messages;
 }
 
+// getUsageFromWellknownFields gets token usage from metadata fields they could be defined in (kagent_usage_metadata for kagent agents. usage_metadata, token_usage, usage fields for remote agents)
+// TODO: Should we instead allow for Remote Agent configuration to define where (assuming if) they define their token usage in metadata - defaulting to kagent_usage_metadata.?
+function getUsageFromWellknownFields(metadata: ADKMetadata | undefined): TokenStats | undefined {
+  if (!metadata) {
+    return undefined;
+  }
+
+  const usage = metadata?.kagent_usage_metadata || 
+    metadata?.usage_metadata as ADKMetadata["kagent_usage_metadata"] ||
+    metadata?.token_usage as ADKMetadata["kagent_usage_metadata"] ||
+    metadata?.usage as ADKMetadata["kagent_usage_metadata"] ||
+    undefined;
+
+  console.warn("usage" + JSON.stringify(usage));
+  
+  if (!usage) {
+    return undefined;
+  }
+
+  return {
+    total: usage?.totalTokenCount || 0,
+    input: usage?.promptTokenCount || 0,
+    output: usage?.candidatesTokenCount || 0,
+  };
+}
+
 export function extractTokenStatsFromTasks(tasks: Task[]): TokenStats {
   let maxTotal = 0;
   let maxInput = 0;
@@ -34,12 +60,12 @@ export function extractTokenStatsFromTasks(tasks: Task[]): TokenStats {
   for (const task of tasks) {
     if (task.metadata) {
       const metadata = task.metadata as ADKMetadata;
-      const usage = metadata.kagent_usage_metadata;
-      
+      const usage = getUsageFromWellknownFields(metadata);
+
       if (usage) {
-        maxTotal = Math.max(maxTotal, usage.totalTokenCount || 0);
-        maxInput = Math.max(maxInput, usage.promptTokenCount || 0);
-        maxOutput = Math.max(maxOutput, usage.candidatesTokenCount || 0);
+        maxTotal = Math.max(maxTotal, usage.total);
+        maxInput = Math.max(maxInput, usage.input);
+        maxOutput = Math.max(maxOutput, usage.output);
       }
     }
   }
@@ -195,19 +221,13 @@ export const createMessageHandlers = (handlers: MessageHandlers) => {
     try {
       const adkMetadata = getADKMetadata(statusUpdate);
 
-      if (adkMetadata?.kagent_usage_metadata) {
-        const usage = adkMetadata.kagent_usage_metadata;
-
-        const tokenStats = {
-          total: usage.totalTokenCount || 0,
-          input: usage.promptTokenCount || 0,
-          output: usage.candidatesTokenCount || 0,
-        };
+      const usage = getUsageFromWellknownFields(adkMetadata);
+      if (usage) {
         // Update token stats cumulatively - each A2A event might have incremental usage
         handlers.setTokenStats(prev => ({
-          total: Math.max(prev.total, tokenStats.total),
-          input: Math.max(prev.input, tokenStats.input),
-          output: Math.max(prev.output, tokenStats.output),
+          total: Math.max(prev.total, usage.total),
+          input: Math.max(prev.input, usage.input),
+          output: Math.max(prev.output, usage.output),
         }));
       }
 
@@ -349,19 +369,13 @@ export const createMessageHandlers = (handlers: MessageHandlers) => {
       adkMetadata = getADKMetadata(artifactUpdate.artifact);
     }
 
-    if (adkMetadata?.kagent_usage_metadata) {
-      const usage = adkMetadata.kagent_usage_metadata;
-
-      const tokenStats = {
-        total: usage.totalTokenCount || 0,
-        input: usage.promptTokenCount || 0,
-        output: usage.candidatesTokenCount || 0,
-      };
+    const usage = getUsageFromWellknownFields(adkMetadata);
+    if (usage) {
       // Update token stats cumulatively for final counts
       handlers.setTokenStats(prev => ({
-        total: Math.max(prev.total, tokenStats.total),
-        input: Math.max(prev.input, tokenStats.input),
-        output: Math.max(prev.output, tokenStats.output),
+        total: Math.max(prev.total, usage.total),
+        input: Math.max(prev.input, usage.input),
+        output: Math.max(prev.output, usage.output),
       }));
     }
 
