@@ -37,16 +37,14 @@ class KebabAgentExecutor(AgentExecutor):
         context: RequestContext,
         task_updater: TaskUpdater,
     ) -> None:
-        logging.info(f"Processing kebab request: {message_text}")
-        
-        # Generate kebab response - prefer authenticated user id if available
-        user_id = getattr(context, 'user_id', None)
-        if not user_id and hasattr(context, "headers") and isinstance(context.headers, dict):
-            user_id = context.headers.get("x-user-id")
-        else:
-            user_id = "unknown"
+        # get the user id if passed through headers
+        cc = getattr(context, 'call_context', None)
+        state = getattr(cc, 'state', None) if cc is not None else None
+        headers = state.get('headers', {}) if isinstance(state, dict) else {}
+        user_id = headers.get('x-user-id') or 'unknown'
+
         response_text = f"kebab for {user_id} in session {context.context_id}"
-        
+
         # First add as artifact so it is captured for sync Task history
         parts = [TextPart(text=response_text)]
         await task_updater.add_artifact(parts)
