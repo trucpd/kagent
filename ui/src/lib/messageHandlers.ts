@@ -38,8 +38,6 @@ function getUsageFromWellknownFields(metadata: ADKMetadata | undefined): TokenSt
     metadata?.token_usage as ADKMetadata["kagent_usage_metadata"] ||
     metadata?.usage as ADKMetadata["kagent_usage_metadata"] ||
     undefined;
-
-  console.warn("usage" + JSON.stringify(usage));
   
   if (!usage) {
     return undefined;

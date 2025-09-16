@@ -118,24 +118,6 @@ func (h *AgentsHandler) getAgentResponse(ctx context.Context, log logr.Logger, a
 		response.Tools = agent.Spec.Declarative.Tools
 	}
 
-	// TODO(infocus7): get this to work. not sure if the database is the expected one (with all the agent information).
-	// At the moment, it says agent does not exist (maybe the error log causes it to not return anything) instead of finding it and updating the description..
-	// if agent.Spec.Type == v1alpha2.AgentType_Remote {
-	// 	log.V(1).Info("Processing Remote Agent", "agentRef", agentRef)
-	// 	// if agent.Spec.Description == "" {
-	// 	log.V(1).Info("No description provided for agent, getting from database", "agentRef", agentRef)
-	// 	dbAgent, err := h.DatabaseService.GetAgent(agent.Name)
-	// 	if err != nil {
-	// 		log.Error(err, "Failed to get remote agent information from database", "agentRef", agentRef)
-	// 		return response, err
-	// 	}
-	// 	log.V(1).Info("Got Agent from database", "agentRef", agentRef, "description", dbAgent.RemoteConfig.Description)
-	// 	if dbAgent.RemoteConfig.Description != "" {
-	// 		response.Agent.Spec.Description = dbAgent.RemoteConfig.Description
-	// 	}
-	// 	// }
-	// }
-
 	return response, nil
 }
 
