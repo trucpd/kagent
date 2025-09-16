@@ -92,6 +92,7 @@ func (m *RecordingManager) OnSendMessage(ctx context.Context, request protocol.S
 	return result, nil
 }
 
+// TODO: Should we handle Task creation and storage here to keep track of history?
 func (m *RecordingManager) OnSendMessageStream(ctx context.Context, request protocol.SendMessageParams) (<-chan protocol.StreamingMessageEvent, error) {
 	if request.Message.MessageID == "" {
 		request.Message.MessageID = protocol.GenerateMessageID()
@@ -120,7 +121,6 @@ func (m *RecordingManager) OnSendMessageStream(ctx context.Context, request prot
 			// Forward to client
 			out <- ev
 
-			// Log what the remote agent is providing (for debugging)
 			switch v := ev.Result.(type) {
 			case *protocol.TaskArtifactUpdateEvent:
 				if v != nil {
