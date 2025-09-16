@@ -2,24 +2,43 @@ package a2a
 
 import (
 	"context"
-	"sync/atomic"
 
 	"github.com/kagent-dev/kagent/go/internal/database"
+	"github.com/kagent-dev/kagent/go/internal/utils"
+	"github.com/kagent-dev/kagent/go/pkg/auth"
+	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 	"trpc.group/trpc-go/trpc-a2a-go/client"
 	"trpc.group/trpc-go/trpc-a2a-go/protocol"
 	"trpc.group/trpc-go/trpc-a2a-go/taskmanager"
 )
 
+// RecordingManager is similar to the PassthroughManager, but it also stores the task and session information in the database.
+// It is used for remote agents, which do not have a connection to kagent, so we use this middleware to handle that.
+// Note: We expect the remote agent to handle its task history + token information which we store and parse from.
 type RecordingManager struct {
 	client   *client.A2AClient
 	dbClient database.Client
+	agentRef string
 }
 
-func NewRecordingManager(client *client.A2AClient, dbClient database.Client) taskmanager.TaskManager {
+func NewRecordingManager(client *client.A2AClient, dbClient database.Client, agentRef string) taskmanager.TaskManager {
 	return &RecordingManager{
 		client:   client,
 		dbClient: dbClient,
+		agentRef: agentRef,
 	}
+}
+
+// getUserID extracts user ID from context.
+// similar to _get_user_id in kagent-adk's request_converter.py
+func (m *RecordingManager) getUserID(ctx context.Context, contextID string) string {
+	if session, ok := auth.AuthSessionFrom(ctx); ok {
+		if session.Principal().User.ID != "" {
+			return session.Principal().User.ID
+		}
+	}
+
+	return "A2A_USER_" + contextID
 }
 
 func (m *RecordingManager) OnSendMessage(ctx context.Context, request protocol.SendMessageParams) (*protocol.MessageResult, error) {
@@ -29,7 +48,48 @@ func (m *RecordingManager) OnSendMessage(ctx context.Context, request protocol.S
 	if request.Message.Kind == "" {
 		request.Message.Kind = protocol.KindMessage
 	}
-	return m.client.SendMessage(ctx, request)
+
+	result, err := m.client.SendMessage(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+
+	if task, ok := result.Result.(*protocol.Task); ok {
+		logger := ctrllog.FromContext(ctx).WithName("recording-manager")
+
+		if m.dbClient != nil {
+			// Extract user ID from context
+			userID := m.getUserID(ctx, task.ContextID)
+
+			// Get agent ID from the agent ref
+			var agentID *string
+			if m.agentRef != "" {
+				agentIDStr := utils.ConvertToPythonIdentifier(m.agentRef)
+				agentID = &agentIDStr
+			}
+
+			session := &database.Session{
+				ID:      task.ContextID,
+				UserID:  userID,
+				AgentID: agentID,
+			}
+
+			// Store a session (fail silently if duplicate)
+			if err := m.dbClient.StoreSession(session); err != nil {
+				logger.Error(err, "Failed to create session", "contextID", task.ContextID, "sessionID", session.ID, "agentID", session.AgentID)
+			}
+
+			// Store Task - always store whatever the remote agent provides
+			if err := m.dbClient.StoreTask(task); err != nil {
+				// Log error but don't fail the response
+				logger.Error(err, "Failed to store sync task", "taskID", task.ID, "contextID", task.ContextID)
+			}
+		} else {
+			logger.Info("No database client available for storing sync task")
+		}
+	}
+
+	return result, nil
 }
 
 func (m *RecordingManager) OnSendMessageStream(ctx context.Context, request protocol.SendMessageParams) (<-chan protocol.StreamingMessageEvent, error) {
@@ -45,123 +105,63 @@ func (m *RecordingManager) OnSendMessageStream(ctx context.Context, request prot
 		return nil, err
 	}
 
-	// TODO: If DB is not available, passthrough? or should we return an error?
+	// TODO: If DB is not available, passthrough? or should we return an error since we won't be able to store chat history information?
 	if m.dbClient == nil {
 		return upstream, nil
 	}
 
 	out := make(chan protocol.StreamingMessageEvent)
 
-	var (
-		contextID     string
-		taskID        string
-		assistantText string
-		persisted     int32
-		taskMetadata  map[string]interface{}
-	)
-
-	/*
-	  TODO:
-	  - What total events would we need to capture?
-	  - Should usage metadata be added instead of overwriting?
-	*/
 	go func() {
 		defer close(out)
+		logger := ctrllog.FromContext(ctx).WithName("recording-manager")
+
 		for ev := range upstream {
-			// forward to client
+			// Forward to client
 			out <- ev
 
-			// capture for persistence
+			// Log what the remote agent is providing (for debugging)
 			switch v := ev.Result.(type) {
 			case *protocol.TaskArtifactUpdateEvent:
 				if v != nil {
-					if contextID == "" {
-						contextID = v.ContextID
-					}
-					if taskID == "" {
-						taskID = v.TaskID
-					}
-					// Collect metadata from artifact update events
-					if v.Artifact.Metadata != nil {
-						if taskMetadata == nil {
-							taskMetadata = make(map[string]interface{})
-						}
-						for k, v := range v.Artifact.Metadata {
-							taskMetadata[k] = v
-						}
-					}
-					for _, p := range v.Artifact.Parts {
-						if tp, ok := p.(*protocol.TextPart); ok {
-							assistantText += tp.Text
-						}
-					}
+					logger.V(1).Info("Remote agent artifact update",
+						"taskID", v.TaskID,
+						"contextID", v.ContextID,
+						"artifactParts", len(v.Artifact.Parts),
+						"metadata", v.Artifact.Metadata)
 				}
 			case *protocol.TaskStatusUpdateEvent:
 				if v != nil {
-					if contextID == "" {
-						contextID = v.ContextID
+					logger.V(1).Info("Remote agent status update",
+						"taskID", v.TaskID,
+						"contextID", v.ContextID,
+						"state", v.Status.State,
+						"final", v.Final,
+						"metadata", v.Metadata)
+				}
+			case *protocol.Task:
+				if v != nil {
+					// Store session
+					userID := m.getUserID(ctx, v.ContextID)
+					var agentID *string
+					if m.agentRef != "" {
+						agentIDStr := utils.ConvertToPythonIdentifier(m.agentRef)
+						agentID = &agentIDStr
 					}
-					if taskID == "" {
-						taskID = v.TaskID
-					}
-					// Collect metadata from status update events
-					if v.Metadata != nil {
-						if taskMetadata == nil {
-							taskMetadata = make(map[string]interface{})
-						}
-						for k, v := range v.Metadata {
-							taskMetadata[k] = v
-						}
-					}
-					if v.Status.Message != nil {
-						// ignore status message text for persistence; keep only artifact text
-					}
-					if v.Final && atomic.CompareAndSwapInt32(&persisted, 0, 1) {
-						// Prefer request's context ID to align with UI sessions
-						var desiredContextID string
-						if request.Message.ContextID != nil && *request.Message.ContextID != "" {
-							desiredContextID = *request.Message.ContextID
-						} else {
-							desiredContextID = contextID
-						}
 
-						// Build minimal history: user then assistant
-						userMsg := request.Message
-						if userMsg.Kind == "" {
-							userMsg.Kind = protocol.KindMessage
-						}
-						if userMsg.Role == "" {
-							userMsg.Role = protocol.MessageRoleUser
-						}
-						if userMsg.ContextID == nil {
-							userMsg.ContextID = &desiredContextID
-						}
-						if userMsg.TaskID == nil {
-							userMsg.TaskID = &taskID
-						}
+					session := &database.Session{
+						ID:      v.ContextID,
+						UserID:  userID,
+						AgentID: agentID,
+					}
 
-						finalText := assistantText
-						if finalText == "" && v.Status.Message != nil {
-							finalText = ExtractText(*v.Status.Message)
-						}
-						assistantMsg := protocol.Message{
-							Kind:  protocol.KindMessage,
-							Role:  protocol.MessageRoleAgent,
-							Parts: []protocol.Part{protocol.NewTextPart(finalText)},
-						}
-						if assistantMsg.MessageID == "" {
-							assistantMsg.MessageID = protocol.GenerateMessageID()
-						}
-						assistantMsg.ContextID = &desiredContextID
-						assistantMsg.TaskID = &taskID
+					if err := m.dbClient.StoreSession(session); err != nil {
+						logger.Error(err, "Failed to create session", "contextID", v.ContextID)
+					}
 
-						task := &protocol.Task{
-							ID:        taskID,
-							ContextID: desiredContextID,
-							History:   []protocol.Message{userMsg, assistantMsg},
-							Metadata:  taskMetadata,
-						}
-						_ = m.dbClient.StoreTask(task)
+					// Store task as-is (whatever the remote agent provided)
+					if err := m.dbClient.StoreTask(v); err != nil {
+						logger.Error(err, "Failed to store streaming task", "taskID", v.ID, "contextID", v.ContextID)
 					}
 				}
 			}

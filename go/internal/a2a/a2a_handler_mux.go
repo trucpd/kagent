@@ -57,7 +57,7 @@ func (a *handlerMux) SetAgentHandler(
 ) error {
 	var manager taskmanager.TaskManager
 	if agentType == v1alpha2.AgentType_Remote {
-		manager = NewRecordingManager(client, a.dbClient)
+		manager = NewRecordingManager(client, a.dbClient, agentRef)
 	} else {
 		manager = NewPassthroughManager(client)
 	}

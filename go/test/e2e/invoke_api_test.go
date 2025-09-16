@@ -166,9 +166,6 @@ func TestInvokeExternalAgent(t *testing.T) {
 	})
 }
 
-// TODO(infocus7): Fix. Tests are failing. I was trying to set this up like other tests but hit two issues:
-// 1. No History. Is this normal? Is it meant to be populated by the agent? or a2a proxy? Should we just check the message has expected text?
-// 2. Missing user id. Not sure how BYO handles this, if custom implementation is necessary to pass this information. Is it needed for Remote agents as well?
 func TestInvokeRemoteAgent(t *testing.T) {
 	// Setup
 	a2aURL := a2aUrl("kagent", "remote-kebab-agent")

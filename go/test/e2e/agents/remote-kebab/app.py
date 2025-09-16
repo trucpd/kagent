@@ -1,5 +1,4 @@
 import logging
-import os
 import click
 import uvicorn
 
@@ -10,72 +9,81 @@ from a2a.types import (
     AgentCapabilities,
     AgentCard,
     AgentSkill,
+    UnsupportedOperationError,
 )
+from a2a.types import Message, TextPart, Task, TaskState, TaskStatus, TaskStatusUpdateEvent
+import uuid
+from datetime import datetime, timezone
 from starlette.applications import Starlette
 from a2a.server.agent_execution import AgentExecutor
 from a2a.server.agent_execution.context import RequestContext
 from a2a.server.events.event_queue import EventQueue
-from a2a.server.tasks import TaskUpdater
-from a2a.types import (
-    TaskState,
-    TextPart,
-    UnsupportedOperationError,
-)
 from a2a.utils.errors import ServerError
 
 logging.basicConfig(level=logging.DEBUG)
 
 class KebabAgentExecutor(AgentExecutor):
-    """An AgentExecutor that responds with kebab."""
+    """A simple AgentExecutor that responds with kebab message."""
 
     def __init__(self, card: AgentCard):
         self._card = card
-
-    async def _process_request(
-        self,
-        message_text: str,
-        context: RequestContext,
-        task_updater: TaskUpdater,
-    ) -> None:
-        # get the user id if passed through headers
-        cc = getattr(context, 'call_context', None)
-        state = getattr(cc, 'state', None) if cc is not None else None
-        headers = state.get('headers', {}) if isinstance(state, dict) else {}
-        user_id = headers.get('x-user-id') or 'unknown'
-
-        response_text = f"kebab for {user_id} in session {context.context_id}"
-
-        # First add as artifact so it is captured for sync Task history
-        parts = [TextPart(text=response_text)]
-        await task_updater.add_artifact(parts)
-
-        # Then emit a final status with the agent message (for streaming and completion)
-        await task_updater.update_status(
-            TaskState.completed,
-            message=task_updater.new_agent_message(parts),
-            final=True,
-        )
 
     async def execute(
         self,
         context: RequestContext,
         event_queue: EventQueue,
     ):
-        # Run the agent until complete
-        updater = TaskUpdater(event_queue, context.task_id, context.context_id)
-        # Immediately notify that the task is submitted.
-        if not context.current_task:
-            await updater.submit()
-        await updater.start_work()
+        """Execute the kebab agent with proper Task history for RecordingManager."""
+        # Get the user id if passed through headers
+        cc = getattr(context, 'call_context', None)
+        state = getattr(cc, 'state', None) if cc is not None else None
+        headers = state.get('headers', {}) if isinstance(state, dict) else {}
+        user_id = headers.get('x-user-id') or 'unknown'
 
-        # Extract text from message parts
-        message_text = ''
-        for part in context.message.parts:
-            if isinstance(part.root, TextPart):
-                message_text += part.root.text
+        # Create kebab response with user info
+        response_text = f"kebab for {user_id} in session {context.context_id}"
+        
+        # Create agent response message
+        agent_message = Message(
+            messageId=str(uuid.uuid4()),
+            kind="message",
+            role="agent",
+            parts=[TextPart(text=response_text)]
+        )
 
-        await self._process_request(message_text, context, updater)
-        logging.debug('[Kebab Agent] execute exiting')
+        # Build task history
+        history = []
+        if context.message:
+            history.append(context.message)
+        history.append(agent_message)
+        
+        task = Task(
+            id=context.task_id,
+            contextId=context.context_id,
+            state=TaskState.completed,
+            status=TaskStatus(
+                state=TaskState.completed,
+                message=agent_message,
+                timestamp=datetime.now(timezone.utc).isoformat()
+            ),
+            history=history
+        )
+        
+        status_update = TaskStatusUpdateEvent(
+            task_id=context.task_id,
+            context_id=context.context_id,
+            status=TaskStatus(
+                state=TaskState.completed,
+                message=agent_message,
+                timestamp=datetime.now(timezone.utc).isoformat()
+            ),
+            final=False 
+        )
+        await event_queue.enqueue_event(status_update)
+        
+        await event_queue.enqueue_event(task)
+        
+        logging.debug('[Kebab Agent] execute completed with task history')
 
     async def cancel(self, context: RequestContext, event_queue: EventQueue):
         raise ServerError(error=UnsupportedOperationError())
