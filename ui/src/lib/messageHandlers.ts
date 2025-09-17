@@ -239,27 +239,18 @@ export type MessageHandlers = {
   };
 };
 
-// TODO(infocus7): There were a lot of changes here which may have broken my previous updates for remote agents. Need to re-verify.
 export const createMessageHandlers = (handlers: MessageHandlers) => {
   const appendMessage = (message: Message) => {
     handlers.setMessages(prev => [...prev, message]);
   };
 
-  // TODO(infocus7): Check that it works as before.
-  let lastArtifactText = "";
-  // TODO(infocus7): Update to use the getWellknown fn.
   const updateTokenStatsFromMetadata = (adkMetadata: ADKMetadata | undefined) => {
-    if (!adkMetadata?.kagent_usage_metadata) return;
-    const usage = adkMetadata.kagent_usage_metadata;
-    const tokenStats = {
-      total: usage.totalTokenCount || 0,
-      input: usage.promptTokenCount || 0,
-      output: usage.candidatesTokenCount || 0,
-    };
+    const usage = getUsageFromWellknownFields(adkMetadata);
+    if (!usage) return;
     handlers.setTokenStats(prev => ({
-      total: Math.max(prev.total, tokenStats.total),
-      input: Math.max(prev.input, tokenStats.input),
-      output: Math.max(prev.output, tokenStats.output),
+      total: Math.max(prev.total, usage.total),
+      input: Math.max(prev.input, usage.input),
+      output: Math.max(prev.output, usage.output),
     }));
   };
 
@@ -435,24 +426,7 @@ export const createMessageHandlers = (handlers: MessageHandlers) => {
           const uiStatus = mapA2AStateToStatus(statusUpdate.status.state);
           handlers.setChatStatus(uiStatus);
         }
-      }
-
-      // If we are finalizing and we were streaming artifact text, commit it as a message
-        // TODO(infocus7): Update to fit in with newer changes
-      if (statusUpdate.final && lastArtifactText) {
-        const source = getSourceFromMetadata(adkMetadata, defaultAgentSource);
-        const displayMessage = createMessage(
-          lastArtifactText,
-          source,
-          {
-            originalType: "TextMessage",
-            contextId: statusUpdate.contextId,
-            taskId: statusUpdate.taskId
-          }
-        );
-        handlers.setMessages(prevMessages => [...prevMessages, displayMessage]);
-        lastArtifactText = "";
-      }
+      }      
 
       if (statusUpdate.final) {
         finalizeStreaming();
@@ -552,16 +526,6 @@ export const createMessageHandlers = (handlers: MessageHandlers) => {
       if (handlers.setChatStatus) {
         handlers.setChatStatus("ready");
       }
-
-      lastArtifactText = ""; // TODO: Was this my addition or from before latest changes?
-    } else { // TODO(infocus7): Is this correct anymore?
-      // Stream partial or single-chunk artifact content; final commit happens on statusUpdate.final
-      handlers.setIsStreaming(true);
-      handlers.setStreamingContent(() => artifactText);
-      if (handlers.setChatStatus) {
-        handlers.setChatStatus("generating_response");
-      }
-      lastArtifactText = artifactText;
     }
   };
 
