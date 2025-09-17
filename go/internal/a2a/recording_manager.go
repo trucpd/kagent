@@ -68,10 +68,15 @@ func (m *RecordingManager) OnSendMessage(ctx context.Context, request protocol.S
 		}
 
 		// Check if session already exists
-		existingSession, err := m.dbClient.GetSession(task.ContextID, userID)
-		if err != nil || existingSession == nil {
+		session, err := m.dbClient.GetSession(task.ContextID, userID)
+		if err != nil {
+			if err != gorm.ErrRecordNotFound {
+				logger.Error(err, "Failed to get session", "contextID", task.ContextID)
+				return nil, err
+			}
+
 			// Session doesn't exist, create a new one
-			session := &database.Session{
+			session = &database.Session{
 				ID:      task.ContextID,
 				UserID:  userID,
 				AgentID: agentID,
