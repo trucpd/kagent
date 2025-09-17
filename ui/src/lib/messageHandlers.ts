@@ -426,7 +426,7 @@ export const createMessageHandlers = (handlers: MessageHandlers) => {
           const uiStatus = mapA2AStateToStatus(statusUpdate.status.state);
           handlers.setChatStatus(uiStatus);
         }
-      }      
+      }
 
       if (statusUpdate.final) {
         finalizeStreaming();

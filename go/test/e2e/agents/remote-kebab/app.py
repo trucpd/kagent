@@ -45,29 +45,31 @@ class KebabAgentExecutor(AgentExecutor):
         
         # Create agent response message
         agent_message = Message(
-            messageId=str(uuid.uuid4()),
+            context_id=context.context_id,
+            message_id=str(uuid.uuid4()),
+            task_id=context.task_id,
             kind="message",
             role="agent",
             parts=[TextPart(text=response_text)]
         )
 
-        # Build task history
+        # Build task history [user, agent] (for test)
         history = []
         if context.message:
             history.append(context.message)
         history.append(agent_message)
-        
+
         task = Task(
             id=context.task_id,
-            contextId=context.context_id,
-            state=TaskState.completed,
+            context_id=context.context_id,
             status=TaskStatus(
-                state=TaskState.completed,
+                state=TaskState.working,
                 message=agent_message,
                 timestamp=datetime.now(timezone.utc).isoformat()
             ),
             history=history
         )
+        await event_queue.enqueue_event(task)
         
         status_update = TaskStatusUpdateEvent(
             task_id=context.task_id,
@@ -80,8 +82,6 @@ class KebabAgentExecutor(AgentExecutor):
             final=False 
         )
         await event_queue.enqueue_event(status_update)
-        
-        await event_queue.enqueue_event(task)
         
         logging.debug('[Kebab Agent] execute completed with task history')
 
