@@ -58,7 +58,6 @@ func (m *RecordingManager) OnSendMessage(ctx context.Context, request protocol.S
 		logger := ctrllog.FromContext(ctx).WithName("recording-manager")
 
 		if m.dbClient != nil {
-			// Extract user ID from context
 			userID := m.getUserID(ctx, task.ContextID)
 
 			// Get agent ID from the agent ref
@@ -81,7 +80,6 @@ func (m *RecordingManager) OnSendMessage(ctx context.Context, request protocol.S
 
 			// Store Task - always store whatever the remote agent provides
 			if err := m.dbClient.StoreTask(task); err != nil {
-				// Log error but don't fail the response
 				logger.Error(err, "Failed to store sync task", "taskID", task.ID, "contextID", task.ContextID)
 			}
 		} else {
@@ -113,6 +111,8 @@ func (m *RecordingManager) OnSendMessageStream(ctx context.Context, request prot
 
 	out := make(chan protocol.StreamingMessageEvent)
 
+	// TODO: We shouldn't _expect_ a Task to be sent during streaming.
+	// If not, this means we'd need to have an internal Task. This way we can store it in the database for future reference.
 	go func() {
 		defer close(out)
 		logger := ctrllog.FromContext(ctx).WithName("recording-manager")
@@ -122,6 +122,13 @@ func (m *RecordingManager) OnSendMessageStream(ctx context.Context, request prot
 			out <- ev
 
 			switch v := ev.Result.(type) {
+			case *protocol.Message:
+				if v != nil {
+					logger.V(1).Info("Remote agent message",
+						"messageID", v.MessageID,
+						"contextID", v.ContextID,
+					)
+				}
 			case *protocol.TaskArtifactUpdateEvent:
 				if v != nil {
 					logger.V(1).Info("Remote agent artifact update",
@@ -149,6 +156,7 @@ func (m *RecordingManager) OnSendMessageStream(ctx context.Context, request prot
 						agentID = &agentIDStr
 					}
 
+					// TODO: What Session name should we use? In non-remote agents we use the first message.
 					session := &database.Session{
 						ID:      v.ContextID,
 						UserID:  userID,
