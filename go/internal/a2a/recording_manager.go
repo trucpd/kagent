@@ -6,6 +6,7 @@ import (
 	"github.com/kagent-dev/kagent/go/internal/database"
 	"github.com/kagent-dev/kagent/go/internal/utils"
 	"github.com/kagent-dev/kagent/go/pkg/auth"
+	"gorm.io/gorm"
 	ctrllog "sigs.k8s.io/controller-runtime/pkg/log"
 	"trpc.group/trpc-go/trpc-a2a-go/client"
 	"trpc.group/trpc-go/trpc-a2a-go/protocol"
@@ -57,40 +58,41 @@ func (m *RecordingManager) OnSendMessage(ctx context.Context, request protocol.S
 	if task, ok := result.Result.(*protocol.Task); ok {
 		logger := ctrllog.FromContext(ctx).WithName("recording-manager")
 
-		if m.dbClient != nil {
-			userID := m.getUserID(ctx, task.ContextID)
+		userID := m.getUserID(ctx, task.ContextID)
 
-			// Get agent ID from the agent ref
-			var agentID *string
-			if m.agentRef != "" {
-				agentIDStr := utils.ConvertToPythonIdentifier(m.agentRef)
-				agentID = &agentIDStr
-			}
+		// Get agent ID from the agent ref
+		var agentID *string
+		if m.agentRef != "" {
+			agentIDStr := utils.ConvertToPythonIdentifier(m.agentRef)
+			agentID = &agentIDStr
+		}
 
+		// Check if session already exists
+		existingSession, err := m.dbClient.GetSession(task.ContextID, userID)
+		if err != nil || existingSession == nil {
+			// Session doesn't exist, create a new one
 			session := &database.Session{
 				ID:      task.ContextID,
 				UserID:  userID,
 				AgentID: agentID,
 			}
 
-			// Store a session (fail silently if duplicate)
 			if err := m.dbClient.StoreSession(session); err != nil {
 				logger.Error(err, "Failed to create session", "contextID", task.ContextID, "sessionID", session.ID, "agentID", session.AgentID)
+				return nil, err
 			}
+		}
 
-			// Store Task - always store whatever the remote agent provides
-			if err := m.dbClient.StoreTask(task); err != nil {
-				logger.Error(err, "Failed to store sync task", "taskID", task.ID, "contextID", task.ContextID)
-			}
-		} else {
-			logger.Info("No database client available for storing sync task")
+		// Store Task
+		if err := m.dbClient.StoreTask(task); err != nil {
+			logger.Error(err, "Failed to store task", "taskID", task.ID, "contextID", task.ContextID)
+			return nil, err
 		}
 	}
 
 	return result, nil
 }
 
-// TODO: Should we handle Task creation and storage here to keep track of history?
 func (m *RecordingManager) OnSendMessageStream(ctx context.Context, request protocol.SendMessageParams) (<-chan protocol.StreamingMessageEvent, error) {
 	if request.Message.MessageID == "" {
 		request.Message.MessageID = protocol.GenerateMessageID()
@@ -102,11 +104,6 @@ func (m *RecordingManager) OnSendMessageStream(ctx context.Context, request prot
 	upstream, err := m.client.StreamMessage(ctx, request)
 	if err != nil {
 		return nil, err
-	}
-
-	// TODO: If DB is not available, passthrough? or should we return an error since we won't be able to store chat history information?
-	if m.dbClient == nil {
-		return upstream, nil
 	}
 
 	out := make(chan protocol.StreamingMessageEvent)
@@ -156,18 +153,28 @@ func (m *RecordingManager) OnSendMessageStream(ctx context.Context, request prot
 						agentID = &agentIDStr
 					}
 
-					// TODO: What Session name should we use? In non-remote agents we use the first message.
-					session := &database.Session{
-						ID:      v.ContextID,
-						UserID:  userID,
-						AgentID: agentID,
+					// Check if session already exists (if it does not exist, create a new one)
+					session, err := m.dbClient.GetSession(v.ContextID, userID)
+					if err != nil {
+						// In this case, a non-NotFound error occurred, so do not store the task or any session information
+						if err != gorm.ErrRecordNotFound {
+							logger.Error(err, "Failed to get session", "contextID", v.ContextID)
+							continue
+						}
+
+						// Create a new session
+						session = &database.Session{
+							ID:      v.ContextID,
+							UserID:  userID,
+							AgentID: agentID,
+						}
+						if err := m.dbClient.StoreSession(session); err != nil {
+							logger.Error(err, "Failed to create session", "contextID", v.ContextID)
+							continue
+						}
 					}
 
-					if err := m.dbClient.StoreSession(session); err != nil {
-						logger.Error(err, "Failed to create session", "contextID", v.ContextID)
-					}
-
-					// Store task as-is (whatever the remote agent provided)
+					// Store task (should only happen if a session exists)
 					if err := m.dbClient.StoreTask(v); err != nil {
 						logger.Error(err, "Failed to store streaming task", "taskID", v.ID, "contextID", v.ContextID)
 					}
