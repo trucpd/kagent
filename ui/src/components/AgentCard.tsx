@@ -12,10 +12,9 @@ import { AgentCardPreview } from "@/components/AgentCardPreview";
 
 interface AgentCardProps {
   agentResponse: AgentResponse;
-  id: number;
 }
 
-export function AgentCard({ id, agentResponse: { agent, model, modelProvider, deploymentReady, accepted } }: AgentCardProps) {
+export function AgentCard({ agentResponse: { agent, model, modelProvider, deploymentReady, accepted } }: AgentCardProps) {
   const router = useRouter();
   const [previewOpen, setPreviewOpen] = useState(false);
   const agentRef = k8sRefUtils.toRef(
