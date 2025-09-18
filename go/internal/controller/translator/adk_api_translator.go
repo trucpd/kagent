@@ -2,9 +2,6 @@ package translator
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/binary"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -236,18 +233,12 @@ func (a *adkApiTranslator) buildManifest(
 	var cfgJson string
 	var agentCard string
 	if cfg != nil && card != nil {
-		bCfg, err := json.Marshal(cfg)
-		if err != nil {
-			return nil, err
-		}
-		bCard, err := json.Marshal(card)
-		if err != nil {
-			return nil, err
-		}
-		configHash = computeConfigHash(bCfg, bCard)
+		var err error
 
-		cfgJson = string(bCfg)
-		agentCard = string(bCard)
+		cfgJson, agentCard, configHash, err = utils.ComputeConfig(cfg, card)
+		if err != nil {
+			return nil, err
+		}
 
 		secretVol = []corev1.Volume{{
 			Name: "config",
@@ -511,14 +502,8 @@ func (a *adkApiTranslator) translateInlineAgent(ctx context.Context, agent *v1al
 					Description: toolAgent.Spec.Description,
 				})
 			case v1alpha2.AgentType_Remote:
-				/* TODO: Add support for remote agents.
-				Either:
-					- Add the dbClient be a part of the *adkApiTranslator, which we'd fetch the remote agent config based on the agent
-					- Do a fetch to the remote agent card url to get the remote agent config.
-
-				We'll also need to look into how the polling system would work to update the db with updated details AND ensuring the updated details are reflected when the agent is used as a tool.
-				*/
-				return nil, nil, nil, fmt.Errorf("remote agent type is not supported")
+				// Skip remote agents during translation - they will be handled during reconciliation
+				continue
 			default:
 				return nil, nil, nil, fmt.Errorf("unknown agent type: %s", toolAgent.Spec.Type)
 			}
@@ -952,14 +937,6 @@ func (a *adkApiTranslator) translateRemoteMCPServerTarget(ctx context.Context, a
 }
 
 // Helper functions
-
-func computeConfigHash(config, card []byte) uint64 {
-	hasher := sha256.New()
-	hasher.Write(config)
-	hasher.Write(card)
-	hash := hasher.Sum(nil)
-	return binary.BigEndian.Uint64(hash[:8])
-}
 
 func collectOtelEnvFromProcess() []corev1.EnvVar {
 	envVars := slices.Collect(utils.Map(
