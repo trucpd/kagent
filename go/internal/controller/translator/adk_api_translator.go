@@ -7,9 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"maps"
-	"net/http"
 	"os"
 	"slices"
 	"strconv"
@@ -151,19 +149,6 @@ func (a *adkApiTranslator) TranslateAgent(
 			DefaultOutputModes: []string{"text"},
 		}
 		return a.buildManifest(ctx, agent, dep, nil, agentCard)
-	case v1alpha2.AgentType_Remote:
-		// fetch the agent card details from the URL
-		agentCard, remoteConfig, err := a.fetchRemoteAgentDetails(agent.Spec.Remote)
-		if err != nil {
-			return nil, err
-		}
-
-		// remote agents are already served elsewhere, so we don't need to build a manifest
-		return &AgentOutputs{
-			Manifest:     []client.Object{},
-			AgentCard:    *agentCard,
-			RemoteConfig: remoteConfig,
-		}, nil
 	default:
 		return nil, fmt.Errorf("unknown agent type: %s", agent.Spec.Type)
 	}
@@ -233,39 +218,6 @@ func (a *adkApiTranslator) validateAgent(ctx context.Context, agent *v1alpha2.Ag
 	}
 
 	return nil
-}
-
-func (a *adkApiTranslator) fetchRemoteAgentDetails(r *v1alpha2.RemoteAgentSpec) (*server.AgentCard, *adk.RemoteAgentConfig, error) {
-	agentCard := &server.AgentCard{}
-
-	resp, err := http.Get(r.AgentCardURL)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to fetch agent card: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to read agent card body: %w", err)
-	}
-
-	err = json.Unmarshal(body, agentCard)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to unmarshal agent card: %w", err)
-	}
-
-	// override the agent card's server url to be the provided server url if provided
-	if r.ServerURL != "" {
-		agentCard.URL = r.ServerURL
-	}
-
-	agentConfig := &adk.RemoteAgentConfig{
-		Name:        agentCard.Name,
-		Url:         agentCard.URL,
-		Description: agentCard.Description,
-	}
-
-	return agentCard, agentConfig, nil
 }
 
 func (a *adkApiTranslator) buildManifest(

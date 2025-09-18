@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
 	"reflect"
 	"sync"
 
@@ -19,6 +21,7 @@ import (
 	"trpc.group/trpc-go/trpc-a2a-go/server"
 
 	"github.com/kagent-dev/kagent/go/api/v1alpha2"
+	"github.com/kagent-dev/kagent/go/internal/adk"
 	"github.com/kagent-dev/kagent/go/internal/controller/a2a"
 	"github.com/kagent-dev/kagent/go/internal/controller/translator"
 	"github.com/kagent-dev/kagent/go/internal/database"
@@ -416,9 +419,21 @@ func (a *kagentReconciler) reconcileRemoteMCPServerStatus(
 }
 
 func (a *kagentReconciler) reconcileAgent(ctx context.Context, agent *v1alpha2.Agent) error {
-	agentOutputs, err := a.adkTranslator.TranslateAgent(ctx, agent)
-	if err != nil {
-		return fmt.Errorf("failed to translate agent %s/%s: %v", agent.Namespace, agent.Name, err)
+	var agentOutputs *translator.AgentOutputs
+	var err error
+
+	switch agent.Spec.Type {
+	case v1alpha2.AgentType_Remote:
+		// Remote agents are handled entirely in the reconciler
+		agentOutputs, err = a.reconcileRemoteAgent(agent)
+		if err != nil {
+			return fmt.Errorf("failed to reconcile remote agent %s/%s: %v", agent.Namespace, agent.Name, err)
+		}
+	default:
+		agentOutputs, err = a.adkTranslator.TranslateAgent(ctx, agent)
+		if err != nil {
+			return fmt.Errorf("failed to translate agent %s/%s: %v", agent.Namespace, agent.Name, err)
+		}
 	}
 
 	ownedObjects, err := reconcilerutils.FindOwnedObjects(ctx, a.kube, agent.UID, agent.Namespace, a.adkTranslator.GetOwnedResourceTypes())
@@ -538,6 +553,44 @@ func mutate(f controllerutil.MutateFn, key client.ObjectKey, obj client.Object) 
 		return fmt.Errorf("MutateFn cannot mutate object name and/or object namespace")
 	}
 	return nil
+}
+
+// reconcileRemoteAgent handles remote agents entirely in the reconciler
+func (a *kagentReconciler) reconcileRemoteAgent(agent *v1alpha2.Agent) (*translator.AgentOutputs, error) {
+	// Fetch the agent card details from the URL
+	agentCard := &server.AgentCard{}
+
+	resp, err := http.Get(agent.Spec.Remote.AgentCardURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch agent card: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read agent card body: %w", err)
+	}
+
+	err = json.Unmarshal(body, agentCard)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal agent card: %w", err)
+	}
+
+	// override the agent card's server url to be the provided server url if provided
+	if agent.Spec.Remote.ServerURL != "" {
+		agentCard.URL = agent.Spec.Remote.ServerURL
+	}
+
+	// Remote agents don't need any Kubernetes manifests
+	return &translator.AgentOutputs{
+		Manifest:  []client.Object{},
+		AgentCard: *agentCard,
+		RemoteConfig: &adk.RemoteAgentConfig{
+			Name:        agentCard.Name,
+			Url:         agentCard.URL,
+			Description: agentCard.Description,
+		},
+	}, nil
 }
 
 func (a *kagentReconciler) deleteObjects(ctx context.Context, objects map[types.UID]client.Object) error {
