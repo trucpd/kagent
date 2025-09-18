@@ -2,6 +2,7 @@ package a2a
 
 import (
 	"context"
+	"errors"
 
 	"github.com/kagent-dev/kagent/go/internal/database"
 	"github.com/kagent-dev/kagent/go/internal/utils"
@@ -106,6 +107,14 @@ func (m *RecordingManager) OnSendMessageStream(ctx context.Context, request prot
 		request.Message.Kind = protocol.KindMessage
 	}
 
+	if request.Message.ContextID == nil || *request.Message.ContextID == "" {
+		return nil, errors.New("contextID is required")
+	}
+
+	if err := m.ensureSession(ctx, *request.Message.ContextID); err != nil {
+		return nil, err
+	}
+
 	upstream, err := m.client.StreamMessage(ctx, request)
 	if err != nil {
 		return nil, err
@@ -138,6 +147,9 @@ func (m *RecordingManager) OnSendMessageStream(ctx context.Context, request prot
 						"contextID", v.ContextID,
 						"artifactParts", len(v.Artifact.Parts),
 						"metadata", v.Artifact.Metadata)
+
+					// Ensure a task exists for this artifact update
+					m.ensureTaskExists(ctx, v.TaskID, v.ContextID)
 				}
 			case *protocol.TaskStatusUpdateEvent:
 				if v != nil {
@@ -147,43 +159,32 @@ func (m *RecordingManager) OnSendMessageStream(ctx context.Context, request prot
 						"state", v.Status.State,
 						"final", v.Final,
 						"metadata", v.Metadata)
+					// First ensure a task record exists, then update existing task
+					m.ensureTaskExists(ctx, v.TaskID, v.ContextID)
+					m.updateExistingTaskFromStatusEvent(ctx, v)
 				}
 			case *protocol.Task:
 				if v != nil {
-					// Store session
-					userID := m.getUserID(ctx, v.ContextID)
-					var agentID *string
-					if m.agentRef != "" {
-						agentIDStr := utils.ConvertToPythonIdentifier(m.agentRef)
-						agentID = &agentIDStr
+					logger.V(1).Info("Remote agent task",
+						"taskID", v.ID,
+						"contextID", v.ContextID,
+						"status", v.Status,
+						"metadata", v.Metadata)
+				}
+
+				if v != nil {
+					if err := m.ensureSession(ctx, v.ContextID); err != nil {
+						logger.Error(err, "Failed to ensure session for task", "contextID", v.ContextID)
+						continue
 					}
 
-					// Check if session already exists (if it does not exist, create a new one)
-					session, err := m.dbClient.GetSession(v.ContextID, userID)
-					if err != nil {
-						// In this case, a non-NotFound error occurred, so do not store the task or any session information
-						if err != gorm.ErrRecordNotFound {
-							logger.Error(err, "Failed to get session", "contextID", v.ContextID)
-							continue
-						}
-
-						// Create a new session
-						session = &database.Session{
-							ID:      v.ContextID,
-							UserID:  userID,
-							AgentID: agentID,
-						}
-						if err := m.dbClient.StoreSession(session); err != nil {
-							logger.Error(err, "Failed to create session", "contextID", v.ContextID)
-							continue
-						}
-					}
-
-					// Store task (should only happen if a session exists)
+					// Store task
 					if err := m.dbClient.StoreTask(v); err != nil {
 						logger.Error(err, "Failed to store streaming task", "taskID", v.ID, "contextID", v.ContextID)
 					}
 				}
+			default:
+				logger.V(1).Info("UNHANDLED Received agent event", "event", v)
 			}
 		}
 	}()
@@ -209,4 +210,91 @@ func (m *RecordingManager) OnPushNotificationGet(ctx context.Context, params pro
 
 func (m *RecordingManager) OnResubscribe(ctx context.Context, params protocol.TaskIDParams) (<-chan protocol.StreamingMessageEvent, error) {
 	return m.client.ResubscribeTask(ctx, params)
+}
+
+// ensureSession makes sure a session exists for the given contextID.
+// It creates the session if it does not already exist.
+func (m *RecordingManager) ensureSession(ctx context.Context, contextID string) error {
+	logger := ctrllog.FromContext(ctx).WithName("recording-manager")
+
+	userID := m.getUserID(ctx, contextID)
+	var agentID *string
+	if m.agentRef != "" {
+		agentIDStr := utils.ConvertToPythonIdentifier(m.agentRef)
+		agentID = &agentIDStr
+	}
+
+	if _, err := m.dbClient.GetSession(contextID, userID); err != nil {
+		if err != gorm.ErrRecordNotFound {
+			logger.Error(err, "Failed to get session", "contextID", contextID)
+			return err
+		}
+		session := &database.Session{ID: contextID, UserID: userID, AgentID: agentID}
+		if err := m.dbClient.StoreSession(session); err != nil {
+			logger.Error(err, "Failed to create session", "contextID", contextID)
+			return err
+		}
+	}
+	return nil
+}
+
+// ensureTaskExists creates a task record if one does not already exist.
+func (m *RecordingManager) ensureTaskExists(ctx context.Context, taskID string, contextID string) {
+	if taskID == "" {
+		return
+	}
+	logger := ctrllog.FromContext(ctx).WithName("recording-manager")
+	// Ensure session exists as a prerequisite for storing a task
+	if err := m.ensureSession(ctx, contextID); err != nil {
+		logger.Error(err, "Failed to ensure session for task creation", "contextID", contextID)
+		return
+	}
+	if _, err := m.dbClient.GetTask(taskID); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			task := &protocol.Task{ID: taskID, ContextID: contextID, Kind: protocol.KindTask}
+			if err := m.dbClient.StoreTask(task); err != nil {
+				logger.Error(err, "Failed to create task", "taskID", taskID, "contextID", contextID)
+			}
+		} else {
+			logger.Error(err, "Failed to get task", "taskID", taskID)
+		}
+	}
+}
+
+// updateExistingTaskFromStatusEvent persists status and metadata ONLY if the task already exists.
+func (m *RecordingManager) updateExistingTaskFromStatusEvent(ctx context.Context, ev *protocol.TaskStatusUpdateEvent) {
+	if ev == nil || ev.TaskID == "" {
+		return
+	}
+	logger := ctrllog.FromContext(ctx).WithName("recording-manager")
+
+	// Ensure session exists for the context
+	if err := m.ensureSession(ctx, ev.ContextID); err != nil {
+		logger.Error(err, "Failed to ensure session for status update", "contextID", ev.ContextID)
+		return
+	}
+
+	// Load existing task
+	task, err := m.dbClient.GetTask(ev.TaskID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// Do not create here; creation is handled separately
+			return
+		}
+		logger.Error(err, "Failed to get task for status update", "taskID", ev.TaskID)
+		return
+	}
+
+	// Update existing task fields
+	if task.Metadata == nil {
+		task.Metadata = map[string]interface{}{}
+	}
+	for k, v := range ev.Metadata {
+		task.Metadata[k] = v
+	}
+	task.Status = ev.Status
+
+	if err := m.dbClient.StoreTask(task); err != nil {
+		logger.Error(err, "Failed to persist task status update", "taskID", ev.TaskID)
+	}
 }
