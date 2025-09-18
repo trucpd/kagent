@@ -36,8 +36,7 @@ logger = logging.getLogger("google_adk." + __name__)
 
 class A2aAgentExecutorConfig(BaseModel):
     """Configuration for the A2aAgentExecutor."""
-
-    pass
+    propagate_token: bool = True
 
 
 # This class is a copy of the A2aAgentExecutor class in the ADK sdk,
@@ -53,17 +52,17 @@ class A2aAgentExecutor(AgentExecutor):
         self,
         *,
         runner: Callable[..., Runner | Awaitable[Runner]],
-        config: Optional[A2aAgentExecutorConfig] = None,
+        config: A2aAgentExecutorConfig = A2aAgentExecutorConfig(),
     ):
         super().__init__()
         self._runner = runner
         self._config = config
 
-    async def _resolve_runner(self) -> Runner:
+    async def _resolve_runner(self, headers : dict[str, str] | None = None) -> Runner:
         """Resolve the runner, handling cases where it's a callable that returns a Runner."""
         if callable(self._runner):
             # Call the function to get the runner
-            result = self._runner()
+            result = self._runner(headers)
 
             # Handle async callables
             if inspect.iscoroutine(result):
@@ -119,8 +118,11 @@ class A2aAgentExecutor(AgentExecutor):
                 )
             )
 
+        mcp_headers = None
+        if self._config.propagate_token and context.token:
+            mcp_headers = {"authorization": f"Bearer {context.token}"}
         # Handle the request and publish updates to the event queue
-        runner = await self._resolve_runner()
+        runner = await self._resolve_runner(headers=mcp_headers)
         try:
             await self._handle_request(context, event_queue, runner)
         except Exception as e:

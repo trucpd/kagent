@@ -1,4 +1,4 @@
-#! /usr/bin/env python3
+#!/usr/bin/env python3
 import faulthandler
 import logging
 import os
@@ -44,7 +44,7 @@ kagent_url_override = os.getenv("KAGENT_URL")
 class KAgentApp:
     def __init__(
         self,
-        root_agent: BaseAgent,
+        root_agent: Callable[[dict[str, str] | None], BaseAgent],
         agent_card: AgentCard,
         kagent_url: str,
         app_name: str,
@@ -61,9 +61,9 @@ class KAgentApp:
         )
         session_service = KAgentSessionService(http_client)
 
-        def create_runner() -> Runner:
+        def create_runner(headers : dict[str, str] | None = None) -> Runner:
             return Runner(
-                agent=self.root_agent,
+                agent=self.root_agent(headers=headers),
                 app_name=self.app_name,
                 session_service=session_service,
             )

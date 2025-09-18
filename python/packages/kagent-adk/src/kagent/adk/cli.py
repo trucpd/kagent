@@ -34,9 +34,9 @@ def static(
     with open(os.path.join(filepath, "agent-card.json"), "r") as f:
         agent_card = json.load(f)
     agent_card = AgentCard.model_validate(agent_card)
-    root_agent = agent_config.to_agent(app_cfg.name)
-
-    kagent_app = KAgentApp(root_agent, agent_card, app_cfg.url, app_cfg.app_name)
+    def create_root_agent(headers : dict[str, str] | None = None):
+        return agent_config.to_agent(app_cfg.name, headers)
+    kagent_app = KAgentApp(create_root_agent, agent_card, app_cfg.url, app_cfg.app_name)
 
     server = kagent_app.build()
     configure_tracing(server)

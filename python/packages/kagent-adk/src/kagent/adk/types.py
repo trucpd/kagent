@@ -81,16 +81,31 @@ class AgentConfig(BaseModel):
     sse_tools: list[SseMcpServerConfig] | None = None  # tools, always MCP
     remote_agents: list[RemoteAgentConfig] | None = None  # remote agents
 
-    def to_agent(self, name: str) -> Agent:
+    def to_agent(self, name: str, mcp_headers: dict[str, str] | None = None) -> Agent:
+        extra_headers = self.model.headers or {}
+        mcp_extra_headers = extra_headers.copy()
+        if mcp_headers:
+            mcp_extra_headers.update(mcp_headers)
+
         if name is None or not str(name).strip():
             raise ValueError("Agent name must be a non-empty string.")
         mcp_toolsets: list[ToolUnion] = []
         if self.http_tools:
             for http_tool in self.http_tools:  # add http tools
-                mcp_toolsets.append(MCPToolset(connection_params=http_tool.params, tool_filter=http_tool.tools))
+                params = http_tool.params
+                if params.headers:
+                    params.headers.update(mcp_extra_headers)
+                else:
+                    params.headers = mcp_extra_headers
+                mcp_toolsets.append(MCPToolset(connection_params=params, tool_filter=http_tool.tools))
         if self.sse_tools:
             for sse_tool in self.sse_tools:  # add stdio tools
-                mcp_toolsets.append(MCPToolset(connection_params=sse_tool.params, tool_filter=sse_tool.tools))
+                params = sse_tool.params
+                if params.headers:
+                    params.headers.update(mcp_extra_headers)
+                else:
+                    params.headers = mcp_extra_headers
+                mcp_toolsets.append(MCPToolset(connection_params=params, tool_filter=sse_tool.tools))
         if self.remote_agents:
             for remote_agent in self.remote_agents:  # Add remote agents as tools
                 remote_agent = RemoteA2aAgent(
@@ -101,8 +116,6 @@ class AgentConfig(BaseModel):
                 mcp_toolsets.append(
                     AgentTool(agent=remote_agent, skip_summarization=True)
                 )  # Get headers from model config
-
-        extra_headers = self.model.headers or {}
 
         if self.model.type == "openai":
             model = OpenAINative(model=self.model.model, base_url=self.model.base_url, type="openai")
