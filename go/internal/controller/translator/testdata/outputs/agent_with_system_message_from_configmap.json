@@ -12,30 +12,22 @@
       "text"
     ],
     "description": "",
-    "name": "parent_agent",
+    "name": "agent_with_configmap_system_message",
     "skills": null,
-    "url": "http://parent-agent.test:8080",
+    "url": "http://agent-with-configmap-system-message.test:8080",
     "version": ""
   },
   "config": {
     "description": "",
     "http_tools": null,
-    "instruction": "You are a coordinating agent that can delegate tasks to specialists.",
+    "instruction": "Speak in the style of Shakespeare.",
     "model": {
       "base_url": "",
       "headers": null,
       "model": "gpt-4o",
       "type": "openai"
     },
-    "remote_agents": [
-      {
-        "headers": {
-          "FOO": "sup3rs3cr3t"
-        },
-        "name": "test__NS__specialist_agent",
-        "url": "http://specialist-agent.test:8080"
-      }
-    ],
+    "remote_agents": null,
     "sse_tools": null
   },
   "manifest": [
@@ -45,9 +37,9 @@
       "metadata": {
         "labels": {
           "app": "kagent",
-          "kagent": "parent-agent"
+          "kagent": "agent-with-configmap-system-message"
         },
-        "name": "parent-agent",
+        "name": "agent-with-configmap-system-message",
         "namespace": "test",
         "ownerReferences": [
           {
@@ -55,14 +47,14 @@
             "blockOwnerDeletion": true,
             "controller": true,
             "kind": "Agent",
-            "name": "parent-agent",
+            "name": "agent-with-configmap-system-message",
             "uid": ""
           }
         ]
       },
       "stringData": {
-        "agent-card.json": "{\"name\":\"parent_agent\",\"description\":\"\",\"url\":\"http://parent-agent.test:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":[]}",
-        "config.json": "{\"model\":{\"base_url\":\"\",\"headers\":null,\"model\":\"gpt-4o\",\"type\":\"openai\"},\"description\":\"\",\"instruction\":\"You are a coordinating agent that can delegate tasks to specialists.\",\"http_tools\":null,\"sse_tools\":null,\"remote_agents\":[{\"name\":\"test__NS__specialist_agent\",\"url\":\"http://specialist-agent.test:8080\",\"headers\":{\"FOO\":\"sup3rs3cr3t\"}}]}"
+        "agent-card.json": "{\"name\":\"agent_with_configmap_system_message\",\"description\":\"\",\"url\":\"http://agent-with-configmap-system-message.test:8080\",\"version\":\"\",\"capabilities\":{\"streaming\":true,\"pushNotifications\":false,\"stateTransitionHistory\":true},\"defaultInputModes\":[\"text\"],\"defaultOutputModes\":[\"text\"],\"skills\":[]}",
+        "config.json": "{\"model\":{\"base_url\":\"\",\"headers\":null,\"model\":\"gpt-4o\",\"type\":\"openai\"},\"description\":\"\",\"instruction\":\"Speak in the style of Shakespeare.\",\"http_tools\":null,\"sse_tools\":null,\"remote_agents\":null}"
       }
     },
     {
@@ -71,9 +63,9 @@
       "metadata": {
         "labels": {
           "app": "kagent",
-          "kagent": "parent-agent"
+          "kagent": "agent-with-configmap-system-message"
         },
-        "name": "parent-agent",
+        "name": "agent-with-configmap-system-message",
         "namespace": "test",
         "ownerReferences": [
           {
@@ -81,7 +73,7 @@
             "blockOwnerDeletion": true,
             "controller": true,
             "kind": "Agent",
-            "name": "parent-agent",
+            "name": "agent-with-configmap-system-message",
             "uid": ""
           }
         ]
@@ -93,9 +85,9 @@
       "metadata": {
         "labels": {
           "app": "kagent",
-          "kagent": "parent-agent"
+          "kagent": "agent-with-configmap-system-message"
         },
-        "name": "parent-agent",
+        "name": "agent-with-configmap-system-message",
         "namespace": "test",
         "ownerReferences": [
           {
@@ -103,7 +95,7 @@
             "blockOwnerDeletion": true,
             "controller": true,
             "kind": "Agent",
-            "name": "parent-agent",
+            "name": "agent-with-configmap-system-message",
             "uid": ""
           }
         ]
@@ -113,7 +105,7 @@
         "selector": {
           "matchLabels": {
             "app": "kagent",
-            "kagent": "parent-agent"
+            "kagent": "agent-with-configmap-system-message"
           }
         },
         "strategy": {
@@ -126,11 +118,11 @@
         "template": {
           "metadata": {
             "annotations": {
-              "kagent.dev/config-hash": "4744892259230845552"
+              "kagent.dev/config-hash": "11461712675988608977"
             },
             "labels": {
               "app": "kagent",
-              "kagent": "parent-agent"
+              "kagent": "agent-with-configmap-system-message"
             }
           },
           "spec": {
@@ -219,12 +211,12 @@
                 ]
               }
             ],
-            "serviceAccountName": "parent-agent",
+            "serviceAccountName": "agent-with-configmap-system-message",
             "volumes": [
               {
                 "name": "config",
                 "secret": {
-                  "secretName": "parent-agent"
+                  "secretName": "agent-with-configmap-system-message"
                 }
               },
               {
@@ -253,9 +245,9 @@
       "metadata": {
         "labels": {
           "app": "kagent",
-          "kagent": "parent-agent"
+          "kagent": "agent-with-configmap-system-message"
         },
-        "name": "parent-agent",
+        "name": "agent-with-configmap-system-message",
         "namespace": "test",
         "ownerReferences": [
           {
@@ -263,7 +255,7 @@
             "blockOwnerDeletion": true,
             "controller": true,
             "kind": "Agent",
-            "name": "parent-agent",
+            "name": "agent-with-configmap-system-message",
             "uid": ""
           }
         ]
@@ -278,7 +270,7 @@
         ],
         "selector": {
           "app": "kagent",
-          "kagent": "parent-agent"
+          "kagent": "agent-with-configmap-system-message"
         },
         "type": "ClusterIP"
       },
