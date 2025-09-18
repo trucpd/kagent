@@ -6842,14 +6842,11 @@ spec:
                 type: string
               remote:
                 properties:
-                  agentCardUrl:
-                    description: AgentCardURL is the URL of the agent card JSON file.
-                    minLength: 1
-                    type: string
-                  serverUrl:
+                  discoveryUrl:
                     description: |-
-                      ServerURL is the URL of the agent server.
-                      If not specified, the default value is fetched from the agent card.
+                      DiscoveryURL is the URL of the agent server.
+                      The Agent Card is infered from the well known path.
+                    minLength: 1
                     type: string
                 type: object
               type:

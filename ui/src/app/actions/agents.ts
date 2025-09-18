@@ -105,8 +105,7 @@ function fromAgentFormDataToAgent(agentFormData: AgentFormData): Agent {
     };
   } else if (type === "Remote") {
     base.spec!.remote = {
-      agentCardUrl: agentFormData.remoteAgentCardUrl || "",
-      serverUrl: agentFormData.remoteServerUrl || undefined,
+      discoveryUrl: agentFormData.remoteDiscoveryUrl || "",
     } as any;
   }
 

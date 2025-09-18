@@ -235,8 +235,7 @@ export interface BYOAgentSpec {
 }
 
 export interface RemoteAgentSpec {
-  agentCardUrl: string;
-  serverUrl?: string;
+  discoveryUrl: string;
 }
 
 export interface BYODeploymentSpec {

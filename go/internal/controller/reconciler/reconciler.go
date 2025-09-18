@@ -568,9 +568,10 @@ func (a *kagentReconciler) reconcileRemoteAgent(agent *v1alpha2.Agent) (*transla
 	// Fetch the agent card details from the URL
 	agentCard := &server.AgentCard{}
 
-	resp, err := http.Get(agent.Spec.Remote.AgentCardURL)
+	agentCardURL := utils.GetAgentCardURL(agent.Spec.Remote.DiscoveryURL)
+	resp, err := http.Get(agentCardURL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to fetch agent card: %w", err)
+		return nil, fmt.Errorf("failed to fetch agent card (%s): %w", agentCardURL, err)
 	}
 	defer resp.Body.Close()
 
@@ -582,11 +583,6 @@ func (a *kagentReconciler) reconcileRemoteAgent(agent *v1alpha2.Agent) (*transla
 	err = json.Unmarshal(body, agentCard)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal agent card: %w", err)
-	}
-
-	// override the agent card's server url to be the provided server url if provided
-	if agent.Spec.Remote.ServerURL != "" {
-		agentCard.URL = agent.Spec.Remote.ServerURL
 	}
 
 	// Sanitize the agent card's name to be a valid agent name, this allows it to be used used as a tool

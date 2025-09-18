@@ -106,13 +106,10 @@ type ByoDeploymentSpec struct {
 }
 
 type RemoteAgentSpec struct {
-	// AgentCardURL is the URL of the agent card JSON file.
+	// DiscoveryURL is the URL of the agent server.
+	// The Agent Card is infered from the well known path.
 	// +kubebuilder:validation:MinLength=1
-	AgentCardURL string `json:"agentCardUrl,omitempty"`
-	// ServerURL is the URL of the agent server.
-	// If not specified, the default value is fetched from the agent card.
-	// +optional
-	ServerURL string `json:"serverUrl,omitempty"`
+	DiscoveryURL string `json:"discoveryUrl,omitempty"`
 }
 
 type SharedDeploymentSpec struct {

@@ -52,5 +52,4 @@ spec:
   description: This agent is a remote kebab agent running as a standalone service.
   type: Remote
   remote:
-    agentCardUrl: http://remote-kebab-agent.remote.svc.cluster.local:8080/.well-known/agent.json
-    serverUrl: http://remote-kebab-agent.remote.svc.cluster.local:8080
+    discoveryUrl: http://remote-kebab-agent.remote.svc.cluster.local:8080

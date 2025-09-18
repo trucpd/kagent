@@ -106,7 +106,7 @@ def main(host: str, port: int):
     agent_card = AgentCard(
         name='remote_kebab_agent',
         description='Kebab agent that responds with kebab when invoked',
-        url=f'http://{host}:{port}/',
+        url=f'http://remote-kebab-agent.remote.svc.cluster.local:8080/',
         version='0.1.0',
         defaultInputModes=['text'],
         defaultOutputModes=['text'],
