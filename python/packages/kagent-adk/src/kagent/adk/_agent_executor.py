@@ -6,6 +6,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, Optional
+from google.adk.sessions.state import State
 
 from a2a.server.agent_execution import AgentExecutor
 from a2a.server.agent_execution.context import RequestContext
@@ -168,7 +169,6 @@ class A2aAgentExecutor(AgentExecutor):
 
         # ensure the session exists
         session = await self._prepare_session(context, run_args, runner)
-
         current_span = trace.get_current_span()
         if run_args["user_id"]:
             current_span.set_attribute("kagent.user_id", run_args["user_id"])
@@ -273,5 +273,9 @@ class A2aAgentExecutor(AgentExecutor):
             )
             # Update run_args with the new session_id
             run_args["session_id"] = session.id
-
+        if context.call_context and context.call_context.user and context.call_context.user.token:
+            if session.state is None:
+                session.state = {}
+            # propagate token to session state for MCP tools. make it temporary so it won't be serialized.
+            session.state[State.TEMP_PREFIX+"token"] = context.call_context.user.token
         return session
