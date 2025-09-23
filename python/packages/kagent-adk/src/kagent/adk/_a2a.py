@@ -62,7 +62,7 @@ class TokenPropagationPlugin(BasePlugin):
     ) -> Optional[dict]:
         # if tool is mcp tool, propagate headers
         if isinstance(tool, McpTool):
-            token = tool_context.session.state.get(State.TEMP_PREFIX + "token", None)
+            token = tool_context._invocation_context.session.state.get(State.TEMP_PREFIX + "token", None)
             if token:
                 credential = AuthCredential(
                     auth_type=AuthCredentialTypes.HTTP,
