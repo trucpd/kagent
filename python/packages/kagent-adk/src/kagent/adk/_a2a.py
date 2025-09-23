@@ -14,7 +14,7 @@ from google.adk.agents import BaseAgent
 from google.adk.runners import Runner
 from google.adk.sessions import InMemorySessionService
 from google.adk.apps.app import App
-from google.adk.auth.auth_credential import AuthCredential
+from google.adk.auth.auth_credential import AuthCredential, AuthCredentialTypes, HttpAuth, HttpCredentials
 from google.adk.tools.mcp_tool import McpTool
 from google.adk.tools.tool_context import ToolContext
 from google.adk.tools.base_tool import BaseTool
@@ -48,20 +48,9 @@ def thread_dump(request: Request) -> PlainTextResponse:
 
 kagent_url_override = os.getenv("KAGENT_URL")
 
-class TokenPropagationTool(McpTool):
-    def __init__(self, other : McpTool, token: str):
-        super().__init__(mcp_tool=other._mcp_tool, mcp_session_manager=other._mcp_session_manager)
-        self.token = token
-
-    @override
-    async def _get_headers(
-        self, tool_context: ToolContext, credential: AuthCredential
-    ) -> Optional[dict[str, str]]:
-        return super()._get_headers(tool_context, credential)
-
 class TokenPropagationPlugin(BasePlugin):
     def __init__(self):
-        super().__init__()
+        super().__init__("TokenPropagationPlugin")
 
     @override
     async def before_tool_callback(
@@ -73,9 +62,18 @@ class TokenPropagationPlugin(BasePlugin):
     ) -> Optional[dict]:
         # if tool is mcp tool, propagate headers
         if isinstance(tool, McpTool):
-            token = tool_context.session.state.get(State.TEMP_PREFIX+"token", None)
+            token = tool_context.session.state.get(State.TEMP_PREFIX + "token", None)
             if token:
-                return await TokenPropagationTool(tool, token).run_async(args=tool_args, tool_context=tool_context)
+                credential = AuthCredential(
+                    auth_type=AuthCredentialTypes.HTTP,
+                    http=HttpAuth(
+                        scheme="bearer",
+                        credentials=HttpCredentials(token=token),
+                    ),
+                )
+                return await tool._run_async_impl(
+                    args=tool_args, tool_context=tool_context, credential=credential
+                )
         return None
 
 def get_plugins() -> list[BasePlugin]:
@@ -102,15 +100,18 @@ class KAgentApp:
     def build(self) -> FastAPI:
         token_service = KAgentTokenService(self.app_name)
         http_client = httpx.AsyncClient(  # TODO: add user  and agent headers
-            base_url=kagent_url_override or self.kagent_url, event_hooks=token_service.event_hooks()
+            base_url=kagent_url_override or self.kagent_url,
+            event_hooks=token_service.event_hooks(),
         )
         session_service = KAgentSessionService(http_client)
 
-        app = App(name=self.app_name, root_agent=self.root_agent, plugins=self.plugins)
+        adk_app = App(
+            name=self.app_name, root_agent=self.root_agent, plugins=self.plugins
+        )
 
         def create_runner() -> Runner:
             return Runner(
-                app=app,
+                app=adk_app,
                 session_service=session_service,
             )
 
@@ -120,7 +121,9 @@ class KAgentApp:
 
         kagent_task_store = KAgentTaskStore(http_client)
 
-        request_context_builder = KAgentRequestContextBuilder(task_store=kagent_task_store)
+        request_context_builder = KAgentRequestContextBuilder(
+            task_store=kagent_task_store
+        )
         request_handler = DefaultRequestHandler(
             agent_executor=agent_executor,
             task_store=kagent_task_store,
