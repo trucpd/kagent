@@ -7,12 +7,13 @@ from ._consts import (
     A2A_DATA_PART_METADATA_TYPE_KEY,
     get_kagent_metadata_key,
 )
-from ._requests import KAgentRequestContextBuilder
+from ._requests import KAgentRequestContextBuilder, KAgentUser
 from ._task_result_aggregator import TaskResultAggregator
 from ._task_store import KAgentTaskStore
 
 __all__ = [
     "KAgentRequestContextBuilder",
+    "KAgentUser",
     "KAgentTaskStore",
     "get_kagent_metadata_key",
     "A2A_DATA_PART_METADATA_TYPE_KEY",

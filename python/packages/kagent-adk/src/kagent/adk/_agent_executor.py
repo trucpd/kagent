@@ -27,7 +27,7 @@ from opentelemetry import trace
 from pydantic import BaseModel
 from typing_extensions import override
 
-from kagent.core.a2a import TaskResultAggregator, get_kagent_metadata_key
+from kagent.core.a2a import TaskResultAggregator, get_kagent_metadata_key, KAgentUser
 
 from .converters.event_converter import convert_event_to_a2a_events
 from .converters.request_converter import convert_a2a_request_to_adk_run_args
@@ -273,7 +273,7 @@ class A2aAgentExecutor(AgentExecutor):
             )
             # Update run_args with the new session_id
             run_args["session_id"] = session.id
-        if context.call_context and context.call_context.user and context.call_context.user.token:
+        if context.call_context and context.call_context.user and isinstance(context.call_context.user, KAgentUser) and context.call_context.user.token:
             if session.state is None:
                 session.state = {}
             # propagate token to session state for MCP tools. make it temporary so it won't be serialized.
