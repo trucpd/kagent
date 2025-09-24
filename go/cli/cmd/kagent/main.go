@@ -93,6 +93,7 @@ func main() {
 	invokeCmd.Flags().BoolVarP(&invokeCfg.Stream, "stream", "S", false, "Stream the response")
 	invokeCmd.Flags().StringVarP(&invokeCfg.File, "file", "f", "", "File to read the task from")
 	invokeCmd.Flags().StringVarP(&invokeCfg.URLOverride, "url-override", "u", "", "URL override")
+	invokeCmd.Flags().StringSliceVarP(&invokeCfg.Headers, "header", "H", nil, "Headers to include in the requests (can be repeated)")
 	invokeCmd.Flags().MarkHidden("url-override") //nolint:errcheck
 
 	bugReportCmd := &cobra.Command{
