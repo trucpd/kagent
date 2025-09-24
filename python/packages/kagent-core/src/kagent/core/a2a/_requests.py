@@ -15,7 +15,6 @@ class KAgentUser(User):
 
     def __init__(self, user_id: str):
         self.user_id = user_id
-        self.token: str | None = None
 
     @property
     def is_authenticated(self) -> bool:
@@ -47,11 +46,12 @@ class KAgentRequestContextBuilder(SimpleRequestContextBuilder):
             headers = context.state.get("headers", {})
             user_id = headers.get("x-user-id", None)
 
-            token = headers.get("authorization", None)
-            token = token[7:] if token and token.lower().startswith("bearer ") else token
             if user_id:
                 context.user = KAgentUser(user_id=user_id)
-                if token:
-                    context.user.token = token
+            token = headers.get("authorization", None)
+            # TODO: in future iteration, we will want to validate the token first.
+            token = token[7:] if token and token.lower().startswith("bearer ") else token
+            if token:
+                context.state["token"] = token
         request_context = await super().build(params, task_id, context_id, task, context)
         return request_context

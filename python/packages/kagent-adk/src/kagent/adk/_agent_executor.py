@@ -273,9 +273,9 @@ class A2aAgentExecutor(AgentExecutor):
             )
             # Update run_args with the new session_id
             run_args["session_id"] = session.id
-        if context.call_context and context.call_context.user and isinstance(context.call_context.user, KAgentUser) and context.call_context.user.token:
+        if context.call_context:
             if session.state is None:
                 session.state = {}
             # propagate token to session state for MCP tools. make it temporary so it won't be serialized.
-            session.state[State.TEMP_PREFIX+"token"] = context.call_context.user.token
+            session.state[State.TEMP_PREFIX + "token"] = context.call_context.state["token"] if context.call_context.state else None
         return session
