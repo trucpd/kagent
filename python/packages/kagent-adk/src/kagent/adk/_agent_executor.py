@@ -277,5 +277,7 @@ class A2aAgentExecutor(AgentExecutor):
             if session.state is None:
                 session.state = {}
             # propagate token to session state for MCP tools. make it temporary so it won't be serialized.
-            session.state[State.TEMP_PREFIX + "token"] = context.call_context.state["token"] if context.call_context.state else None
+            token = context.call_context.state.get("token", None)
+            if token:
+                session.state[State.TEMP_PREFIX + "token"] = token
         return session

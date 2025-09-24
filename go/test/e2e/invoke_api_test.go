@@ -5,6 +5,7 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"runtime"
@@ -14,11 +15,13 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8s_runtime "k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/kagent-dev/kagent/go/api/v1alpha2"
 	"github.com/kagent-dev/kagent/go/internal/a2a"
 	"github.com/kagent-dev/kagent/go/test/mockllm"
+	"github.com/kagent-dev/kagent/go/test/mockmcp"
 	"github.com/stretchr/testify/require"
 	"sigs.k8s.io/controller-runtime/pkg/client/config"
 	a2aclient "trpc.group/trpc-go/trpc-a2a-go/client"
@@ -56,6 +59,29 @@ func generateModelCfg(baseURL string) *v1alpha2.ModelConfig {
 	}
 }
 
+func generateRemoteMcpServer(s *mockmcp.Server) *v1alpha2.RemoteMCPServer {
+	addr := s.Addr
+	port := addr.(*net.TCPAddr).Port
+	return &v1alpha2.RemoteMCPServer{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: v1alpha2.GroupVersion.String(),
+			Kind:       "RemoteMCPServer",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "mock-mcp-server",
+			Namespace: "kagent",
+		},
+		Spec: v1alpha2.RemoteMCPServerSpec{
+			Description:      "Mock MCP Server",
+			Protocol:         v1alpha2.RemoteMCPServerProtocolStreamableHttp,
+			SseReadTimeout:   &metav1.Duration{Duration: 5 * time.Minute}, // 5 minutes
+			TerminateOnClose: ptr.To(true),
+			Timeout:          &metav1.Duration{Duration: 30 * time.Second}, // 30 seconds
+			URL:              fmt.Sprintf("http://%s:%d/mcp", localhost(), port),
+		},
+	}
+}
+
 func generateAgent() *v1alpha2.Agent {
 	return &v1alpha2.Agent{
 		ObjectMeta: metav1.ObjectMeta{
@@ -79,10 +105,35 @@ func generateAgent() *v1alpha2.Agent {
 							ToolNames: []string{"k8s_get_resources"},
 						},
 					},
+					{
+						Type: v1alpha2.ToolProviderType_McpServer,
+						McpServer: &v1alpha2.McpServerTool{
+							TypedLocalReference: v1alpha2.TypedLocalReference{
+								ApiGroup: "kagent.dev",
+								Kind:     "RemoteMCPServer",
+								Name:     "mock-mcp-server",
+							},
+							ToolNames: []string{"make_kebab"},
+						},
+					},
 				},
 			},
 		},
 	}
+}
+
+func localhost() string {
+	switch runtime.GOOS {
+	case "darwin":
+		return "host.docker.internal"
+	case "linux":
+		return "172.17.0.1"
+	}
+
+	if h := os.Getenv("KAGENT_LOCAL_HOST"); h != "" {
+		return h
+	}
+	return "localhost"
 }
 
 func buildK8sURL(baseURL string) string {
@@ -90,19 +141,7 @@ func buildK8sURL(baseURL string) string {
 	splitted := strings.Split(baseURL, ":")
 	port := splitted[len(splitted)-1]
 	// Check local OS and use the correct local host
-	var localHost string
-	switch runtime.GOOS {
-	case "darwin":
-		localHost = "host.docker.internal"
-	case "linux":
-		localHost = "172.17.0.1"
-	}
-
-	if os.Getenv("KAGENT_LOCAL_HOST") != "" {
-		localHost = os.Getenv("KAGENT_LOCAL_HOST")
-	}
-
-	return fmt.Sprintf("http://%s:%s", localHost, port)
+	return fmt.Sprintf("http://%s:%s", localhost(), port)
 
 }
 
@@ -115,7 +154,13 @@ func TestInvokeInlineAgent(t *testing.T) {
 	baseURL, err := server.Start()
 	baseURL = buildK8sURL(baseURL)
 	require.NoError(t, err)
-	defer server.Stop() //nolint:errcheck
+	t.Cleanup(func() { server.Stop() })
+
+	mcpServer, err := mockmcp.NewServer()
+	require.NoError(t, err)
+	mcpServer.Start()
+	require.NoError(t, err)
+	t.Cleanup(func() { mcpServer.Stop() })
 
 	cfg, err := config.GetConfig()
 	require.NoError(t, err)
@@ -129,10 +174,18 @@ func TestInvokeInlineAgent(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	remoteMcp := generateRemoteMcpServer(mcpServer)
+	err = cli.Patch(t.Context(), remoteMcp, client.Apply, client.ForceOwnership, client.FieldOwner("e2e-test"))
+	require.NoError(t, err)
+
+	defer cli.Delete(t.Context(), remoteMcp) //nolint:errcheck
+
 	modelCfg := generateModelCfg(baseURL + "/v1")
+	agent := generateAgent()
+	cli.Delete(t.Context(), modelCfg) //nolint:errcheck
+	cli.Delete(t.Context(), agent)    //nolint:errcheck
 	err = cli.Create(t.Context(), modelCfg)
 	require.NoError(t, err)
-	agent := generateAgent()
 	err = cli.Create(t.Context(), agent)
 	require.NoError(t, err)
 
@@ -182,6 +235,31 @@ func TestInvokeInlineAgent(t *testing.T) {
 		jsn, err := json.Marshal(taskResult)
 		require.NoError(t, err)
 		require.Contains(t, text, "kagent-control-plane", string(jsn))
+	})
+
+	t.Run("sync invocation with token propagation", func(t *testing.T) {
+		a2aClient, err := a2aclient.NewA2AClient(a2aURL, a2aclient.WithAPIKeyAuth("Bearer token-to-propagate", "authorization"))
+		require.NoError(t, err)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		msg, err := a2aClient.SendMessage(ctx, protocol.SendMessageParams{
+			Message: protocol.Message{
+				Kind:  protocol.KindMessage,
+				Role:  protocol.MessageRoleUser,
+				Parts: []protocol.Part{protocol.NewTextPart("Make a kebab")},
+			},
+		})
+		require.NoError(t, err)
+
+		taskResult, ok := msg.Result.(*protocol.Task)
+		require.True(t, ok)
+		require.Equal(t, protocol.TaskStateCompleted, taskResult.Status.State)
+
+		text := a2a.ExtractText(taskResult.History[len(taskResult.History)-1])
+		jsn, err := json.Marshal(taskResult)
+		require.NoError(t, err)
+		require.Contains(t, text, "I have made you a lamb kebab. Enjoy!", string(jsn))
 	})
 
 	t.Run("streaming_invocation", func(t *testing.T) {
