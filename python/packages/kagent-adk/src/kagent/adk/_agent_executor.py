@@ -119,9 +119,12 @@ class A2aAgentExecutor(AgentExecutor):
                     final=False,
                 )
             )
-
+        # propagate token to session state for MCP tools. make it temporary so it won't be serialized.
+        token = context.call_context.state.get("token", None)
         # Handle the request and publish updates to the event queue
         runner = await self._resolve_runner()
+        if token:
+            runner.session_service = wrap_session(runner.session_service, token)
         try:
             await self._handle_request(context, event_queue, runner)
         except Exception as e:
@@ -276,8 +279,77 @@ class A2aAgentExecutor(AgentExecutor):
         if context.call_context:
             if session.state is None:
                 session.state = {}
-            # propagate token to session state for MCP tools. make it temporary so it won't be serialized.
-            token = context.call_context.state.get("token", None)
-            if token:
-                session.state[State.TEMP_PREFIX + "token"] = token
         return session
+
+
+def wrap_session(session_service, token: str):
+    """Wraps a session service to inject a token into session state."""
+    from google.adk.events.event import Event
+    from google.adk.sessions.base_session_service import BaseSessionService
+    from google.adk.sessions import Session
+    from google.adk.sessions.base_session_service import (
+        BaseSessionService,
+        ListSessionsResponse,
+    )
+
+    class WrappedSessionService(BaseSessionService):
+        def __init__(self, wrapped_service, token):
+            self._wrapped_service = wrapped_service
+            self._token = token
+
+        @override
+        async def get_session(self, *, app_name: str, user_id: str, session_id: str, config: Optional[Any] = None) -> Optional[Session]:
+            session = await self._wrapped_service.get_session(
+                app_name=app_name,
+                user_id=user_id,
+                session_id=session_id,
+                config=config,
+            )
+            if session is not None:
+                if session.state is None:
+                    session.state = {}
+                session.state[State.TEMP_PREFIX + "token"] = self._token
+            return session
+
+        @override
+        async def create_session(
+            self,
+            *,
+            app_name: str,
+            user_id: str,
+            state: Optional[dict[str, Any]] = None,
+            session_id: Optional[str] = None,
+        ) -> Session:
+            return await self._wrapped_service.create_session(
+                app_name=app_name,
+                user_id=user_id,
+                state=state,
+                session_id=session_id,
+            )
+        
+
+
+        @override
+        async def list_sessions(self, *, app_name: str, user_id: str) -> ListSessionsResponse:
+            return await self._wrapped_service.list_sessions(
+                app_name=app_name,
+                user_id=user_id,
+            )
+
+        @override
+        async def delete_session(self, *, app_name: str, user_id: str, session_id: str) -> None:
+            return await self._wrapped_service.delete_session(
+                app_name=app_name,
+                user_id=user_id,
+                session_id=session_id,
+            )
+
+        @override
+        async def append_event(self, session: Session, event: Event) -> Event:
+            return await self._wrapped_service.append_event(
+                session=session,
+                event=event,
+            )
+
+
+    return WrappedSessionService(session_service, token)
