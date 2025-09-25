@@ -13,6 +13,7 @@ import (
 
 // Server is the main mock LLM server
 type Server struct {
+	Address           string
 	config            Config
 	openaiProvider    *OpenAIProvider
 	anthropicProvider *AnthropicProvider
@@ -55,6 +56,10 @@ func LoadConfigFromFile(path string, filesys fs.ReadFileFS) (Config, error) {
 		return Config{}, fmt.Errorf("failed to read config file: %w", err)
 	}
 
+	return LoadConfig(data)
+}
+
+func LoadConfig(data []byte) (Config, error) {
 	var config Config
 	if err := json.Unmarshal(data, &config); err != nil {
 		return Config{}, fmt.Errorf("failed to parse config JSON: %w", err)
@@ -66,8 +71,11 @@ func LoadConfigFromFile(path string, filesys fs.ReadFileFS) (Config, error) {
 // Start starts the server on a random available port and returns the base URL
 func (s *Server) Start() (string, error) {
 	s.setupRoutes()
-
-	listener, err := net.Listen("tcp", "0.0.0.0:0")
+	addr := "0.0.0.0:0"
+	if s.Address != "" {
+		addr = s.Address
+	}
+	listener, err := net.Listen("tcp", addr)
 	if err != nil {
 		return "", fmt.Errorf("failed to create listener: %w", err)
 	}

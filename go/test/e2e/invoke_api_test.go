@@ -13,8 +13,11 @@ import (
 	"testing"
 	"time"
 
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8s_runtime "k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -142,7 +145,84 @@ func buildK8sURL(baseURL string) string {
 	port := splitted[len(splitted)-1]
 	// Check local OS and use the correct local host
 	return fmt.Sprintf("http://%s:%s", localhost(), port)
+}
 
+func getHelperService(ctx context.Context, cli client.Client) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+	// create additional service to test-agent, with LB type
+	namespace, name := "kagent", "test-agent2"
+
+	svc := &v1.Service{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: "v1",
+			Kind:       "Service",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: namespace,
+			Name:      name,
+		},
+		Spec: v1.ServiceSpec{
+			Type: v1.ServiceTypeLoadBalancer,
+			Ports: []v1.ServicePort{
+				{
+					Name:       "http",
+					Protocol:   v1.ProtocolTCP,
+					Port:       8080,
+					TargetPort: intstr.FromInt(8080),
+				},
+			},
+			Selector: map[string]string{
+				"app":    "kagent",
+				"kagent": "test-agent",
+			},
+		},
+	}
+	err := cli.Patch(ctx, svc, client.Apply, client.ForceOwnership, client.FieldOwner("e2e-test"))
+	if err != nil {
+		return "", fmt.Errorf("failed to patch service: %w", err)
+	}
+
+	for {
+		err = cli.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, svc)
+		if err != nil {
+			return "", fmt.Errorf("failed to get service after patching: %w", err)
+		}
+		// get lb ip:
+		if ip := getIp(svc); ip != "" {
+
+			// verify that we can connect to the ip:8080
+			for {
+				if err := testConnect(ctx, ip); err != nil {
+					// not ready yet
+					time.Sleep(time.Second / 10)
+					continue
+				}
+				break
+			}
+			return ip, nil
+		}
+		time.Sleep(time.Second / 2)
+	}
+}
+
+func testConnect(ctx context.Context, ip string) error {
+	var dialer net.Dialer
+	ctx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	conn, err := dialer.DialContext(ctx, "tcp", net.JoinHostPort(ip, "8080"))
+	if err != nil {
+		return fmt.Errorf("failed to connect to %s:8080: %w", ip, err)
+	}
+	conn.Close()
+	return nil
+}
+
+func getIp(svc *v1.Service) string {
+	if len(svc.Status.LoadBalancer.Ingress) == 0 {
+		return ""
+	}
+	return svc.Status.LoadBalancer.Ingress[0].IP
 }
 
 func TestInvokeInlineAgent(t *testing.T) {
@@ -156,7 +236,7 @@ func TestInvokeInlineAgent(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { server.Stop() })
 
-	mcpServer, err := mockmcp.NewServer()
+	mcpServer, err := mockmcp.NewServer(0)
 	require.NoError(t, err)
 	mcpServer.Start()
 	require.NoError(t, err)
@@ -167,6 +247,8 @@ func TestInvokeInlineAgent(t *testing.T) {
 
 	scheme := k8s_runtime.NewScheme()
 	err = v1alpha2.AddToScheme(scheme)
+	require.NoError(t, err)
+	err = v1.AddToScheme(scheme)
 	require.NoError(t, err)
 
 	cli, err := client.New(cfg, client.Options{
@@ -238,7 +320,19 @@ func TestInvokeInlineAgent(t *testing.T) {
 	})
 
 	t.Run("sync invocation with token propagation", func(t *testing.T) {
-		a2aClient, err := a2aclient.NewA2AClient(a2aURL, a2aclient.WithAPIKeyAuth("Bearer token-to-propagate", "authorization"))
+		agentIp, err := getHelperService(t.Context(), cli)
+		require.NoError(t, err)
+		defer func() {
+			svc := &v1.Service{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "kagent",
+					Name:      "test-agent2",
+				},
+			}
+			cli.Delete(t.Context(), svc) //nolint:errcheck
+		}()
+
+		a2aClient, err := a2aclient.NewA2AClient(fmt.Sprintf("http://%s:8080/", agentIp), a2aclient.WithAPIKeyAuth("Bearer token-to-propagate", "authorization"))
 		require.NoError(t, err)
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()

@@ -16,9 +16,9 @@ type Server struct {
 	httpSrv  *http.Server
 }
 
-func NewServer() (*Server, error) {
+func NewServer(port uint16) (*Server, error) {
 
-	listener, err := net.Listen("tcp", "0.0.0.0:0")
+	listener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", port))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create listener: %w", err)
 	}
@@ -38,7 +38,7 @@ func NewServer() (*Server, error) {
 	)
 
 	// Add tool handler
-	srv.AddTool(tool, helloHandler)
+	srv.AddTool(tool, kebabHandler)
 	mux := http.NewServeMux()
 	mux.Handle("/mcp", server.NewStreamableHTTPServer(srv))
 	httpSrv := &http.Server{
@@ -65,7 +65,7 @@ func (s *Server) Stop() {
 	s.httpSrv.Shutdown(context.Background())
 }
 
-func helloHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func kebabHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	name := request.GetString("type", "lamb")
 	return mcp.NewToolResultText(fmt.Sprintf("Your kebab is ready. it is made from: %s!", name)), nil
 }

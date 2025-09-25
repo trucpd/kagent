@@ -119,3 +119,6 @@ docker run --rm \
   --net=host \
   localhost:5001/kebab:latest
 ```
+
+### Run static agent locally.
+See [here](examples/local-static-agent/README.md) for instructions on how to run a static agent locally in a debugger.
