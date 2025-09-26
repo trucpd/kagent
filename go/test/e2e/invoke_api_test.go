@@ -96,6 +96,16 @@ func generateAgent() *v1alpha2.Agent {
 			Declarative: &v1alpha2.DeclarativeAgentSpec{
 				ModelConfig:   "test-model-config",
 				SystemMessage: "You are a test agent. The system prompt doesn't matter because we're using a mock server.",
+				Deployment: &v1alpha2.DeclarativeDeploymentSpec{
+					SharedDeploymentSpec: v1alpha2.SharedDeploymentSpec{
+						Env: []v1.EnvVar{
+							{
+								Name:  "ENABLE_TOKEN_PROPAGATION",
+								Value: "true",
+							},
+						},
+					},
+				},
 				Tools: []*v1alpha2.Tool{
 					{
 						Type: v1alpha2.ToolProviderType_McpServer,
@@ -238,7 +248,7 @@ func TestInvokeInlineAgent(t *testing.T) {
 
 	mcpServer, err := mockmcp.NewServer(0)
 	require.NoError(t, err)
-	mcpServer.Start()
+	mcpServer.Start(t.Context())
 	require.NoError(t, err)
 	t.Cleanup(func() { mcpServer.Stop() })
 
@@ -354,6 +364,9 @@ func TestInvokeInlineAgent(t *testing.T) {
 		jsn, err := json.Marshal(taskResult)
 		require.NoError(t, err)
 		require.Contains(t, text, "I have made you a lamb kebab. Enjoy!", string(jsn))
+		lastHeaders := mcpServer.LastHeaders.Load()
+		require.NotNil(t, lastHeaders)
+		require.Equal(t, "Bearer token-to-propagate", lastHeaders.Get("Authorization"))
 	})
 
 	t.Run("streaming_invocation", func(t *testing.T) {

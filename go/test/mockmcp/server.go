@@ -5,13 +5,17 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"sync/atomic"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
 
+type requestContextKey struct{}
 type Server struct {
-	Addr     net.Addr
+	Addr        net.Addr
+	LastHeaders atomic.Pointer[http.Header]
+
 	listener net.Listener
 	httpSrv  *http.Server
 }
@@ -36,23 +40,28 @@ func NewServer(port uint16) (*Server, error) {
 			mcp.Description("Type of kebab to make"),
 		),
 	)
-
+	s := &Server{
+		Addr:     listener.Addr(),
+		listener: listener,
+	}
 	// Add tool handler
-	srv.AddTool(tool, kebabHandler)
+	srv.AddTool(tool, s.kebabHandler)
 	mux := http.NewServeMux()
-	mux.Handle("/mcp", server.NewStreamableHTTPServer(srv))
-	httpSrv := &http.Server{
+	mux.Handle("/mcp", server.NewStreamableHTTPServer(srv, server.WithHTTPContextFunc(func(ctx context.Context, r *http.Request) context.Context {
+		return context.WithValue(ctx, requestContextKey{}, r)
+	})))
+
+	s.httpSrv = &http.Server{
 		Addr:    ":0",
 		Handler: mux,
 	}
-	return &Server{
-		Addr:     listener.Addr(),
-		listener: listener,
-		httpSrv:  httpSrv,
-	}, nil
+	return s, nil
 }
 
-func (s *Server) Start() string {
+func (s *Server) Start(ctx context.Context) string {
+	s.httpSrv.BaseContext = func(net.Listener) context.Context {
+		return ctx
+	}
 	// start the server in a goroutine, get the port it started on and return it
 	go func() {
 		if err := s.httpSrv.Serve(s.listener); err != nil && err != http.ErrServerClosed {
@@ -65,7 +74,10 @@ func (s *Server) Stop() {
 	s.httpSrv.Shutdown(context.Background())
 }
 
-func kebabHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func (s *Server) kebabHandler(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	httpRequest := ctx.Value(requestContextKey{}).(*http.Request)
+	headers := httpRequest.Header
+	s.LastHeaders.Store(&headers)
 	name := request.GetString("type", "lamb")
 	return mcp.NewToolResultText(fmt.Sprintf("Your kebab is ready. it is made from: %s!", name)), nil
 }

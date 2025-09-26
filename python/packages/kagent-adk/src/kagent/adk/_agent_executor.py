@@ -37,8 +37,7 @@ logger = logging.getLogger("google_adk." + __name__)
 
 class A2aAgentExecutorConfig(BaseModel):
     """Configuration for the A2aAgentExecutor."""
-
-    pass
+    propagate_token: bool = False
 
 
 # This class is a copy of the A2aAgentExecutor class in the ADK sdk,
@@ -123,7 +122,7 @@ class A2aAgentExecutor(AgentExecutor):
         token = context.call_context.state.get("token", None)
         # Handle the request and publish updates to the event queue
         runner = await self._resolve_runner()
-        if token:
+        if self._config.propagate_token and token:
             runner.session_service = wrap_session(runner.session_service, token)
         try:
             await self._handle_request(context, event_queue, runner)

@@ -25,7 +25,7 @@ from typing_extensions import override
 
 from kagent.core.a2a import KAgentRequestContextBuilder, KAgentTaskStore
 
-from ._agent_executor import A2aAgentExecutor
+from ._agent_executor import A2aAgentExecutor, A2aAgentExecutorConfig
 from ._session_service import KAgentSessionService
 from ._token import KAgentTokenService
 
@@ -71,15 +71,19 @@ class TokenPropagationPlugin(BasePlugin):
                         credentials=HttpCredentials(token=token),
                     ),
                 )
+                logger.debug(f"Propagating token in tool call: {tool.name}")
                 return await tool._run_async_impl(
                     args=tool_args, tool_context=tool_context, credential=credential
                 )
         return None
 
+def enable_token_propagation() -> bool:
+    return os.getenv("ENABLE_TOKEN_PROPAGATION", "").lower() in ("true", "1", "yes")
+
 def get_plugins() -> list[BasePlugin]:
     plugins = []
     # Add TokenPropagationPlugin unless explicitly disabled
-    if os.getenv("DISABLE_TOKEN_PROPAGATION", "").lower() not in ("true", "1", "yes"):
+    if enable_token_propagation():
         plugins.append(TokenPropagationPlugin())
     return plugins
 
@@ -114,9 +118,12 @@ class KAgentApp:
                 app=adk_app,
                 session_service=session_service,
             )
-
+        config = A2aAgentExecutorConfig(
+            propagate_token=enable_token_propagation()
+        )
         agent_executor = A2aAgentExecutor(
             runner=create_runner,
+            config=config,
         )
 
         kagent_task_store = KAgentTaskStore(http_client)
