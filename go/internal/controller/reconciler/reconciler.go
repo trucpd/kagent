@@ -508,6 +508,10 @@ func (a *kagentReconciler) reconcileDesiredObjects(ctx context.Context, owner me
 
 		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 			_, createOrUpdateErr := createOrUpdate(ctx, a.kube, existing, mutateFn)
+			l.Info("reconciled desired resource", "result", createOrUpdateErr,
+				"resource", fmt.Sprintf("%T %s/%s",
+					existing, existing.GetNamespace(), existing.GetName()),
+			)
 			return createOrUpdateErr
 		}); err != nil {
 			l.Error(err, "failed to configure desired")

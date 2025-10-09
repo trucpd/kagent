@@ -174,6 +174,7 @@ func FindOwnedObjects(ctx context.Context, cl client.Client, uid types.UID, name
 	}
 
 	for _, objectType := range objectTypes {
+
 		objs, err := GetList(ctx, cl, objectType, listOpts...)
 		if err != nil {
 			return nil, err
@@ -181,6 +182,7 @@ func FindOwnedObjects(ctx context.Context, cl client.Client, uid types.UID, name
 		for uid, object := range objs {
 			ownedObjects[uid] = object
 		}
+		ctrl.Log.WithName("reconciler").V(1).Info("found owned objects", "type", fmt.Sprintf("%T", objectType), "namespace", namespace, "ownerUID", uid, "count", len(objs))
 	}
 
 	return ownedObjects, nil
