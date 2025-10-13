@@ -325,7 +325,7 @@ func (a *adkApiTranslator) buildManifest(
 		},
 		corev1.EnvVar{
 			Name:  "KAGENT_URL",
-			Value: fmt.Sprintf("http://kagent-controller.%s:8083", utils.GetResourceNamespace()),
+			Value: fmt.Sprintf("http://%s.%s:8083", utils.GetControllerName(), utils.GetResourceNamespace()),
 		},
 	)
 
