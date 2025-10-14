@@ -21,6 +21,8 @@ type AgentConfig struct {
 	Language      string
 	KagentVersion string
 	McpServers    []McpServerType
+	HasMcpServers bool
+	EnvVars       []string
 }
 
 // BaseGenerator provides common functionality for all project generators
@@ -49,6 +51,11 @@ func (g *BaseGenerator) GenerateProject(config AgentConfig) error {
 			return err
 		}
 
+		// Skip mcp_server directory - it's generated dynamically by add_mcp command
+		if d.IsDir() && d.Name() == "mcp_server" {
+			return fs.SkipDir
+		}
+
 		// Skip directories, we'll create them as needed
 		if d.IsDir() {
 			return nil
@@ -69,7 +76,7 @@ func (g *BaseGenerator) GenerateProject(config AgentConfig) error {
 		}
 
 		// Render template content
-		renderedContent, err := g.renderTemplate(string(templateContent), config)
+		renderedContent, err := g.RenderTemplate(string(templateContent), config)
 		if err != nil {
 			return fmt.Errorf("failed to render template for %s: %w", path, err)
 		}
@@ -94,8 +101,8 @@ func (g *BaseGenerator) GenerateProject(config AgentConfig) error {
 	return nil
 }
 
-// renderTemplate renders a template string with the provided data
-func (g *BaseGenerator) renderTemplate(tmplContent string, data interface{}) (string, error) {
+// RenderTemplate renders a template string with the provided data
+func (g *BaseGenerator) RenderTemplate(tmplContent string, data interface{}) (string, error) {
 	tmpl, err := template.New("template").Parse(tmplContent)
 	if err != nil {
 		return "", fmt.Errorf("failed to parse template: %w", err)

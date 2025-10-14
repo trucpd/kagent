@@ -2,17 +2,25 @@ package cli
 
 import (
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	pygen "github.com/kagent-dev/kagent/go/cli/internal/agent/frameworks/adk/python"
 	"github.com/kagent-dev/kagent/go/cli/internal/agent/frameworks/common"
 	"github.com/kagent-dev/kagent/go/cli/internal/config"
 	"github.com/kagent-dev/kagent/go/cli/internal/tui/dialogs"
 )
+
+// mcpTarget represents an MCP server target for config.yaml template
+type mcpTarget struct {
+	Name  string
+	Cmd   string
+	Args  []string
+	Env   []string
+	Image string
+	Build string
+}
 
 // AddMcpCfg carries inputs for adding an MCP server entry to kagent.yaml
 type AddMcpCfg struct {
@@ -21,6 +29,7 @@ type AddMcpCfg struct {
 	// Non-interactive fields
 	Name      string
 	RemoteURL string
+	Headers   []string // KEY=VALUE pairs
 	Command   string
 	Args      []string
 	Env       []string
@@ -31,29 +40,19 @@ type AddMcpCfg struct {
 // AddMcpCmd runs the interactive flow to append an MCP server to kagent.yaml
 func AddMcpCmd(cfg *AddMcpCfg) error {
 	// Determine project directory
-	projectDir := cfg.ProjectDir
-	if projectDir == "" {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return fmt.Errorf("failed to get current directory: %w", err)
-		}
-		projectDir = cwd
-	} else if !filepath.IsAbs(projectDir) {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return fmt.Errorf("failed to get current directory: %w", err)
-		}
-		projectDir = filepath.Join(cwd, projectDir)
+	projectDir, err := ResolveProjectDir(cfg.ProjectDir)
+	if err != nil {
+		return err
 	}
 
 	// Load manifest
-	manager := common.NewManifestManager(projectDir)
-	manifest, err := manager.Load()
+	manifest, err := LoadManifest(projectDir)
 	if err != nil {
-		return fmt.Errorf("failed to load kagent.yaml: %w", err)
+		return err
 	}
 
-	if cfg.Config != nil && cfg.Config.Verbose {
+	verbose := IsVerbose(cfg.Config)
+	if verbose {
 		fmt.Printf("Loaded manifest for agent '%s' from %s\n", manifest.Name, projectDir)
 	}
 
@@ -61,11 +60,12 @@ func AddMcpCmd(cfg *AddMcpCfg) error {
 	var res common.McpServerType
 	if cfg.RemoteURL != "" || cfg.Command != "" || cfg.Image != "" || cfg.Build != "" {
 		if cfg.RemoteURL != "" {
+			headers := parseKeyValuePairs(cfg.Headers)
 			res = common.McpServerType{
-				Type: "remote",
-				URL:  cfg.RemoteURL,
-				Name: cfg.Name,
-				Env:  cfg.Env,
+				Type:    "remote",
+				URL:     cfg.RemoteURL,
+				Name:    cfg.Name,
+				Headers: headers,
 			}
 		} else {
 			if cfg.Image != "" && cfg.Build != "" {
@@ -97,37 +97,17 @@ func AddMcpCmd(cfg *AddMcpCfg) error {
 			res.Name = cfg.Name
 		}
 	}
-	serverType := res.Type
-	name := res.Name
 
 	// Ensure unique name
 	for _, existing := range manifest.McpServers {
-		if strings.EqualFold(existing.Name, name) {
-			return fmt.Errorf("an MCP server named '%s' already exists in kagent.yaml", name)
+		if strings.EqualFold(existing.Name, res.Name) {
+			return fmt.Errorf("an MCP server named '%s' already exists in kagent.yaml", res.Name)
 		}
 	}
 
-	image := res.Image
-	build := res.Build
-	command := res.Command
-	url := res.URL
-	args := res.Args
-	env := res.Env
-
-	// Construct new entry
-	newServer := common.McpServerType{
-		Type:    serverType,
-		Name:    name,
-		Image:   image,
-		Build:   build,
-		Command: command,
-		Args:    args,
-		Env:     env,
-		URL:     url,
-	}
-
 	// Append and validate
-	manifest.McpServers = append(manifest.McpServers, newServer)
+	manifest.McpServers = append(manifest.McpServers, res)
+	manager := common.NewManifestManager(projectDir)
 	if err := manager.Validate(manifest); err != nil {
 		return fmt.Errorf("invalid MCP server configuration: %w", err)
 	}
@@ -137,40 +117,118 @@ func AddMcpCmd(cfg *AddMcpCfg) error {
 		return fmt.Errorf("failed to save kagent.yaml: %w", err)
 	}
 
-	// Create mcp_tools.py on first MCP server addition for ADK Python projects
-	if err := ensureMcpToolsFile(projectDir, manifest.Name, cfg.Config != nil && cfg.Config.Verbose); err != nil {
-		return fmt.Errorf("failed to ensure mcp_tools.py: %w", err)
+	// Regenerate mcp_tools.py with updated MCP servers for ADK Python projects
+	if err := regenerateMcpToolsFile(projectDir, manifest, verbose); err != nil {
+		return fmt.Errorf("failed to regenerate mcp_tools.py: %w", err)
 	}
 
-	fmt.Printf("✓ Added MCP server '%s' (%s) to kagent.yaml\n", name, serverType)
+	// Create/update mcp_server/config.yaml with the mcpServers configuration
+	if err := ensureMcpServerConfigFile(projectDir, manifest.Name, verbose); err != nil {
+		return fmt.Errorf("failed to ensure mcp_server/config.yaml: %w", err)
+	}
+
+	// Regenerate docker-compose.yaml with updated MCP server configuration
+	if err := RegenerateDockerCompose(projectDir, manifest, verbose); err != nil {
+		return fmt.Errorf("failed to regenerate docker-compose.yaml: %w", err)
+	}
+
+	fmt.Printf("✓ Added MCP server '%s' (%s) to kagent.yaml\n", res.Name, res.Type)
 	return nil
 }
 
-// ensureMcpToolsFile creates a default mcp_tools.py next to agent.py if it doesn't exist yet.
-func ensureMcpToolsFile(projectDir, agentName string, verbose bool) error {
-	// Expected agent directory for ADK Python: <projectDir>/<agentName>
-	agentDir := filepath.Join(projectDir, agentName)
-	if _, err := os.Stat(agentDir); err != nil {
-		// If not present, nothing to do (not an ADK Python layout)
-		return nil
-	}
-	target := filepath.Join(agentDir, "mcp_tools.py")
-	if _, err := os.Stat(target); err == nil {
-		// Already exists
-		return nil
+func ensureMcpServerConfigFile(projectDir, agentName string, verbose bool) error {
+	// Expected mcp_server directory for ADK Python: <projectDir>/mcp_server
+	mcpServerDir := filepath.Join(projectDir, "mcp_server")
+	if err := os.MkdirAll(mcpServerDir, 0o755); err != nil {
+		return fmt.Errorf("failed to create mcp_server directory: %w", err)
 	}
 
-	gen := pygen.NewPythonGenerator()
-	tmplBytes, err := fs.ReadFile(gen.BaseGenerator.TemplateFiles, "templates/agent/mcp_tools.py.tmpl")
+	// Load the manifest to get mcpServers
+	manifest, err := LoadManifest(projectDir)
 	if err != nil {
 		return err
 	}
 
-	if err := os.WriteFile(target, tmplBytes, 0o644); err != nil {
+	// Transform mcpServers into targets for config.yaml template
+	targets := transformMcpServersToTargets(manifest.McpServers)
+
+	// Render and write config.yaml
+	templateData := struct {
+		Targets []mcpTarget
+	}{
+		Targets: targets,
+	}
+
+	renderedContent, err := RenderTemplate("templates/mcp_server/config.yaml.tmpl", templateData)
+	if err != nil {
+		return fmt.Errorf("failed to render config.yaml template: %w", err)
+	}
+
+	configPath := filepath.Join(mcpServerDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(renderedContent), 0o644); err != nil {
+		return fmt.Errorf("failed to write config.yaml: %w", err)
+	}
+
+	if verbose {
+		fmt.Printf("Created/updated %s\n", configPath)
+	}
+
+	// Copy Dockerfile if it doesn't exist
+	if err := CopyTemplateIfNotExists(mcpServerDir, "Dockerfile", "templates/mcp_server/Dockerfile", verbose); err != nil {
 		return err
 	}
-	if verbose {
-		fmt.Printf("Created %s\n", target)
-	}
+
 	return nil
+}
+
+// transformMcpServersToTargets converts mcpServers to template-friendly targets
+func transformMcpServersToTargets(mcpServers []common.McpServerType) []mcpTarget {
+	var targets []mcpTarget
+
+	for _, srv := range mcpServers {
+		// Skip remote type servers as they're not stdio-based
+		if srv.Type != "command" {
+			continue
+		}
+
+		// Generate a name if not provided
+		name := srv.Name
+		if name == "" {
+			// Derive name from command or first arg
+			if srv.Command != "" {
+				name = filepath.Base(srv.Command)
+			} else if len(srv.Args) > 0 {
+				name = filepath.Base(srv.Args[0])
+			} else {
+				name = "unnamed-server"
+			}
+		}
+
+		targets = append(targets, mcpTarget{
+			Name:  name,
+			Cmd:   srv.Command,
+			Args:  srv.Args,
+			Env:   srv.Env,
+			Image: srv.Image,
+			Build: srv.Build,
+		})
+	}
+
+	return targets
+}
+
+// parseKeyValuePairs parses KEY=VALUE pairs from a string slice
+func parseKeyValuePairs(pairs []string) map[string]string {
+	result := make(map[string]string)
+	for _, pair := range pairs {
+		parts := strings.SplitN(pair, "=", 2)
+		if len(parts) == 2 {
+			key := strings.TrimSpace(parts[0])
+			value := strings.TrimSpace(parts[1])
+			if key != "" {
+				result[key] = value
+			}
+		}
+	}
+	return result
 }

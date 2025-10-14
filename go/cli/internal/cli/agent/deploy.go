@@ -39,9 +39,14 @@ func DeployCmd(ctx context.Context, cfg *DeployCfg) error {
 	}
 
 	// Load the kagent.yaml manifest
-	manifest, err := loadManifest(cfg.ProjectDir)
+	manifest, err := LoadManifest(cfg.ProjectDir)
 	if err != nil {
 		return fmt.Errorf("failed to load kagent.yaml: %v", err)
+	}
+
+	// Additional validation for deploy-specific requirements
+	if manifest.ModelProvider == "" {
+		return fmt.Errorf("model provider is required in kagent.yaml")
 	}
 
 	// Determine the API key environment variable name based on model provider
@@ -70,13 +75,13 @@ func DeployCmd(ctx context.Context, cfg *DeployCfg) error {
 		if err := verifySecretExists(ctx, k8sClient, cfg.Config.Namespace, secretName, apiKeyEnvVar); err != nil {
 			return err
 		}
-		if cfg.Config.Verbose {
+		if IsVerbose(cfg.Config) {
 			fmt.Printf("Using existing secret '%s' in namespace '%s'\n", secretName, cfg.Config.Namespace)
 		}
 	} else if cfg.APIKey != "" {
 		// Create new secret with provided API key
 		secretName = fmt.Sprintf("%s-%s", manifest.Name, strings.ToLower(manifest.ModelProvider))
-		if err := createSecret(ctx, k8sClient, cfg.Config.Namespace, secretName, apiKeyEnvVar, cfg.APIKey, cfg.Config.Verbose); err != nil {
+		if err := createSecret(ctx, k8sClient, cfg.Config.Namespace, secretName, apiKeyEnvVar, cfg.APIKey, IsVerbose(cfg.Config)); err != nil {
 			return err
 		}
 	} else {
@@ -84,27 +89,12 @@ func DeployCmd(ctx context.Context, cfg *DeployCfg) error {
 	}
 
 	// Create the Agent CRD
-	if err := createAgentCRD(ctx, k8sClient, cfg, manifest, secretName, apiKeyEnvVar, cfg.Config.Verbose); err != nil {
+	if err := createAgentCRD(ctx, k8sClient, cfg, manifest, secretName, apiKeyEnvVar, IsVerbose(cfg.Config)); err != nil {
 		return err
 	}
 
 	fmt.Printf("Successfully deployed agent '%s' to namespace '%s'\n", manifest.Name, cfg.Config.Namespace)
 	return nil
-}
-
-// loadManifest loads the kagent.yaml file from the project directory
-func loadManifest(projectDir string) (*common.AgentManifest, error) {
-	// Use the Manager to load the manifest
-	manager := common.NewManifestManager(projectDir)
-	manifest, err := manager.Load()
-	if err != nil {
-		return nil, fmt.Errorf("failed to load kagent.yaml: %v", err)
-	}
-	// Additional validation for deploy-specific requirements
-	if manifest.ModelProvider == "" {
-		return nil, fmt.Errorf("model provider is required in kagent.yaml")
-	}
-	return manifest, nil
 }
 
 // getAPIKeyEnvVar returns the environment variable name for the given model provider

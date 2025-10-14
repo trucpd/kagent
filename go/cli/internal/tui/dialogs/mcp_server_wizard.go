@@ -20,6 +20,7 @@ type wizardStep int
 const (
 	stepPickType wizardStep = iota
 	stepRemoteURL
+	stepRemoteHeaders
 	stepCommandMethod
 	stepCommandMode
 	stepCommandDetails
@@ -115,11 +116,12 @@ var (
 		Remote: WizardFlowConfig{
 			Name: "remote",
 			StepPositions: map[wizardStep]int{
-				stepPickType:  1,
-				stepRemoteURL: 2,
-				stepName:      3,
+				stepPickType:      1,
+				stepRemoteURL:     2,
+				stepRemoteHeaders: 3,
+				stepName:          4,
 			},
-			TotalSteps: 3,
+			TotalSteps: 4,
 		},
 	}
 )
@@ -147,6 +149,11 @@ type McpServerWizard struct {
 	envInput     textinput.Model
 	nameInput    textinput.Model
 	filePicker   filepicker.Model
+
+	// Headers support for remote servers
+	headerKeyInput   textinput.Model
+	headerValueInput textinput.Model
+	headers          map[string]string
 
 	chosenType   string // serverTypes.Remote.ID or serverTypes.Command.ID
 	chosenMethod string // commandMethods.*.ID
@@ -211,19 +218,22 @@ func NewMcpServerWizard() *McpServerWizard {
 	fp.SetHeight(10)
 
 	w := &McpServerWizard{
-		id:           "mcp_server_wizard",
-		step:         stepPickType,
-		typeList:     tl,
-		methodList:   ml,
-		modeList:     mdl,
-		urlInput:     mk("https://your-mcp-server", 40),
-		imageInput:   mk("ghcr.io/org/tool:tag", 40),
-		pkgInput:     mk("@acme/mcp-tool", 40),
-		commandInput: mk("command to execute", 40),
-		argsInput:    mk("comma-separated args (optional)", 40),
-		envInput:     mk("comma-separated KEY=VALUE (optional)", 40),
-		nameInput:    mk("server name", 40),
-		filePicker:   fp,
+		id:               "mcp_server_wizard",
+		step:             stepPickType,
+		typeList:         tl,
+		methodList:       ml,
+		modeList:         mdl,
+		urlInput:         mk("https://your-mcp-server", 40),
+		imageInput:       mk("ghcr.io/org/tool:tag", 40),
+		pkgInput:         mk("@acme/mcp-tool", 40),
+		commandInput:     mk("command to execute", 40),
+		argsInput:        mk("comma-separated args (optional)", 40),
+		envInput:         mk("comma-separated KEY=VALUE (optional)", 40),
+		nameInput:        mk("server name", 40),
+		filePicker:       fp,
+		headerKeyInput:   mk("Header name (e.g., Authorization)", 40),
+		headerValueInput: mk("Header value (e.g., Bearer ${API_KEY})", 50),
+		headers:          make(map[string]string),
 	}
 	return w
 }
@@ -313,7 +323,14 @@ func (w *McpServerWizard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		w.urlInput, cmd = w.urlInput.Update(msg)
 		return w, tea.Batch(fpCmd, cmd)
-
+	case stepRemoteHeaders:
+		var cmds []tea.Cmd
+		if fpCmd != nil {
+			cmds = append(cmds, fpCmd)
+		}
+		w.headerKeyInput, _ = w.headerKeyInput.Update(msg)
+		w.headerValueInput, _ = w.headerValueInput.Update(msg)
+		return w, tea.Batch(cmds...)
 	case stepArgsEnv:
 		var cmds []tea.Cmd
 		if fpCmd != nil {
@@ -340,6 +357,8 @@ func (w *McpServerWizard) View() string {
 		body = w.typeList.View()
 	case stepRemoteURL:
 		body = w.labeled("Remote MCP URL", w.urlInput.View()) + w.errorView()
+	case stepRemoteHeaders:
+		body = w.renderHeadersStep()
 	case stepCommandMethod:
 		body = w.methodList.View()
 	case stepCommandMode:
@@ -384,6 +403,8 @@ func (w *McpServerWizard) onEnter() tea.Cmd {
 		return w.enterPickType()
 	case stepRemoteURL:
 		return w.enterRemoteURL()
+	case stepRemoteHeaders:
+		return w.enterRemoteHeaders()
 	case stepCommandMethod:
 		return w.enterCommandMethod()
 	case stepCommandMode:
@@ -411,7 +432,7 @@ func (w *McpServerWizard) enterPickType() tea.Cmd {
 	return nil
 }
 
-// enterRemoteURL validates the remote URL and advances to naming.
+// enterRemoteURL validates the remote URL and advances to headers step.
 func (w *McpServerWizard) enterRemoteURL() tea.Cmd {
 	u := strings.TrimSpace(w.urlInput.Value())
 	if !strings.HasPrefix(u, "http://") && !strings.HasPrefix(u, "https://") {
@@ -420,9 +441,46 @@ func (w *McpServerWizard) enterRemoteURL() tea.Cmd {
 	}
 	w.result.Type = serverTypes.Remote.ID
 	w.result.URL = u
-	w.nameInput.SetValue("")
-	w.step = stepName
-	w.nameInput.Focus()
+	w.step = stepRemoteHeaders
+	w.headerKeyInput.SetValue("")
+	w.headerValueInput.SetValue("")
+	w.headerKeyInput.Focus()
+	return nil
+}
+
+// enterRemoteHeaders handles adding headers or skipping to name step.
+func (w *McpServerWizard) enterRemoteHeaders() tea.Cmd {
+	key := strings.TrimSpace(w.headerKeyInput.Value())
+	value := strings.TrimSpace(w.headerValueInput.Value())
+
+	// If both are empty, user wants to skip/finish adding headers
+	if key == "" && value == "" {
+		w.result.Headers = w.headers
+		w.step = stepName
+		w.nameInput.SetValue("")
+		w.nameInput.Focus()
+		return nil
+	}
+
+	// Validate that both key and value are provided
+	if key == "" {
+		w.errMsg = "Header name is required (or leave both empty to continue)"
+		return nil
+	}
+	if value == "" {
+		w.errMsg = "Header value is required (or leave both empty to continue)"
+		return nil
+	}
+
+	// Add the header
+	w.headers[key] = value
+
+	// Clear inputs for next header
+	w.headerKeyInput.SetValue("")
+	w.headerValueInput.SetValue("")
+	w.headerKeyInput.Focus()
+	w.errMsg = ""
+
 	return nil
 }
 
@@ -632,6 +690,8 @@ func (w *McpServerWizard) onTab(reverse bool) tea.Cmd {
 	switch w.step {
 	case stepRemoteURL:
 		return w.tabRemoteURL(reverse)
+	case stepRemoteHeaders:
+		return w.tabRemoteHeaders(reverse)
 	case stepCommandDetails:
 		return w.tabCommandDetails(reverse)
 	case stepArgsEnv:
@@ -644,6 +704,28 @@ func (w *McpServerWizard) onTab(reverse bool) tea.Cmd {
 
 // tabRemoteURL has a single input; nothing to cycle.
 func (w *McpServerWizard) tabRemoteURL(_ bool) tea.Cmd { return nil }
+
+// tabRemoteHeaders toggles focus between header key and value inputs.
+func (w *McpServerWizard) tabRemoteHeaders(reverse bool) tea.Cmd {
+	if reverse {
+		if w.headerValueInput.Focused() {
+			w.headerKeyInput.Focus()
+			w.headerValueInput.Blur()
+		} else {
+			w.headerKeyInput.Blur()
+			w.headerValueInput.Focus()
+		}
+	} else {
+		if w.headerKeyInput.Focused() {
+			w.headerKeyInput.Blur()
+			w.headerValueInput.Focus()
+		} else {
+			w.headerValueInput.Blur()
+			w.headerKeyInput.Focus()
+		}
+	}
+	return nil
+}
 
 // tabCommandDetails cycles across visible detail inputs.
 func (w *McpServerWizard) tabCommandDetails(reverse bool) tea.Cmd {
@@ -820,6 +902,8 @@ func (w *McpServerWizard) prevStep() {
 	switch w.step {
 	case stepRemoteURL:
 		w.step = stepPickType
+	case stepRemoteHeaders:
+		w.step = stepRemoteURL
 	case stepCommandMethod:
 		w.step = stepPickType
 	case stepCommandMode:
@@ -834,13 +918,51 @@ func (w *McpServerWizard) prevStep() {
 		w.step = stepCommandDetails
 	case stepName:
 		if w.chosenType == serverTypes.Remote.ID {
-			w.step = stepRemoteURL
+			w.step = stepRemoteHeaders
 		} else {
 			w.step = stepArgsEnv
 		}
 	default:
 		w.step = stepPickType
 	}
+}
+
+// renderHeadersStep displays the headers input interface with current headers.
+func (w *McpServerWizard) renderHeadersStep() string {
+	var sb strings.Builder
+
+	sb.WriteString("\n")
+	sb.WriteString(theme.StatusStyle().Render("Add HTTP headers (optional)"))
+	sb.WriteString("\n\n")
+
+	// Show existing headers
+	if len(w.headers) > 0 {
+		sb.WriteString(theme.StatusStyle().Render("Current headers:"))
+		sb.WriteString("\n")
+		for k, v := range w.headers {
+			// Mask sensitive values but show pattern
+			displayValue := v
+			if strings.Contains(strings.ToLower(k), "auth") || strings.Contains(strings.ToLower(k), "token") || strings.Contains(strings.ToLower(k), "key") {
+				if len(v) > 10 {
+					displayValue = v[:7] + "***"
+				}
+			}
+			sb.WriteString(fmt.Sprintf("  • %s: %s\n", k, displayValue))
+		}
+		sb.WriteString("\n")
+	}
+
+	sb.WriteString(w.labeled("Header name", w.headerKeyInput.View()))
+	sb.WriteString("\n")
+	sb.WriteString(w.labeled("Header value", w.headerValueInput.View()))
+	sb.WriteString("\n\n")
+	sb.WriteString(theme.StatusStyle().Render("💡 Tip: Use ${VAR_NAME} for environment variables (e.g., Bearer ${API_KEY})"))
+	sb.WriteString("\n")
+	sb.WriteString(theme.StatusStyle().Render("   Press Enter with both fields empty to continue"))
+	sb.WriteString("\n")
+	sb.WriteString(w.errorView())
+
+	return sb.String()
 }
 
 // choice list items
