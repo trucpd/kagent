@@ -208,12 +208,14 @@ func RegenerateDockerCompose(projectDir string, manifest *common.AgentManifest, 
 		ModelName     string
 		HasMcpServers bool
 		EnvVars       []string
+		McpServers    []common.McpServerType
 	}{
 		Name:          manifest.Name,
 		ModelProvider: manifest.ModelProvider,
 		ModelName:     manifest.ModelName,
 		HasMcpServers: len(manifest.McpServers) > 0,
 		EnvVars:       envVars,
+		McpServers:    manifest.McpServers,
 	}
 
 	// Render the docker-compose.yaml template

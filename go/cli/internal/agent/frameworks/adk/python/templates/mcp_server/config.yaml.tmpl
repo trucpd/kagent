@@ -31,3 +31,9 @@ binds:
 {{- end }}
 {{- end }}
 {{- end }}
+      matches:
+      - path:
+          pathPrefix: /sse
+      - path:
+          pathPrefix: /mcp
+      name: mcp

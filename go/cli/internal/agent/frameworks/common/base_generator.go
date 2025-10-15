@@ -51,11 +51,6 @@ func (g *BaseGenerator) GenerateProject(config AgentConfig) error {
 			return err
 		}
 
-		// Skip mcp_server directory - it's generated dynamically by add_mcp command
-		if d.IsDir() && d.Name() == "mcp_server" {
-			return fs.SkipDir
-		}
-
 		// Skip directories, we'll create them as needed
 		if d.IsDir() {
 			return nil

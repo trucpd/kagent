@@ -122,9 +122,9 @@ func AddMcpCmd(cfg *AddMcpCfg) error {
 		return fmt.Errorf("failed to regenerate mcp_tools.py: %w", err)
 	}
 
-	// Create/update mcp_server/config.yaml with the mcpServers configuration
-	if err := ensureMcpServerConfigFile(projectDir, manifest.Name, verbose); err != nil {
-		return fmt.Errorf("failed to ensure mcp_server/config.yaml: %w", err)
+	// Create/update individual MCP server directories with config.yaml
+	if err := ensureMcpServerDirectories(projectDir, manifest, verbose); err != nil {
+		return fmt.Errorf("failed to ensure MCP server directories: %w", err)
 	}
 
 	// Regenerate docker-compose.yaml with updated MCP server configuration
@@ -136,85 +136,60 @@ func AddMcpCmd(cfg *AddMcpCfg) error {
 	return nil
 }
 
-func ensureMcpServerConfigFile(projectDir, agentName string, verbose bool) error {
-	// Expected mcp_server directory for ADK Python: <projectDir>/mcp_server
-	mcpServerDir := filepath.Join(projectDir, "mcp_server")
-	if err := os.MkdirAll(mcpServerDir, 0o755); err != nil {
-		return fmt.Errorf("failed to create mcp_server directory: %w", err)
-	}
-
-	// Load the manifest to get mcpServers
-	manifest, err := LoadManifest(projectDir)
-	if err != nil {
-		return err
-	}
-
-	// Transform mcpServers into targets for config.yaml template
-	targets := transformMcpServersToTargets(manifest.McpServers)
-
-	// Render and write config.yaml
-	templateData := struct {
-		Targets []mcpTarget
-	}{
-		Targets: targets,
-	}
-
-	renderedContent, err := RenderTemplate("templates/mcp_server/config.yaml.tmpl", templateData)
-	if err != nil {
-		return fmt.Errorf("failed to render config.yaml template: %w", err)
-	}
-
-	configPath := filepath.Join(mcpServerDir, "config.yaml")
-	if err := os.WriteFile(configPath, []byte(renderedContent), 0o644); err != nil {
-		return fmt.Errorf("failed to write config.yaml: %w", err)
-	}
-
-	if verbose {
-		fmt.Printf("Created/updated %s\n", configPath)
-	}
-
-	// Copy Dockerfile if it doesn't exist
-	if err := CopyTemplateIfNotExists(mcpServerDir, "Dockerfile", "templates/mcp_server/Dockerfile", verbose); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// transformMcpServersToTargets converts mcpServers to template-friendly targets
-func transformMcpServersToTargets(mcpServers []common.McpServerType) []mcpTarget {
-	var targets []mcpTarget
-
-	for _, srv := range mcpServers {
-		// Skip remote type servers as they're not stdio-based
+func ensureMcpServerDirectories(projectDir string, manifest *common.AgentManifest, verbose bool) error {
+	// Create a separate directory for each command-type MCP server
+	for _, srv := range manifest.McpServers {
+		// Skip remote type servers as they don't need local directories
 		if srv.Type != "command" {
 			continue
 		}
 
-		// Generate a name if not provided
-		name := srv.Name
-		if name == "" {
-			// Derive name from command or first arg
-			if srv.Command != "" {
-				name = filepath.Base(srv.Command)
-			} else if len(srv.Args) > 0 {
-				name = filepath.Base(srv.Args[0])
-			} else {
-				name = "unnamed-server"
-			}
+		// Create directory named after the MCP server
+		mcpServerDir := filepath.Join(projectDir, srv.Name)
+		if err := os.MkdirAll(mcpServerDir, 0o755); err != nil {
+			return fmt.Errorf("failed to create %s directory: %w", srv.Name, err)
 		}
 
-		targets = append(targets, mcpTarget{
-			Name:  name,
-			Cmd:   srv.Command,
-			Args:  srv.Args,
-			Env:   srv.Env,
-			Image: srv.Image,
-			Build: srv.Build,
-		})
+		// Transform this specific server into a target for config.yaml template
+		targets := []mcpTarget{
+			{
+				Name:  srv.Name,
+				Cmd:   srv.Command,
+				Args:  srv.Args,
+				Env:   srv.Env,
+				Image: srv.Image,
+				Build: srv.Build,
+			},
+		}
+
+		// Render and write config.yaml
+		templateData := struct {
+			Targets []mcpTarget
+		}{
+			Targets: targets,
+		}
+
+		renderedContent, err := RenderTemplate("templates/mcp_server/config.yaml.tmpl", templateData)
+		if err != nil {
+			return fmt.Errorf("failed to render config.yaml template for %s: %w", srv.Name, err)
+		}
+
+		configPath := filepath.Join(mcpServerDir, "config.yaml")
+		if err := os.WriteFile(configPath, []byte(renderedContent), 0o644); err != nil {
+			return fmt.Errorf("failed to write config.yaml for %s: %w", srv.Name, err)
+		}
+
+		if verbose {
+			fmt.Printf("Created/updated %s\n", configPath)
+		}
+
+		// Copy Dockerfile if it doesn't exist
+		if err := CopyTemplateIfNotExists(mcpServerDir, "Dockerfile", "templates/mcp_server/Dockerfile", verbose); err != nil {
+			return err
+		}
 	}
 
-	return targets
+	return nil
 }
 
 // parseKeyValuePairs parses KEY=VALUE pairs from a string slice

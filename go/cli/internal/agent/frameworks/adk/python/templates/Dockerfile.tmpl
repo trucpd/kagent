@@ -13,10 +13,6 @@ COPY pyproject.toml pyproject.toml
 COPY README.md README.md
 COPY .python-version .python-version
 
-ENV KAGENT_URL=http://localhost
-ENV KAGENT_NAME={{.Name}}
-ENV KAGENT_NAMESPACE=default
-
 RUN uv sync
 
-CMD ["{{.Name}}", "--local"]
+CMD ["{{.Name}}"]

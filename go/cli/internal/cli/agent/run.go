@@ -46,7 +46,7 @@ func RunCmd(ctx context.Context, cfg *RunCfg) error {
 
 	verbose := IsVerbose(cfg.Config)
 
-	fmt.Printf("Starting agents and tools...\n")
+	fmt.Printf("Starting agent and tools...\n")
 
 	// Use docker compose (newer version) or docker-compose (older version)
 	composeCmd := getDockerComposeCommand()

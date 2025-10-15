@@ -63,16 +63,16 @@ func BuildCmd(cfg *BuildCfg) error {
 		}
 	}
 
-	// Check if MCP servers exist and build the MCP server image
+	// Check if MCP servers exist and build images for each MCP server
 	if manifest != nil && len(manifest.McpServers) > 0 {
-		if err := buildMcpServerImage(cfg); err != nil {
-			return fmt.Errorf("failed to build MCP server image: %v", err)
+		if err := buildMcpServerImages(cfg, manifest); err != nil {
+			return fmt.Errorf("failed to build MCP server images: %v", err)
 		}
 
-		// Push the MCP server image if requested
+		// Push the MCP server images if requested
 		if cfg.Push {
-			if err := pushMcpServerImage(cfg); err != nil {
-				return fmt.Errorf("failed to push MCP server image: %v", err)
+			if err := pushMcpServerImages(cfg, manifest); err != nil {
+				return fmt.Errorf("failed to push MCP server images: %v", err)
 			}
 		}
 	}
@@ -200,68 +200,98 @@ func getManifestFromProjectDir(projectDir string) *common.AgentManifest {
 	return manifest
 }
 
-// buildMcpServerImage builds the MCP server Docker image
-func buildMcpServerImage(cfg *BuildCfg) error {
-	mcpServerDir := filepath.Join(cfg.ProjectDir, "mcp_server")
-	if _, err := os.Stat(mcpServerDir); os.IsNotExist(err) {
-		// No mcp_server directory, skip building
-		return nil
+// buildMcpServerImages builds Docker images for each MCP server
+func buildMcpServerImages(cfg *BuildCfg, manifest *common.AgentManifest) error {
+	// Build an image for each command-type MCP server
+	for _, srv := range manifest.McpServers {
+		// Skip remote type servers as they don't need to be built
+		if srv.Type != "command" {
+			continue
+		}
+
+		mcpServerDir := filepath.Join(cfg.ProjectDir, srv.Name)
+		if _, err := os.Stat(mcpServerDir); os.IsNotExist(err) {
+			// Directory doesn't exist, skip building
+			if cfg.Config.Verbose {
+				fmt.Printf("Skipping %s: directory not found\n", srv.Name)
+			}
+			continue
+		}
+
+		// Check if Dockerfile exists in the MCP server directory
+		dockerfilePath := filepath.Join(mcpServerDir, "Dockerfile")
+		if _, err := os.Stat(dockerfilePath); os.IsNotExist(err) {
+			return fmt.Errorf("Dockerfile not found in %s directory: %s", srv.Name, dockerfilePath)
+		}
+
+		// Construct the MCP server image name
+		imageName := constructMcpServerImageName(cfg, srv.Name)
+
+		// Build command arguments
+		args := []string{"build", "-t", imageName, "."}
+
+		// Execute docker build command
+		cmd := exec.Command("docker", args...)
+		cmd.Dir = mcpServerDir
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+
+		if cfg.Config.Verbose {
+			fmt.Printf("Executing: docker %s\n", strings.Join(args, " "))
+			fmt.Printf("Working directory: %s\n", cmd.Dir)
+		}
+
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("docker build failed for %s: %v", srv.Name, err)
+		}
+
+		fmt.Printf("Successfully built MCP server Docker image: %s\n", imageName)
 	}
 
-	// Check if Dockerfile exists in mcp_server directory
-	dockerfilePath := filepath.Join(mcpServerDir, "Dockerfile")
-	if _, err := os.Stat(dockerfilePath); os.IsNotExist(err) {
-		return fmt.Errorf("Dockerfile not found in mcp_server directory: %s", dockerfilePath)
-	}
-
-	// Construct the MCP server image name
-	imageName := constructMcpServerImageName(cfg)
-
-	// Build command arguments
-	args := []string{"build", "-t", imageName, "."}
-
-	// Execute docker build command
-	cmd := exec.Command("docker", args...)
-	cmd.Dir = mcpServerDir
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if cfg.Config.Verbose {
-		fmt.Printf("Executing: docker %s\n", strings.Join(args, " "))
-		fmt.Printf("Working directory: %s\n", cmd.Dir)
-	}
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("docker build failed: %v", err)
-	}
-
-	fmt.Printf("Successfully built MCP server Docker image: %s\n", imageName)
 	return nil
 }
 
-// pushMcpServerImage pushes the MCP server Docker image to the specified registry
-func pushMcpServerImage(cfg *BuildCfg) error {
-	imageName := constructMcpServerImageName(cfg)
+// pushMcpServerImages pushes the MCP server Docker images to the specified registry
+func pushMcpServerImages(cfg *BuildCfg, manifest *common.AgentManifest) error {
+	// Push an image for each command-type MCP server
+	for _, srv := range manifest.McpServers {
+		// Skip remote type servers
+		if srv.Type != "command" {
+			continue
+		}
 
-	// Execute docker push command
-	cmd := exec.Command("docker", "push", imageName)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+		mcpServerDir := filepath.Join(cfg.ProjectDir, srv.Name)
+		if _, err := os.Stat(mcpServerDir); os.IsNotExist(err) {
+			// Directory doesn't exist, skip pushing
+			if cfg.Config.Verbose {
+				fmt.Printf("Skipping %s: directory not found\n", srv.Name)
+			}
+			continue
+		}
 
-	if cfg.Config.Verbose {
-		fmt.Printf("Executing: docker push %s\n", imageName)
+		imageName := constructMcpServerImageName(cfg, srv.Name)
+
+		// Execute docker push command
+		cmd := exec.Command("docker", "push", imageName)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+
+		if cfg.Config.Verbose {
+			fmt.Printf("Executing: docker push %s\n", imageName)
+		}
+
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("docker push failed for %s: %v", srv.Name, err)
+		}
+
+		fmt.Printf("Successfully pushed MCP server Docker image: %s\n", imageName)
 	}
 
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("docker push failed: %v", err)
-	}
-
-	fmt.Printf("Successfully pushed MCP server Docker image: %s\n", imageName)
 	return nil
 }
 
 // constructMcpServerImageName constructs the MCP server image name
-func constructMcpServerImageName(cfg *BuildCfg) string {
+func constructMcpServerImageName(cfg *BuildCfg, serverName string) string {
 	// Get agent name from kagent.yaml file
 	agentName := getAgentNameFromManifest(cfg.ProjectDir)
 
@@ -274,6 +304,6 @@ func constructMcpServerImageName(cfg *BuildCfg) string {
 	registry := "localhost:5001"
 	tag := "latest"
 
-	// Construct full image name: registry/agent-name-mcp-server:tag
-	return fmt.Sprintf("%s/%s-mcp-server:%s", registry, agentName, tag)
+	// Construct full image name: registry/agent-name-server-name:tag
+	return fmt.Sprintf("%s/%s-%s:%s", registry, agentName, serverName, tag)
 }

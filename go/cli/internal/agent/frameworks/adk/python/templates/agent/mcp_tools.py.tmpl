@@ -75,9 +75,9 @@ def get_mcp_tools(
         server_name = server["name"]
         
         # Determine the URL based on server type
-        # For command type, use hardcoded "mcp-server" as all command servers are in single docker-compose service
+        # For command type, use the server name as hostname (each server has its own docker-compose service)
         # For remote type, use the configured URL
-        url = "http://mcp-server:3000" if server["type"] == "command" else server["url"]
+        url = f"http://{server_name}:3000/mcp" if server["type"] == "command" else server["url"]
         
         # Process headers with environment variable resolution
         headers = {}
@@ -103,10 +103,3 @@ def get_mcp_tools(
             toolsets.append(MCPToolset(connection_params=connection_params))
     
     return toolsets
-
-
-def _get_mcp_server_urls() -> List[str]:
-    """Get the hostnames of the MCP servers."""
-    # For command type of MCP servers, we return "mcp-server" as the hostname
-    # For remote type of MCP servers, we return the configured URL as the hostname
-    return ["mcp-server" if server["type"] == "command" else server["url"] for server in _MCP_SERVERS]
