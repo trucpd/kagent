@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
+	commonexec "github.com/kagent-dev/kagent/go/cli/internal/common/exec"
 	"github.com/kagent-dev/kagent/go/cli/internal/config"
 	"github.com/kagent-dev/kagent/go/cli/internal/tui"
 	a2aclient "trpc.group/trpc-go/trpc-a2a-go/client"
@@ -49,7 +50,7 @@ func RunCmd(ctx context.Context, cfg *RunCfg) error {
 	fmt.Printf("Starting agent and tools...\n")
 
 	// Use docker compose (newer version) or docker-compose (older version)
-	composeCmd := getDockerComposeCommand()
+	composeCmd := commonexec.GetComposeCommand()
 	args := append(composeCmd[1:], "up", "-d", "--remove-orphans")
 	cmd := exec.CommandContext(ctx, composeCmd[0], args...)
 	cmd.Dir = cfg.ProjectDir
@@ -122,7 +123,7 @@ func RunCmd(ctx context.Context, cfg *RunCfg) error {
 
 	// Automatically stop docker-compose when chat ends
 	fmt.Println("\nStopping docker-compose...")
-	composeCmdStop := getDockerComposeCommand()
+	composeCmdStop := commonexec.GetComposeCommand()
 	stopCmd := exec.Command(composeCmdStop[0], append(composeCmdStop[1:], "down")...)
 	stopCmd.Dir = cfg.ProjectDir
 
@@ -138,20 +139,6 @@ func RunCmd(ctx context.Context, cfg *RunCfg) error {
 	}
 
 	return nil
-}
-
-// getDockerComposeCommand returns the appropriate docker compose command
-func getDockerComposeCommand() []string {
-	// Try docker compose (newer version)
-	if _, err := exec.LookPath("docker"); err == nil {
-		cmd := exec.Command("docker", "compose", "version")
-		if err := cmd.Run(); err == nil {
-			return []string{"docker", "compose"}
-		}
-	}
-
-	// Fall back to docker-compose (older version)
-	return []string{"docker-compose"}
 }
 
 // waitForAgent polls the agent's root endpoint until it's ready or timeout

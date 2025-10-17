@@ -3,11 +3,11 @@ package cli
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 
 	"github.com/kagent-dev/kagent/go/cli/internal/agent/frameworks/common"
+	commonexec "github.com/kagent-dev/kagent/go/cli/internal/common/exec"
+	commonimage "github.com/kagent-dev/kagent/go/cli/internal/common/image"
 	"github.com/kagent-dev/kagent/go/cli/internal/config"
 )
 
@@ -37,7 +37,8 @@ func BuildCmd(cfg *BuildCfg) error {
 	}
 
 	// Check if Docker is available and running
-	if err := checkDockerAvailability(); err != nil {
+	docker := commonexec.NewDockerExecutor(cfg.Config.Verbose, cfg.ProjectDir)
+	if err := docker.CheckAvailability(); err != nil {
 		return fmt.Errorf("docker check failed: %v", err)
 	}
 
@@ -50,15 +51,13 @@ func BuildCmd(cfg *BuildCfg) error {
 		}
 	}
 
-	// Build the Docker image
-	if err := buildDockerImage(cfg); err != nil {
+	imageName := constructImageName(cfg)
+	if err := docker.Build(imageName, "."); err != nil {
 		return fmt.Errorf("failed to build Docker image: %v", err)
 	}
 
-	// Push the image if requested
 	if cfg.Push {
-		// Docker availability is already checked above, but we could add another check here if needed
-		if err := pushDockerImage(cfg); err != nil {
+		if err := docker.Push(imageName); err != nil {
 			return fmt.Errorf("failed to push Docker image: %v", err)
 		}
 	}
@@ -80,64 +79,8 @@ func BuildCmd(cfg *BuildCfg) error {
 	return nil
 }
 
-// buildDockerImage builds the Docker image using docker build
-func buildDockerImage(cfg *BuildCfg) error {
-	// Construct the image name
-	imageName := constructImageName(cfg)
-
-	// Build command arguments
-	args := []string{"build", "-t", imageName, "."}
-
-	// Execute docker build command
-	cmd := exec.Command("docker", args...)
-	cmd.Dir = cfg.ProjectDir
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if cfg.Config.Verbose {
-		fmt.Printf("Executing: docker %s\n", strings.Join(args, " "))
-		fmt.Printf("Working directory: %s\n", cmd.Dir)
-	}
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("docker build failed: %v", err)
-	}
-
-	fmt.Printf("Successfully built Docker image: %s\n", imageName)
-	return nil
-}
-
-// pushDockerImage pushes the Docker image to the specified registry
-func pushDockerImage(cfg *BuildCfg) error {
-	// Construct the image name
-	imageName := constructImageName(cfg)
-
-	// Execute docker push command
-	cmd := exec.Command("docker", "push", imageName)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if cfg.Config.Verbose {
-		fmt.Printf("Executing: docker push %s\n", imageName)
-	}
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("docker push failed: %v", err)
-	}
-
-	fmt.Printf("Successfully pushed Docker image: %s\n", imageName)
-	return nil
-}
-
 // constructImageName constructs the full image name from the provided image or defaults
 func constructImageName(cfg *BuildCfg) string {
-	// If a full image specification is provided, use it as-is
-	if cfg.Image != "" {
-		return cfg.Image
-	}
-
-	// Otherwise, construct from defaults
-	// Get agent name from kagent.yaml file
 	agentName := getAgentNameFromManifest(cfg.ProjectDir)
 
 	// If no agent name found in manifest, fall back to directory name
@@ -145,12 +88,8 @@ func constructImageName(cfg *BuildCfg) string {
 		agentName = filepath.Base(cfg.ProjectDir)
 	}
 
-	// Use default registry and tag
-	registry := "localhost:5001"
-	tag := "latest"
-
-	// Construct full image name: registry/agent-name:tag
-	return fmt.Sprintf("%s/%s:%s", registry, agentName, tag)
+	// Construct full image name using common utility
+	return commonimage.ConstructImageName(cfg.Image, agentName)
 }
 
 // getAgentNameFromManifest attempts to load the agent name from kagent.yaml
@@ -164,29 +103,6 @@ func getAgentNameFromManifest(projectDir string) string {
 	}
 
 	return manifest.Name
-}
-
-// checkDockerAvailability checks if Docker is installed and running
-func checkDockerAvailability() error {
-	// Check if docker command exists
-	if _, err := exec.LookPath("docker"); err != nil {
-		return fmt.Errorf("docker command not found in PATH. Please install Docker")
-	}
-
-	// Check if Docker daemon is running by running docker version
-	cmd := exec.Command("docker", "version", "--format", "{{.Server.Version}}")
-	output, err := cmd.Output()
-	if err != nil {
-		return fmt.Errorf("docker daemon is not running or not accessible. Please start Docker Desktop or Docker daemon")
-	}
-
-	// Check if we got a valid version string
-	version := strings.TrimSpace(string(output))
-	if version == "" {
-		return fmt.Errorf("docker daemon returned empty version. Docker may not be properly installed")
-	}
-
-	return nil
 }
 
 // getManifestFromProjectDir loads the agent manifest from the project directory
@@ -224,28 +140,13 @@ func buildMcpServerImages(cfg *BuildCfg, manifest *common.AgentManifest) error {
 			return fmt.Errorf("Dockerfile not found in %s directory: %s", srv.Name, dockerfilePath)
 		}
 
-		// Construct the MCP server image name
+		// Construct the MCP server image name and build using shared executor
 		imageName := constructMcpServerImageName(cfg, srv.Name)
+		docker := commonexec.NewDockerExecutor(cfg.Config.Verbose, mcpServerDir)
 
-		// Build command arguments
-		args := []string{"build", "-t", imageName, "."}
-
-		// Execute docker build command
-		cmd := exec.Command("docker", args...)
-		cmd.Dir = mcpServerDir
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-
-		if cfg.Config.Verbose {
-			fmt.Printf("Executing: docker %s\n", strings.Join(args, " "))
-			fmt.Printf("Working directory: %s\n", cmd.Dir)
-		}
-
-		if err := cmd.Run(); err != nil {
+		if err := docker.Build(imageName, "."); err != nil {
 			return fmt.Errorf("docker build failed for %s: %v", srv.Name, err)
 		}
-
-		fmt.Printf("Successfully built MCP server Docker image: %s\n", imageName)
 	}
 
 	return nil
@@ -253,6 +154,8 @@ func buildMcpServerImages(cfg *BuildCfg, manifest *common.AgentManifest) error {
 
 // pushMcpServerImages pushes the MCP server Docker images to the specified registry
 func pushMcpServerImages(cfg *BuildCfg, manifest *common.AgentManifest) error {
+	docker := commonexec.NewDockerExecutor(cfg.Config.Verbose, "")
+
 	// Push an image for each command-type MCP server
 	for _, srv := range manifest.McpServers {
 		// Skip remote type servers
@@ -271,20 +174,9 @@ func pushMcpServerImages(cfg *BuildCfg, manifest *common.AgentManifest) error {
 
 		imageName := constructMcpServerImageName(cfg, srv.Name)
 
-		// Execute docker push command
-		cmd := exec.Command("docker", "push", imageName)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-
-		if cfg.Config.Verbose {
-			fmt.Printf("Executing: docker push %s\n", imageName)
-		}
-
-		if err := cmd.Run(); err != nil {
+		if err := docker.Push(imageName); err != nil {
 			return fmt.Errorf("docker push failed for %s: %v", srv.Name, err)
 		}
-
-		fmt.Printf("Successfully pushed MCP server Docker image: %s\n", imageName)
 	}
 
 	return nil
@@ -299,11 +191,5 @@ func constructMcpServerImageName(cfg *BuildCfg, serverName string) string {
 	if agentName == "" {
 		agentName = filepath.Base(cfg.ProjectDir)
 	}
-
-	// Use default registry and tag
-	registry := "localhost:5001"
-	tag := "latest"
-
-	// Construct full image name: registry/agent-name-server-name:tag
-	return fmt.Sprintf("%s/%s-%s:%s", registry, agentName, serverName, tag)
+	return commonimage.ConstructMCPServerImageName(agentName, serverName)
 }

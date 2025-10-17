@@ -302,10 +302,15 @@ API Key Options:
   --api-key: Convenience option to create a new secret with the provided API key
   --api-key-secret: Canonical way to reference an existing secret by name
 
+Dry-Run Mode:
+  --dry-run: Output YAML manifests without applying them to the cluster. This is useful
+             for previewing changes or for use with GitOps workflows.
+
 Examples:
   kagent deploy ./my-agent --api-key-secret "my-existing-secret"
   kagent deploy ./my-agent --api-key "your-api-key-here" --image "myregistry/myagent:v1.0"
-  kagent deploy ./my-agent --api-key-secret "my-secret" --namespace "my-namespace"`,
+  kagent deploy ./my-agent --api-key-secret "my-secret" --namespace "my-namespace"
+  kagent deploy ./my-agent --api-key "your-api-key" --dry-run > manifests.yaml`,
 		Args: cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			deployCfg.ProjectDir = args[0]
@@ -323,6 +328,7 @@ Examples:
 	deployCmd.Flags().StringVar(&deployCfg.APIKey, "api-key", "", "API key for the model provider (convenience option to create secret)")
 	deployCmd.Flags().StringVar(&deployCfg.APIKeySecret, "api-key-secret", "", "Name of existing secret containing API key")
 	deployCmd.Flags().StringVar(&deployCfg.Config.Namespace, "namespace", "", "Kubernetes namespace to deploy to")
+	deployCmd.Flags().BoolVar(&deployCfg.DryRun, "dry-run", false, "Output YAML manifests without applying them to the cluster")
 
 	// add-mcp command
 	addMcpCfg := &cli.AddMcpCfg{Config: cfg}
