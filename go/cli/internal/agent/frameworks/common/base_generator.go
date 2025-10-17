@@ -18,7 +18,6 @@ type AgentConfig struct {
 	Language      string
 	KagentVersion string
 	McpServers    []McpServerType
-	HasMcpServers bool
 	EnvVars       []string
 }
 
