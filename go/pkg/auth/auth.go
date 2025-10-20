@@ -6,6 +6,14 @@ import (
 	"net/url"
 )
 
+type UnauthenticatedError struct {
+	Msg string
+}
+
+func (e *UnauthenticatedError) Error() string {
+	return e.Msg
+}
+
 type Verb string
 
 const (

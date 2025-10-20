@@ -17,9 +17,10 @@ limitations under the License.
 package main
 
 import (
+	"os"
+
 	"github.com/kagent-dev/kagent/go/internal/httpserver/auth"
 	"github.com/kagent-dev/kagent/go/pkg/app"
-
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -28,7 +29,7 @@ import (
 // nolint:gocyclo
 func main() {
 	authorizer := &auth.NoopAuthorizer{}
-	authenticator := &auth.UnsecureAuthenticator{}
+	authenticator := auth.NewJWTAuthenticator(os.Getenv("JWKS_URL"), os.Getenv("ISSUER"))
 	app.Start(func(bootstrap app.BootstrapConfig) (*app.ExtensionConfig, error) {
 		return &app.ExtensionConfig{
 			Authenticator:    authenticator,

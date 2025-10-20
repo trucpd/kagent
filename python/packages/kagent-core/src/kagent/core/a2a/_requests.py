@@ -1,28 +1,38 @@
 import logging
-
-from a2a.auth.user import User
-from a2a.server.agent_execution import RequestContext, SimpleRequestContextBuilder
-from a2a.server.context import ServerCallContext
-from a2a.server.tasks import TaskStore
-from a2a.types import MessageSendParams, Task
+import os
+from authlib.jose import jwt
+from authlib.jwk import jwk
+import httpx
 
 # --- Configure Logging ---
 logger = logging.getLogger(__name__)
 
 
-class KAgentUser(User):
-    """A simple user implementation for KAgent integration."""
+class JWTValidator:
+    def __init__(self, jwks_url, issuer):
+        self.jwks_url = jwks_url
+        self.issuer = issuer
+        self.keys = None
 
-    def __init__(self, user_id: str):
-        self.user_id = user_id
+    async def fetch_keys(self):
+        async with httpx.AsyncClient() as client:
+            response = await client.get(self.jwks_url)
+            self.keys = response.json()["keys"]
 
-    @property
-    def is_authenticated(self) -> bool:
-        return False
+    async def validate(self, token):
+        if not self.keys:
+            await self.fetch_keys()
 
-    @property
-    def user_name(self) -> str:
-        return self.user_id
+        claims = jwt.decode(token, jwk.loads(self.keys))
+        claims.validate()
+
+        if claims["iss"] != self.issuer:
+            raise Exception("Invalid issuer")
+
+        return claims
+
+
+validator = JWTValidator(os.getenv("JWKS_URL"), os.getenv("ISSUER"))
 
 
 class KAgentRequestContextBuilder(SimpleRequestContextBuilder):
@@ -42,10 +52,13 @@ class KAgentRequestContextBuilder(SimpleRequestContextBuilder):
         context: ServerCallContext | None = None,
     ) -> RequestContext:
         if context:
-            # grab the user id from the header
             headers = context.state.get("headers", {})
-            user_id = headers.get("x-user-id", None)
-            if user_id:
-                context.user = KAgentUser(user_id=user_id)
+            token = headers.get("authorization", "").replace("Bearer ", "")
+            if token:
+                try:
+                    claims = await validator.validate(token)
+                    context.user = KAgentUser(user_id=claims["sub"])
+                except Exception as e:
+                    logger.error(f"Failed to validate token: {e}")
         request_context = await super().build(params, task_id, context_id, task, context)
         return request_context
