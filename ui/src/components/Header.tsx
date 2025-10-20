@@ -6,6 +6,7 @@ import KAgentLogoWithText from "./kagent-logo-text";
 import KagentLogo from "./kagent-logo";
 import { Plus, Menu, X, ChevronDown, Brain, Server, Eye, Hammer, HomeIcon } from "lucide-react";
 import { ThemeToggle } from "./ThemeToggle";
+import LoginButton from "./LoginButton";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -130,6 +131,7 @@ export function Header() {
               <Link href="https://discord.gg/Fu3k65f2k3" target="_blank">Community</Link>
             </Button>
             
+            <LoginButton />
             <ThemeToggle />
           </div>
         </div>

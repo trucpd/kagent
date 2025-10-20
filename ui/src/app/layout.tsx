@@ -8,6 +8,7 @@ import { Footer } from "@/components/Footer";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { Toaster } from "@/components/ui/sonner";
 import { AppInitializer } from "@/components/AppInitializer";
+import Providers from '@/components/Providers'
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -25,12 +26,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <html lang="en" className="">
           <body className={`${geistSans.className} flex flex-col h-screen overflow-hidden`}>
             <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-              <AppInitializer>
-                <Header />
-                <main className="flex-1 overflow-y-scroll w-full mx-auto">{children}</main>
-                <Footer />
-              </AppInitializer>
-              <Toaster richColors/>
+              <Providers>
+                <AppInitializer>
+                  <Header />
+                  <main className="flex-1 overflow-y-scroll w-full mx-auto">{children}</main>
+                  <Footer />
+                </AppInitializer>
+                <Toaster richColors/>
+              </Providers>
             </ThemeProvider>
           </body>
         </html>
