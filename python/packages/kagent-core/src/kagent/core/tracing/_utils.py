@@ -18,9 +18,13 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 
+from langsmith.trace_importers.otlp import LangSmithExporter
 def configure(fastapi_app: FastAPI | None = None):
     tracing_enabled = os.getenv("OTEL_TRACING_ENABLED", "false").lower() == "true"
     logging_enabled = os.getenv("OTEL_LOGGING_ENABLED", "false").lower() == "true"
+    langsmith_otel_enabled = (
+        os.getenv("LANGSMITH_OTEL_ENABLED", "false").lower() == "true"
+    )
 
     resource = Resource({"service.name": "kagent"})
 
@@ -47,6 +51,12 @@ def configure(fastapi_app: FastAPI | None = None):
             tracer_provider.add_span_processor(processor)
             trace.set_tracer_provider(tracer_provider)
             logging.info("Created new TracerProvider")
+        if langsmith_otel_enabled:
+            logging.info("Enabling langsmith opentelemetry tracing")
+            langsmith_exporter = LangSmithExporter()
+            trace.get_tracer_provider().add_span_processor(
+                BatchSpanProcessor(langsmith_exporter)
+            )
 
         HTTPXClientInstrumentor().instrument()
         if fastapi_app:

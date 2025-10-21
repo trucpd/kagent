@@ -1762,6 +1762,7 @@ version = "0.1.0"
 source = { editable = "packages/kagent-core" }
 dependencies = [
     { name = "a2a-sdk" },
+    { name = "langsmith", extra = ["otel"] },
     { name = "opentelemetry-api" },
     { name = "opentelemetry-exporter-otlp-proto-grpc" },
     { name = "opentelemetry-instrumentation-anthropic" },
@@ -1775,6 +1776,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "a2a-sdk", specifier = ">=0.2.16" },
+    { name = "langsmith", extras = ["otel"], specifier = ">=0.4.30" },
     { name = "opentelemetry-api", specifier = ">=1.36.0" },
     { name = "opentelemetry-exporter-otlp-proto-grpc", specifier = ">=1.36.0" },
     { name = "opentelemetry-instrumentation-anthropic", specifier = ">=0.44.0" },
