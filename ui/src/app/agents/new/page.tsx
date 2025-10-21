@@ -174,6 +174,41 @@ function AgentPageContent({ isEditMode, agentName, agentNamespace }: AgentPageCo
     void fetchAgentData();
   }, [isEditMode, agentName, agentNamespace, getAgent]);
 
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const templateParam = searchParams.get("template");
+    if (templateParam) {
+      try {
+        const template = JSON.parse(decodeURIComponent(templateParam));
+        const agentSpec = template.spec.agentSpec;
+        const model = models.find(m => m.ref === `${template.metadata.namespace}/${agentSpec.declarative.modelConfig}`);
+
+        setState(prev => ({
+          ...prev,
+          description: template.spec.description,
+          agentType: agentSpec.type,
+          systemPrompt: agentSpec.declarative?.systemMessage || "",
+          selectedTools: agentSpec.declarative?.tools || [],
+          selectedModel: model ? { model: model.model, ref: model.ref } : null,
+          byoImage: agentSpec.byo?.deployment?.image || "",
+          byoCmd: agentSpec.byo?.deployment?.cmd || "",
+          byoArgs: (agentSpec.byo?.deployment?.args || []).join(" "),
+          replicas: agentSpec.byo?.deployment?.replicas !== undefined ? String(agentSpec.byo?.deployment?.replicas) : "",
+          imagePullPolicy: agentSpec.byo?.deployment?.imagePullPolicy || "",
+          imagePullSecrets: (agentSpec.byo?.deployment?.imagePullSecrets || []).map((s: { name: string }) => s.name).concat((agentSpec.byo?.deployment?.imagePullSecrets || []).length === 0 ? [""] : []),
+          envPairs: (agentSpec.byo?.deployment?.env || []).map((e: EnvVar) => (
+            e?.valueFrom?.secretKeyRef
+              ? { name: e.name || "", isSecret: true, secretName: e.valueFrom.secretKeyRef.name || "", secretKey: e.valueFrom.secretKeyRef.key || "", optional: e.valueFrom.secretKeyRef.optional }
+              : { name: e.name || "", value: e.value || "", isSecret: false }
+          )).concat((agentSpec.byo?.deployment?.env || []).length === 0 ? [{ name: "", value: "", isSecret: false }] : []),
+        }));
+      } catch (error) {
+        console.error("Failed to parse agent template:", error);
+        toast.error("Failed to load agent template");
+      }
+    }
+  }, [searchParams, models]);
+
   const validateForm = () => {
     const formData = {
       name: state.name,

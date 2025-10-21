@@ -101,6 +101,12 @@ export function Header() {
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
+                  <Link href="/marketplace" className="gap-2 cursor-pointer w-full">
+                    <Eye className="h-4 w-4" />
+                    Marketplace
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
                   <Link href="/models" className="gap-2 cursor-pointer w-full">
                     <Brain className="h-4 w-4" />
                     Models
@@ -160,6 +166,12 @@ export function Header() {
                     <Link href="/agents" className="gap-2 cursor-pointer w-full">
                       <KagentLogo className="h-4 w-4 text-primary" />
                       My Agents
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild onClick={handleMobileLinkClick}>
+                    <Link href="/marketplace" className="gap-2 cursor-pointer w-full">
+                      <Eye className="h-4 w-4" />
+                      Marketplace
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild onClick={handleMobileLinkClick}>

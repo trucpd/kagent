@@ -69,3 +69,32 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - kagent.kagent.dev
+  resources:
+  - agents
+  - agenttemplates
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - kagent.kagent.dev
+  resources:
+  - agents/finalizers
+  - agenttemplates/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - kagent.kagent.dev
+  resources:
+  - agents/status
+  - agenttemplates/status
+  verbs:
+  - get
+  - patch
+  - update

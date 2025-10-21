@@ -386,3 +386,19 @@ export interface DiscoveredTool {
   name: string;
   description: string;
 }
+
+export interface AgentTemplate {
+  metadata: ResourceMetadata;
+  spec: AgentTemplateSpec;
+}
+
+export interface AgentTemplateSpec {
+  description: string;
+  author: string;
+  tags: string[];
+  agentSpec: AgentSpec;
+}
+
+export interface AgentTemplateResponse {
+  agentTemplate: AgentTemplate;
+}
