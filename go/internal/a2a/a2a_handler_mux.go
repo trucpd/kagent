@@ -76,6 +76,14 @@ func (a *handlerMux) getHandler(name string) (http.Handler, bool) {
 	return handler, ok
 }
 
+// addAgentHandler is a test helper to add a handler to the muxer.
+// It is not intended for use in production code.
+func (a *handlerMux) addAgentHandler(agentRef string, handler http.Handler) {
+	a.lock.Lock()
+	defer a.lock.Unlock()
+	a.handlers[agentRef] = handler
+}
+
 func (a *handlerMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	vars := mux.Vars(r)
