@@ -18,7 +18,6 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 
-from langsmith.run_helpers import get_run_tree_context
 from langsmith.trace_importers.otlp import LangSmithExporter
 def configure(fastapi_app: FastAPI | None = None):
     tracing_enabled = os.getenv("OTEL_TRACING_ENABLED", "false").lower() == "true"
