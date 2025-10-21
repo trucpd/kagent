@@ -20,9 +20,9 @@ export function LogViewer() {
   return (
     <ScrollArea className="h-64 w-full rounded-md border p-4">
       <AnimatePresence>
-        {logs.map((log, index) => (
+        {logs.map((log) => (
           <motion.div
-            key={index}
+            key={log}
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
