@@ -11,7 +11,7 @@ export function LogViewer() {
     // In a real implementation, we would connect to a log streaming endpoint.
     // For now, we'll just simulate log messages being added.
     const interval = setInterval(() => {
-      setLogs((prevLogs) => [...prevLogs, `[${new Date().toISOString()}] Log message`]);
+      setLogs((prevLogs) => [...prevLogs.slice(-999), `[${new Date().toISOString()}] Log message`]);
     }, 2000);
 
     return () => clearInterval(interval);
