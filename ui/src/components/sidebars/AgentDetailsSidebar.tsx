@@ -249,7 +249,11 @@ export function AgentDetailsSidebar({ selectedAgentName, currentAgent, allTools 
               <SidebarMenu>
                 <SidebarMenuItem>
                   <MetricsDashboard />
+                </SidebarMenuItem>
+                <SidebarMenuItem>
                   <LogViewer />
+                </SidebarMenuItem>
+                <SidebarMenuItem>
                   <TraceVisualization />
                 </SidebarMenuItem>
               </SidebarMenu>
