@@ -13,6 +13,9 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { getAgents } from "@/app/actions/agents";
 import { k8sRefUtils } from "@/lib/k8sUtils";
+import { LogViewer } from "@/components/observability/LogViewer";
+import { TraceVisualization } from "@/components/observability/TraceVisualization";
+import { MetricsDashboard } from "@/components/observability/MetricsDashboard";
 
 interface AgentDetailsSidebarProps {
   selectedAgentName: string;
@@ -240,6 +243,20 @@ export function AgentDetailsSidebar({ selectedAgentName, currentAgent, allTools 
             <SidebarGroup className="group-data-[collapsible=icon]:hidden">
               <SidebarGroupLabel>Tools & Agents</SidebarGroupLabel>
               {selectedTeam && renderAgentTools(selectedTeam.tools)}
+            </SidebarGroup>
+            <SidebarGroup className="group-data-[collapsible=icon]:hidden">
+              <SidebarGroupLabel>Observability</SidebarGroupLabel>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <MetricsDashboard />
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <LogViewer />
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <TraceVisualization />
+                </SidebarMenuItem>
+              </SidebarMenu>
             </SidebarGroup>
           </ScrollArea>
         </SidebarContent>

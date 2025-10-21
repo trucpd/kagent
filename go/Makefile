@@ -105,7 +105,7 @@ run: manifests generate fmt vet ## Run a controller from your host.
 .PHONY: test
 test:
 	CGO_ENABLED=0 go mod tidy -v
-	CGO_ENABLED=0 go test -race ./cli/...
+	CGO_ENABLED=0 go test ./cli/...
 #	CGO_ENABLED=0 go test ./controller/...
 
 .PHONY: e2e
@@ -180,3 +180,5 @@ mv $(1) $(1)-$(3) ;\
 } ;\
 ln -sf $(1)-$(3) $(1)
 endef
+
+
