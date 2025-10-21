@@ -23,8 +23,8 @@ func TestA2AHandlerMux_Deadlock(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	// Add the handler to the muxer
-	muxer.AddAgentHandler(handlerName, handler)
+	// Add the handler to the muxer using the new test helper
+	muxer.addAgentHandler(handlerName, handler)
 
 	// Create a new request
 	req := httptest.NewRequest("GET", "/api/a2a/default/test-agent/", nil)
