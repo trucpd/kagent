@@ -94,7 +94,10 @@ func (a *handlerMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	handlerName := common.ResourceRefString(agentNamespace, agentName)
 
 	// get the underlying handler
-	handlerHandler, ok := a.getHandler(handlerName)
+	a.lock.RLock()
+	handler, ok := a.handlers[handlerName]
+	a.lock.RUnlock()
+
 	if !ok {
 		http.Error(
 			w,
@@ -104,5 +107,6 @@ func (a *handlerMux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	handlerHandler.ServeHTTP(w, r)
+	// To prevent deadlocks, we serve the http request outside of the read lock.
+	handler.ServeHTTP(w, r)
 }
